@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rabee Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="ربيع ستوديو: مصنع الأغاني الإعلانية والكليبات وأفكار الملتي ميديا.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;500;700;800&family=Aref+Ruqaa:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: Apple-style cinematic presentation (black stage, one statement per band)
+   wrapped around a Pollo-style working studio (presets, models, step-by-step factory). */
+:root{
+  --stage:#07070a;         /* black stage */
+  --stage-2:#101015;       /* raised surface */
+  --stage-3:#17171e;       /* inputs, chips */
+  --line:rgba(243,236,226,.11);
+  --pearl:#f3ece2;         /* warm white text */
+  --mute:#a19a90;          /* secondary text */
+  --gold:#e4c28f;          /* champagne accent */
+  --ember:#ff6a3d;         /* the one hot color, for sound */
+  --rose:#d9577b;
+  --ok:#7fd1a4;
+
+  --f-display:"Alexandria","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Arabic","Alexandria",system-ui,sans-serif;
+  --f-lyric:"Aref Ruqaa","Amiri",serif;
+  --f-lyric-en:"Instrument Serif",Georgia,serif;
+  --f-mono:"JetBrains Mono",ui-monospace,monospace;
+
+  --s-1:clamp(2.6rem,7vw,5.6rem);
+  --s-2:clamp(1.9rem,4.4vw,3.4rem);
+  --s-3:clamp(1.25rem,2.2vw,1.6rem);
+  --s-body:1.02rem;
+  --s-small:.82rem;
+  --radius:22px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--stage);color:var(--pearl);font-family:var(--f-body);font-size:var(--s-body);line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--stage)}
+a{color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:8px}
+.wrap{max-width:1180px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);font-weight:800;line-height:1.12;margin:0;text-wrap:balance;letter-spacing:-.01em}
+[dir=ltr] h1,[dir=ltr] h2{letter-spacing:-.03em}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+.lede{color:var(--mute);font-size:clamp(1.05rem,1.6vw,1.3rem);max-width:58ch;line-height:1.75}
+.grad{background:linear-gradient(100deg,var(--pearl) 0%,var(--gold) 45%,var(--ember) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgba(7,7,10,.72);backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:56px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--f-display);font-weight:700;font-size:1.02rem;white-space:nowrap}
+.brand-mark{width:26px;height:26px;border-radius:50%;background:conic-gradient(from 200deg,var(--gold),var(--ember),var(--rose),var(--gold));display:grid;place-items:center}
+.brand-mark::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--stage)}
+.nav-links{display:flex;gap:22px;margin-inline-start:auto;font-size:.88rem;color:var(--mute)}
+.nav-links a{text-decoration:none;transition:color .2s}
+.nav-links a:hover{color:var(--pearl)}
+.lang{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 12px;font-size:.8rem;cursor:pointer;font-family:var(--f-mono)}
+.lang:hover{border-color:var(--gold)}
+@media (max-width:760px){.nav-links{display:none}.lang{margin-inline-start:auto}}
+
+/* hero */
+.hero{position:relative;padding-block:clamp(56px,9vw,110px) 40px;text-align:center;overflow:hidden}
+#ribbons{position:absolute;inset:auto 0 0 0;width:100%;height:62%;pointer-events:none;opacity:.95}
+.hero .wrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:22px}
+.hero h1{font-size:var(--s-1);max-width:14ch}
+.hero .lede{margin-inline:auto;text-align:center}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:6px}
+.btn{display:inline-flex;align-items:center;gap:10px;border:0;border-radius:999px;padding:13px 24px;font-weight:600;cursor:pointer;text-decoration:none;font-size:.95rem;transition:transform .2s,background .2s,border-color .2s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--pearl);color:var(--stage)}
+.btn-primary:hover{background:var(--gold)}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--pearl)}
+.btn-ghost:hover{border-color:var(--gold)}
+.btn .dot{width:8px;height:8px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px var(--ember)}
+.hero-spec{display:flex;flex-wrap:wrap;gap:8px 28px;justify-content:center;margin-top:min(16vw,130px);font-family:var(--f-mono);font-size:.76rem;color:var(--mute);letter-spacing:.06em}
+.hero-spec b{color:var(--pearl);font-weight:600}
+@media (prefers-reduced-motion:no-preference){
+  .hero h1,.hero .lede,.hero .cta-row,.hero .eyebrow{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
+  .hero .eyebrow{animation-delay:.05s}.hero .lede{animation-delay:.18s}.hero .cta-row{animation-delay:.3s}
+}
+@keyframes rise{from{transform:translateY(18px);opacity:.25}to{transform:none;opacity:1}}
+
+/* bands */
+.band{padding-block:clamp(64px,10vw,120px)}
+.band-head{display:flex;flex-direction:column;gap:14px;margin-bottom:clamp(32px,5vw,56px);max-width:760px}
+.band-head h2{font-size:var(--s-2)}
+
+/* factories */
+.factories{display:grid;grid-template-columns:1.25fr 1fr;grid-template-rows:auto auto;gap:16px}
+.fx{position:relative;background:var(--stage-2);border-radius:var(--radius);padding:clamp(24px,3vw,38px);overflow:hidden;display:flex;flex-direction:column;gap:14px;min-width:0}
+.fx:first-child{grid-row:span 2;justify-content:flex-end;min-height:440px;background:radial-gradient(120% 80% at 80% 0%,rgba(255,106,61,.22),transparent 60%),radial-gradient(90% 70% at 0% 100%,rgba(228,194,143,.16),transparent 60%),var(--stage-2)}
+.fx h3{font-size:var(--s-3)}
+.fx p{color:var(--mute);max-width:46ch}
+.fx .k{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+.specs{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.spec{font-family:var(--f-mono);font-size:.72rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--pearl);white-space:nowrap}
+.fx-big{font-family:var(--f-lyric);font-size:clamp(2.4rem,5vw,4rem);line-height:1.25;color:var(--pearl);margin-bottom:auto}
+[dir=ltr] .fx-big{font-family:var(--f-lyric-en);font-style:italic}
+@media (max-width:860px){.factories{grid-template-columns:1fr}.fx:first-child{grid-row:auto;min-height:360px}}
+
+/* studio */
+.studio{background:linear-gradient(var(--stage),#0b0b10 30%,var(--stage))}
+.presets{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;margin-bottom:22px;scrollbar-width:thin}
+.preset{flex:0 0 auto;border:1px solid var(--line);background:var(--stage-2);border-radius:14px;padding:10px 16px;cursor:pointer;text-align:start;display:flex;flex-direction:column;gap:2px;transition:border-color .2s,background .2s}
+.preset:hover{border-color:var(--gold)}
+.preset b{font-size:.9rem;font-weight:600}
+.preset span{font-size:.74rem;color:var(--mute)}
+.factory{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:960px){.factory{grid-template-columns:1fr}}
+.panel{background:var(--stage-2);border:1px solid var(--line);border-radius:var(--radius);min-width:0}
+form.panel{padding:22px;display:flex;flex-direction:column;gap:22px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 72px)}
+@media (max-width:960px){form.panel{position:static}}
+.step{display:flex;flex-direction:column;gap:12px}
+.step-h{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:.98rem}
+.step-n{width:24px;height:24px;border-radius:50%;border:1px solid var(--gold);color:var(--gold);display:grid;place-items:center;font-family:var(--f-mono);font-size:.72rem;font-weight:600}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:var(--s-small);color:var(--mute)}
+.field input{background:var(--stage-3);border:1px solid var(--line);border-radius:12px;padding:11px 14px;outline:none;transition:border-color .2s}
+.field input:focus{border-color:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.chip span{display:inline-block;border:1px solid var(--line);background:var(--stage-3);border-radius:999px;padding:7px 13px;font-size:.84rem;transition:all .18s;cursor:pointer}
+.chip input:checked+span{background:var(--pearl);color:var(--stage);border-color:var(--pearl)}
+.chip input:focus-visible+span{outline:2px solid var(--gold);outline-offset:2px}
+.chip:hover span{border-color:var(--gold)}
+.gen{width:100%;justify-content:center;padding:15px;font-size:1rem;background:linear-gradient(100deg,var(--gold),var(--ember));color:var(--stage)}
+.gen:hover{filter:brightness(1.07)}
+.gen[disabled]{opacity:.6;cursor:wait}
+.form-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.78rem;color:var(--mute)}
+.linkbtn{background:none;border:0;color:var(--gold);cursor:pointer;padding:0;font-size:.78rem;text-decoration:underline;text-underline-offset:3px}
+
+/* result */
+.result{overflow:hidden}
+.r-head{padding:26px 26px 0;display:flex;flex-direction:column;gap:10px}
+.r-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.badge{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.08em;padding:4px 10px;border-radius:999px;background:var(--stage-3);color:var(--mute);border:1px solid var(--line)}
+.badge.src{color:var(--ok);border-color:rgba(127,209,164,.3)}
+.r-title{font-size:var(--s-2)}
+.r-idea{color:var(--mute);max-width:64ch}
+.tabs{display:flex;gap:4px;padding:18px 20px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tab{background:none;border:0;padding:10px 12px 12px;font-size:.9rem;color:var(--mute);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab[aria-selected=true]{color:var(--pearl);border-bottom-color:var(--ember)}
+.tabpane{padding:26px;display:flex;flex-direction:column;gap:22px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border-radius:16px;overflow:hidden}
+.stat{background:var(--stage-2);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--f-mono);font-size:1.25rem;font-variant-numeric:tabular-nums;font-weight:600}
+.stat span{font-size:.74rem;color:var(--mute)}
+@media (max-width:620px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.why{display:flex;flex-direction:column;gap:10px;padding:0;margin:0;list-style:none}
+.why li{display:flex;gap:12px;color:var(--mute);font-size:.94rem}
+.why li::before{content:"";flex:0 0 6px;height:6px;border-radius:50%;background:var(--gold);margin-top:.7em}
+
+.lyrics{display:flex;flex-direction:column;gap:26px}
+.sec-label{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:6px;display:flex;gap:10px;align-items:center}
+.sec-label i{font-style:normal;color:var(--mute);letter-spacing:.04em}
+.lines{font-family:var(--f-lyric);font-size:clamp(1.35rem,2.4vw,1.85rem);line-height:1.75}
+.lines.en{font-family:var(--f-lyric-en);font-size:clamp(1.5rem,2.6vw,2rem);line-height:1.45;direction:ltr;text-align:left}
+.sec.hook .lines{background:linear-gradient(100deg,var(--pearl),var(--gold) 60%,var(--ember));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sec.tag .lines{font-family:var(--f-display);font-weight:700;font-size:1.25rem;color:var(--pearl)}
+.sec.tag .lines.en{font-family:var(--f-display)}
+
+.player{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;background:var(--stage-3);border-radius:18px;padding:16px}
+.play-btns{display:flex;flex-direction:column;gap:8px}
+.pbtn{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--stage-2);border-radius:999px;padding:9px 16px 9px 12px;cursor:pointer;font-size:.86rem;white-space:nowrap}
+[dir=rtl] .pbtn{padding:9px 12px 9px 16px}
+.pbtn:hover{border-color:var(--ember)}
+.pbtn .ic{width:22px;height:22px;border-radius:50%;background:var(--ember);display:grid;place-items:center}
+.pbtn .ic::after{content:"";border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent var(--stage);margin-inline-start:2px}
+[dir=rtl] .pbtn .ic::after{margin-inline-start:0;margin-inline-end:-2px}
+.pbtn.playing .ic::after{border:0;width:8px;height:8px;background:var(--stage);margin:0}
+#scope{width:100%;height:84px;display:block}
+.notes{display:flex;gap:8px;flex-wrap:wrap;direction:ltr}
+.note{font-family:var(--f-mono);font-size:.9rem;padding:8px 12px;border-radius:10px;background:var(--stage-3);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.note.on{border-color:var(--ember);color:var(--ember)}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-radius:16px;overflow:hidden}
+.kv div{background:var(--stage-2);padding:13px 16px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.kv span{font-size:.74rem;color:var(--mute)}
+.kv b{font-weight:500;font-size:.94rem}
+@media (max-width:620px){.kv{grid-template-columns:1fr}.player{grid-template-columns:1fr}}
+
+.shots{display:flex;flex-direction:column;gap:0;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.shot{display:grid;grid-template-columns:86px minmax(0,1fr);gap:14px;padding:14px 16px;border-top:1px solid var(--line);background:var(--stage-2)}
+.shot:first-child{border-top:0}
+.tc{font-family:var(--f-mono);font-size:.78rem;color:var(--gold);font-variant-numeric:tabular-nums;direction:ltr;text-align:start}
+.shot b{display:block;font-weight:500}
+.shot small{color:var(--mute);font-size:.8rem;display:block;margin-top:2px}
+.ratios{display:flex;gap:10px;align-items:flex-end}
+.ratio{border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font-family:var(--f-mono);font-size:.68rem;color:var(--mute);background:var(--stage-3)}
+
+.prompt{background:var(--stage-3);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.prompt-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:.82rem}
+.prompt-h b{font-weight:600}
+.prompt-h small{color:var(--mute);font-family:var(--f-mono);font-size:.7rem}
+.copy{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 12px;font-size:.76rem;cursor:pointer}
+.copy:hover{border-color:var(--gold)}
+.prompt pre{margin:0;padding:14px;font-family:var(--f-mono);font-size:.78rem;line-height:1.65;white-space:pre-wrap;word-break:break-word;direction:ltr;text-align:left;color:#d9d2c7}
+
+/* models wall */
+.wall{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.wall{grid-template-columns:1fr}}
+.wcol{background:var(--stage-2);border-radius:var(--radius);padding:22px;display:flex;flex-direction:column;gap:14px}
+.wcol h3{font-size:1.05rem}
+.wcol ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column}
+.wcol li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:.9rem}
+.wcol li small{color:var(--mute);font-family:var(--f-mono);font-size:.68rem;white-space:nowrap}
+.wall-note{margin-top:18px;color:var(--mute);font-size:.84rem}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;counter-reset:p;border-top:1px solid var(--line)}
+.pipe li{list-style:none;padding:22px 18px 0 0;display:flex;flex-direction:column;gap:8px;position:relative;counter-increment:p}
+[dir=rtl] .pipe li{padding:22px 0 0 18px}
+.pipe li::before{content:counter(p,decimal-leading-zero);font-family:var(--f-mono);font-size:.74rem;color:var(--gold)}
+.pipe li::after{content:"";position:absolute;top:-4px;inset-inline-start:0;width:7px;height:7px;border-radius:50%;background:var(--ember)}
+.pipe h3{font-size:1.05rem}
+.pipe p{color:var(--mute);font-size:.88rem}
+.pipe{padding:0;margin:0}
+@media (max-width:860px){.pipe{grid-template-columns:1fr 1fr;row-gap:28px}}
+@media (max-width:520px){.pipe{grid-template-columns:1fr}}
+
+footer{border-top:1px solid var(--line);padding-block:36px;color:var(--mute);font-size:.82rem}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+
+/* settings dialog */
+dialog{background:var(--stage-2);color:var(--pearl);border:1px solid var(--line);border-radius:var(--radius);padding:24px;width:min(460px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+dialog form{display:flex;flex-direction:column;gap:14px}
+dialog p{color:var(--mute);font-size:.86rem}
+.dlg-row{display:flex;gap:10px;justify-content:flex-end}
+
+.toast{position:fixed;inset-inline:0;bottom:calc(20px + env(safe-area-inset-bottom,0px));margin-inline:auto;width:max-content;max-width:calc(100vw - 32px);background:var(--pearl);color:var(--stage);padding:10px 18px;border-radius:999px;font-size:.88rem;font-weight:500;z-index:80;transform:translateY(140%);transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+.toast.show{transform:none}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span><span data-i18n="brand">ربيع ستوديو</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#factories" data-i18n="nav1">المصانع</a>
+      <a href="#studio" data-i18n="nav2">مصنع الأغنية</a>
+      <a href="#models" data-i18n="nav3">الأدوات</a>
+      <a href="#pipeline" data-i18n="nav4">خط الإنتاج</a>
+    </nav>
+    <button class="lang" id="langBtn" type="button" aria-label="Switch language">EN</button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <canvas id="ribbons" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <p class="eyebrow" data-i18n="heroEye">Rabee Studio · مصنع الصوت والصورة</p>
+      <h1><span data-i18n="heroH1a">من فكرة واحدة</span><br><span class="grad" data-i18n="heroH1b">إلى أغنية تُحفظ.</span></h1>
+      <p class="lede" data-i18n="heroLede">اكتب اسم علامتك وما تريد أن يشعر به الناس. يصنع لك المصنع الفكرة، والكلمات، والتوقيع الصوتي، وخطة الكليب، وأوامر جاهزة لأدوات الإنتاج العالمية.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#studio" data-i18n="heroCta">ابدأ مصنع الأغنية</a>
+        <button class="btn btn-ghost" id="heroPlay" type="button"><span class="dot" aria-hidden="true"></span><span data-i18n="heroPlay">اسمع توقيع الاستوديو</span></button>
+      </div>
+      <div class="hero-spec">
+        <span><b>6 · 15 · 30 · 60</b> <span data-i18n="specSec">ثانية</span></span>
+        <span><b>9:16 · 1:1 · 16:9</b></span>
+        <span><b>AR · EN</b> <span data-i18n="specMix">ومزيج</span></span>
+        <span><b>Web Audio</b> <span data-i18n="specLive">لحن حيّ</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="factories">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="eyebrow" data-i18n="fEye">ثلاثة مصانع، استوديو واحد</p>
+        <h2 data-i18n="fH2">كل ما يحتاجه الإعلان ليُسمع ويُرى ويُتذكّر.</h2>
+      </div>
+      <div class="factories">
+        <article class="fx">
+          <p class="fx-big" data-i18n="f1Big">«اسمك…<br>صار لحن.»</p>
+          <p class="k" data-i18n="f1K">المصنع الأول</p>
+          <h3 data-i18n="f1H">الأغنية الإعلانية</h3>
+          <p data-i18n="f1P">هوك من سطرين، توقيع صوتي من أربع نغمات مبني على اسم العلامة، وكلمات بالخليجي أو الفصحى أو الإنجليزي بطول الإعلان بالضبط.</p>
+          <div class="specs"><span class="spec">Hook</span><span class="spec">Sonic logo</span><span class="spec">BPM</span><span class="spec">Hijaz · Dorian · Lydian</span></div>
+        </article>
+        <article class="fx">
+          <p class="k" data-i18n="f2K">المصنع الثاني</p>
+          <h3 data-i18n="f2H">الكليب</h3>
+          <p data-i18n="f2P">قائمة لقطات بتوقيت الثانية، حركة الكاميرا، الإضاءة، وأين يقع الهوك في الصورة. جاهزة لكل المقاسات.</p>
+          <div class="specs"><span class="spec">Shot list</span><span class="spec">Timecode</span><span class="spec">9:16</span><span class="spec">16:9</span></div>
+        </article>
+        <article class="fx">
+          <p class="k" data-i18n="f3K">المصنع الثالث</p>
+          <h3 data-i18n="f3H">أفكار الملتي ميديا</h3>
+          <p data-i18n="f3P">أوامر إنتاج مكتوبة بلغة أدوات الموسيقى والفيديو والصوت، تنسخها وتلصقها وتبدأ.</p>
+          <div class="specs"><span class="spec">Music prompt</span><span class="spec">Video prompt</span><span class="spec">Voice brief</span></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band studio" id="studio">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="eyebrow" data-i18n="sEye">مصنع الأغنية الإعلانية</p>
+        <h2 data-i18n="sH2">ثلاث خطوات. أغنية كاملة.</h2>
+        <p class="lede" data-i18n="sLede">ابدأ من قالب جاهز أو من الصفر. كل نتيجة تُسمع مباشرة في المتصفح.</p>
+      </div>
+
+      <div class="presets" id="presets" role="list"></div>
+
+      <div class="factory">
+        <form class="panel" id="form" novalidate>
+          <div class="step">
+            <div class="step-h"><span class="step-n">1</span><span data-i18n="st1">العلامة</span></div>
+            <div class="field"><label for="fBrand" data-i18n="lBrand">اسم العلامة</label><input id="fBrand" maxlength="28" autocomplete="off"></div>
+            <div class="field"><label for="fProduct" data-i18n="lProduct">المنتج أو الخدمة</label><input id="fProduct" maxlength="40" autocomplete="off"></div>
+            <div class="field"><label for="fMsg" data-i18n="lMsg">الرسالة في جملة واحدة</label><input id="fMsg" maxlength="60" autocomplete="off"></div>
+          </div>
+          <div class="step">
+            <div class="step-h"><span class="step-n">2</span><span data-i18n="st2">الإحساس</span></div>
+            <div class="chips" id="moods" role="radiogroup" aria-label="Mood"></div>
+            <div class="chips" id="genres" role="radiogroup" aria-label="Genre"></div>
+          </div>
+          <div class="step">
+            <div class="step-h"><span class="step-n">3</span><span data-i18n="st3">الصيغة</span></div>
+            <div class="chips" id="langs" role="radiogroup" aria-label="Lyrics language"></div>
+            <div class="chips" id="durs" role="radiogroup" aria-label="Duration"></div>
+          </div>
+          <button class="btn gen" id="genBtn" type="submit" data-i18n="gen">اصنع الأغنية</button>
+          <div class="form-foot">
+            <button class="linkbtn" id="againBtn" type="button" data-i18n="again">نسخة أخرى</button>
+            <button class="linkbtn" id="setBtn" type="button" data-i18n="settings">ربط Gemini</button>
+          </div>
+        </form>
+
+        <article class="panel result" id="result" aria-live="polite">
+          <div class="r-head">
+            <div class="r-meta" id="rMeta"></div>
+            <h3 class="r-title" id="rTitle"></h3>
+            <p class="r-idea" id="rIdea"></p>
+          </div>
+          <div class="tabs" role="tablist" id="tabs"></div>
+          <div class="tabpane" id="pane"></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="models">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="eyebrow" data-i18n="mEye">الأدوات</p>
+        <h2 data-i18n="mH2">مصنع واحد يتكلم لغة كل الأدوات.</h2>
+        <p class="lede" data-i18n="mLede">مثل المنصات التي تجمع الموديلات، لكن بخطوة قبلها: الفكرة المدروسة. كل أمر إنتاج يُكتب بالصيغة التي تفهمها هذه الأدوات.</p>
+      </div>
+      <div class="wall" id="wall"></div>
+      <p class="wall-note" data-i18n="wallNote">الأسماء أعلاه أدوات خارجية يكتب لها المصنع أوامر جاهزة. الربط المباشر بحساباتها يأتي في المرحلة التالية.</p>
+    </div>
+  </section>
+
+  <section class="band" id="pipeline">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="eyebrow" data-i18n="pEye">خط الإنتاج</p>
+        <h2 data-i18n="pH2">من الفكرة إلى النشر، بالترتيب.</h2>
+      </div>
+      <ol class="pipe" id="pipe"></ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span data-i18n="foot1">ربيع ستوديو · Rabee Studio</span>
+    <span data-i18n="foot2">النسخة 0.1 · الواجهة والمحرك المحلي</span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h3 data-i18n="dlgH">ربط Google Gemini</h3>
+    <p data-i18n="dlgP">ضع مفتاح Gemini API ليكتب الذكاء الاصطناعي الكلمات والفكرة. يُحفظ المفتاح في متصفحك فقط. بدون مفتاح يعمل المحرك المحلي.</p>
+    <div class="field"><label for="kKey">API key</label><input id="kKey" type="password" autocomplete="off" placeholder="AIza…"></div>
+    <div class="field"><label for="kModel">Model</label><input id="kModel" autocomplete="off"></div>
+    <div class="dlg-row">
+      <button class="btn btn-ghost" value="cancel" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" value="save" id="dlgSave" data-i18n="save">حفظ</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem("rabee." + k); return v === null ? d : v; } catch { return d; } },
+  set(k, v){ try { localStorage.setItem("rabee." + k, v); } catch {} }
+};
+
+/* ---------- copy ---------- */
+const T = {
+  ar: {
+    brand:"ربيع ستوديو", nav1:"المصانع", nav2:"مصنع الأغنية", nav3:"الأدوات", nav4:"خط الإنتاج",
+    heroEye:"Rabee Studio · مصنع الصوت والصورة", heroH1a:"من فكرة واحدة", heroH1b:"إلى أغنية تُحفظ.",
+    heroLede:"اكتب اسم علامتك وما تريد أن يشعر به الناس. يصنع لك المصنع الفكرة، والكلمات، والتوقيع الصوتي، وخطة الكليب، وأوامر جاهزة لأدوات الإنتاج العالمية.",
+    heroCta:"ابدأ مصنع الأغنية", heroPlay:"اسمع توقيع الاستوديو", specSec:"ثانية", specMix:"ومزيج", specLive:"لحن حيّ",
+    fEye:"ثلاثة مصانع، استوديو واحد", fH2:"كل ما يحتاجه الإعلان ليُسمع ويُرى ويُتذكّر.",
+    f1Big:"«اسمك…<br>صار لحن.»", f1K:"المصنع الأول", f1H:"الأغنية الإعلانية",
+    f1P:"هوك من سطرين، توقيع صوتي من أربع نغمات مبني على اسم العلامة، وكلمات بالخليجي أو الفصحى أو الإنجليزي بطول الإعلان بالضبط.",
+    f2K:"المصنع الثاني", f2H:"الكليب", f2P:"قائمة لقطات بتوقيت الثانية، حركة الكاميرا، الإضاءة، وأين يقع الهوك في الصورة. جاهزة لكل المقاسات.",
+    f3K:"المصنع الثالث", f3H:"أفكار الملتي ميديا", f3P:"أوامر إنتاج مكتوبة بلغة أدوات الموسيقى والفيديو والصوت، تنسخها وتلصقها وتبدأ.",
+    sEye:"مصنع الأغنية الإعلانية", sH2:"ثلاث خطوات. أغنية كاملة.", sLede:"ابدأ من قالب جاهز أو من الصفر. كل نتيجة تُسمع مباشرة في المتصفح.",
+    st1:"العلامة", st2:"الإحساس", st3:"الصيغة", lBrand:"اسم العلامة", lProduct:"المنتج أو الخدمة", lMsg:"الرسالة في جملة واحدة",
+    gen:"اصنع الأغنية", generating:"يصنع…", again:"نسخة أخرى", settings:"ربط Gemini",
+    mEye:"الأدوات", mH2:"مصنع واحد يتكلم لغة كل الأدوات.",
+    mLede:"مثل المنصات التي تجمع الموديلات، لكن بخطوة قبلها: الفكرة المدروسة. كل أمر إنتاج يُكتب بالصيغة التي تفهمها هذه الأدوات.",
+    wallNote:"الأسماء أعلاه أدوات خارجية يكتب لها المصنع أوامر جاهزة. الربط المباشر بحساباتها يأتي في المرحلة التالية.",
+    pEye:"خط الإنتاج", pH2:"من الفكرة إلى النشر، بالترتيب.",
+    foot1:"ربيع ستوديو · Rabee Studio", foot2:"النسخة 0.1 · الواجهة والمحرك المحلي",
+    dlgH:"ربط Google Gemini", dlgP:"ضع مفتاح Gemini API ليكتب الذكاء الاصطناعي الكلمات والفكرة. يُحفظ المفتاح في متصفحك فقط. بدون مفتاح يعمل المحرك المحلي.",
+    cancel:"إلغاء", save:"حفظ",
+    tabs:["الفكرة","الكلمات","اللحن","الكليب","أوامر الإنتاج"],
+    secVerse:"المقطع", secHook:"الهوك", secTag:"الختام", secVerse2:"المقطع الثاني",
+    stBpm:"إيقاع BPM", stHook:"مدة الهوك (ث)", stName:"تكرار الاسم", stShots:"لقطات",
+    playLogo:"التوقيع الصوتي", playHook:"مسودة الهوك",
+    kGenre:"النوع", kScale:"المقام", kKey:"المفتاح", kInst:"الآلات", kVoice:"الصوت", kProg:"التتابع",
+    ratios:"المقاسات", copy:"نسخ", copied:"تم النسخ", copyFail:"حدّد النص وانسخه يدويًا",
+    pMusic:"أمر الموسيقى", pVideo:"أمر الفيديو", pVoice:"موجز الصوت", pImage:"أمر الصورة الرئيسية",
+    srcLocal:"المحرك المحلي", srcAI:"Gemini", sec:"ث",
+    saved:"تم حفظ الإعدادات", aiFail:"تعذّر الوصول إلى Gemini، استخدمنا المحرك المحلي",
+    whyTitle:"لماذا تنجح",
+    why:(r)=>[
+      `الاسم «${r.brand}» يتكرر ${r.nameCount} مرات، وآخر ما يُسمع هو التوقيع الصوتي عليه.`,
+      `الهوك يأخذ ${r.hookSec} ثانية على ${r.bpm} BPM، وهي مدة تكفي ليُعاد في الرأس بعد انتهاء الإعلان.`,
+      `مقام ${r.scaleName} يعطي إحساس «${r.moodName}» بدون أن تشرحه الكلمات.`
+    ],
+    ideaTpl:(r)=>`فكرة تقدّم ${r.product} بإحساس ${r.moodName}. اللحن يبني توقيعًا صوتيًا من ${r.motif.length} نغمات على اسم «${r.brand}»، يُختم به كل إعلان حتى يصير الاسم نفسه لحنًا.`,
+    pipe:[["الفكرة","زاوية واحدة مدروسة: لمن، وماذا يشعر، ولماذا يتذكّر."],["الكلمات واللحن","هوك، مقاطع، وتوقيع صوتي بمقام مختار."],["الصوت","تسجيل بصوت بشري أو ذكاء اصطناعي، وتوزيع كامل."],["الكليب","لقطات بالتوقيت، تُولَّد أو تُصوَّر."],["النشر","نسخ 6 و15 و30 ثانية بكل المقاسات."]],
+    wallCols:[["الموسيقى",""],["الصوت",""],["الفيديو",""],["الصورة والتصميم",""]]
+  },
+  en: {
+    brand:"Rabee Studio", nav1:"Factories", nav2:"Song factory", nav3:"Tools", nav4:"Pipeline",
+    heroEye:"Rabee Studio · Sound & picture factory", heroH1a:"One idea.", heroH1b:"A song they keep.",
+    heroLede:"Type your brand and how you want people to feel. The factory builds the concept, the lyrics, a sonic logo, a clip plan, and ready prompts for the world's production tools.",
+    heroCta:"Open the song factory", heroPlay:"Hear the studio signature", specSec:"seconds", specMix:"& mixed", specLive:"live melody",
+    fEye:"Three factories, one studio", fH2:"Everything an ad needs to be heard, seen, and remembered.",
+    f1Big:"“Your name,<br>now a melody.”", f1K:"Factory one", f1H:"The jingle",
+    f1P:"A two-line hook, a four-note sonic logo built on the brand name, and lyrics in Gulf Arabic, Classical Arabic or English, cut to the exact ad length.",
+    f2K:"Factory two", f2H:"The clip", f2P:"A shot list timed to the second, camera moves, light, and where the hook lands on screen. Ready for every ratio.",
+    f3K:"Factory three", f3H:"Multimedia ideas", f3P:"Production prompts written in the language of music, video and voice tools. Copy, paste, start.",
+    sEye:"Jingle factory", sH2:"Three steps. A full song.", sLede:"Start from a preset or from scratch. Every result plays right in the browser.",
+    st1:"Brand", st2:"Feeling", st3:"Format", lBrand:"Brand name", lProduct:"Product or service", lMsg:"The message, in one line",
+    gen:"Make the song", generating:"Making…", again:"Another take", settings:"Connect Gemini",
+    mEye:"Tools", mH2:"One factory that speaks every tool's language.",
+    mLede:"Like the platforms that bundle models, with one step before them: a considered idea. Every prompt is written in the form these tools understand.",
+    wallNote:"The names above are external tools the factory writes prompts for. Direct account connections come in the next phase.",
+    pEye:"Pipeline", pH2:"From idea to release, in order.",
+    foot1:"Rabee Studio · ربيع ستوديو", foot2:"Version 0.1 · interface and local engine",
+    dlgH:"Connect Google Gemini", dlgP:"Add a Gemini API key and the AI writes the lyrics and concept. The key stays in your browser. Without one, the local engine runs.",
+    cancel:"Cancel", save:"Save",
+    tabs:["Concept","Lyrics","Melody","Clip","Prompts"],
+    secVerse:"Verse", secHook:"Hook", secTag:"Tag", secVerse2:"Verse two",
+    stBpm:"Tempo BPM", stHook:"Hook length (s)", stName:"Name mentions", stShots:"Shots",
+    playLogo:"Sonic logo", playHook:"Hook sketch",
+    kGenre:"Genre", kScale:"Mode", kKey:"Key", kInst:"Instruments", kVoice:"Voice", kProg:"Progression",
+    ratios:"Ratios", copy:"Copy", copied:"Copied", copyFail:"Select the text and copy it by hand",
+    pMusic:"Music prompt", pVideo:"Video prompt", pVoice:"Voice brief", pImage:"Key visual prompt",
+    srcLocal:"Local engine", srcAI:"Gemini", sec:"s",
+    saved:"Settings saved", aiFail:"Couldn't reach Gemini, used the local engine",
+    whyTitle:"Why it works",
+    why:(r)=>[
+      `“${r.brand}” is sung ${r.nameCount} times, and the last thing heard is the sonic logo on it.`,
+      `The hook runs ${r.hookSec} seconds at ${r.bpm} BPM, short enough to replay in the head after the ad ends.`,
+      `The ${r.scaleName} mode carries the “${r.moodName}” feeling without the words having to explain it.`
+    ],
+    ideaTpl:(r)=>`A concept that presents ${r.product} with a ${r.moodName.toLowerCase()} feeling. The melody builds a ${r.motif.length}-note sonic logo on “${r.brand}” that closes every spot, until the name itself becomes the tune.`,
+    pipe:[["Idea","One considered angle: who, what they feel, why they remember."],["Lyrics & melody","Hook, verses, and a sonic logo in a chosen mode."],["Voice","Human or AI vocals, full arrangement."],["Clip","Timed shots, generated or filmed."],["Release","6, 15 and 30 second cuts in every ratio."]],
+    wallCols:[["Music",""],["Voice",""],["Video",""],["Image & design",""]]
+  }
+};
+
+const MOODS = {
+  luxe:{ar:"فخامة",en:"Luxury",scale:"major",name:{ar:"الذهب الهادئ",en:"Quiet Gold"},words:"elegant, warm, intimate, premium"},
+  joy:{ar:"فرح",en:"Joy",scale:"major",name:{ar:"صباح يرقص",en:"Dancing Morning"},words:"bright, upbeat, playful, sunny"},
+  epic:{ar:"ملحمي",en:"Epic",scale:"minor",name:{ar:"إلى القمة",en:"The Ascent"},words:"epic, rising, triumphant, powerful"},
+  nost:{ar:"حنين",en:"Nostalgia",scale:"dorian",name:{ar:"رسالة من زمان",en:"Letter From Then"},words:"nostalgic, tender, warm, vintage"},
+  future:{ar:"مستقبلي",en:"Futuristic",scale:"lydian",name:{ar:"نبض الغد",en:"Pulse of Tomorrow"},words:"futuristic, shimmering, sleek, forward"},
+  poetic:{ar:"شاعري",en:"Poetic",scale:"hijaz",name:{ar:"قصيدة الليل",en:"Night Poem"},words:"poetic, cinematic, romantic, moonlit"}
+};
+const GENRES = {
+  khaleeji:{ar:"بوب خليجي",en:"Khaleeji pop",bpm:96,hijaz:true,beat:"khaleeji",inst:{ar:"عود، إيقاع خليجي، تصفيق، بادات سنث",en:"oud, Khaleeji percussion, handclaps, synth pads"}},
+  orch:{ar:"سينمائي أوركسترالي",en:"Cinematic orchestral",bpm:84,beat:"half",inst:{ar:"وتريات، نحاسيات، تيمباني، كورال",en:"strings, brass, timpani, choir"}},
+  lofi:{ar:"لو-فاي دافئ",en:"Warm lo-fi",bpm:78,beat:"half",inst:{ar:"بيانو رودز، فينيل، طبول ناعمة",en:"Rhodes piano, vinyl texture, soft drums"}},
+  afro:{ar:"آفرو عربي",en:"Afro-Arab",bpm:108,hijaz:true,beat:"four",inst:{ar:"إيقاعات آفرو، عود، باص عميق",en:"afro percussion, oud, deep bass"}},
+  synth:{ar:"سنث ويف",en:"Synthwave",bpm:118,beat:"four",inst:{ar:"سنث تناظري، أربيجيو، 808",en:"analog synths, arpeggiator, 808"}},
+  acoustic:{ar:"أكوستيك حميم",en:"Intimate acoustic",bpm:92,beat:"half",inst:{ar:"جيتار، تصفيق، صفير",en:"acoustic guitar, claps, whistle"}}
+};
+const LANGS = {ar:{ar:"عربي خليجي",en:"Gulf Arabic"},en:{ar:"إنجليزي",en:"English"},mix:{ar:"مزيج",en:"Mixed"}};
+const DURS = [6,15,30,60];
+const SCALES = {
+  major:{iv:[0,2,4,5,7,9,11],prog:[0,4,5,3],ar:"ماجور",en:"Major"},
+  minor:{iv:[0,2,3,5,7,8,10],prog:[0,5,2,6],ar:"مينور",en:"Minor"},
+  dorian:{iv:[0,2,3,5,7,9,10],prog:[0,3,6,0],ar:"دوريان",en:"Dorian"},
+  lydian:{iv:[0,2,4,6,7,9,11],prog:[0,1,4,0],ar:"ليديان",en:"Lydian"},
+  hijaz:{iv:[0,1,4,5,7,8,10],prog:[0,1,6,0],ar:"حجاز",en:"Hijaz"}
+};
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+/* lyric banks: hooks are two lines split by " / " */
+const BANK = {
+ar:{
+ luxe:{hooks:["{b}… لمسة ما تتكرر / وحضورك فيها يكبر","كل التفاصيل تقول اسمك / {b} يليق بمقامك","هدوءٌ يلمع بالذهب / {b} وما بعده طلب"],
+  verse:["في ضوءٍ خافت تبدأ الحكاية","تفاصيل صغيرة، وأثرها غاية","مو كل شي يلمع يستاهل نظرة","بس اللي انصنع بحب يعيش عمره","ولك أنت… كل شي على مهله"],
+  tags:["{b}. لأنك تستاهل.","{b}. الفخامة بهدوء.","{b}. توقيعك أنت."]},
+ joy:{hooks:["يلا نغني، الدنيا أحلى / مع {b} كل يوم أحلى","صفّق صفّق، قلبك يرقص / {b} فرحة ما تنقص","ضحكة وصبح ولون جديد / {b} وكل يوم عيد"],
+  verse:["صحينا والشمس تنادينا","والفرحة طالعة من أيدينا","خلّ الهم ورا ظهرك وامشِ","كل لحظة حلوة لها نغمة","واليوم نغمتنا بسمة"],
+  tags:["{b}. خلّها تفرح.","{b}. يومك أحلى.","{b}. فرحة كل يوم."]},
+ epic:{hooks:["نرفع الراية ونكمل الطريق / {b} اسمٌ يليق","من أول خطوة لين قمة الحلم / {b} معك في كل عزم","إذا قالوا مستحيل / قلنا {b}… وكمّلنا السبيل"],
+  verse:["على أرضٍ تعرف معنى الصبر","نكتب بإيدينا قصة الفجر","كل حلم كبير بدأ بخطوة","وكل خطوة فيها ألف قوة","واليوم… نكمل الدرب سوا"],
+  tags:["{b}. إلى القمة.","{b}. نصنع الفرق.","{b}. البداية من هنا."]},
+ nost:{hooks:["تذكر أول مرة؟ نفس الإحساس / {b} من زمن الناس","رجعنا لحضن الذكرى / {b} حكاية بكرة","صوتٍ قديم في قلبي يعيد / {b} وحنينٍ جديد"],
+  verse:["بيت الجدّة وريحة المطر","وضحكة عيالٍ تحت القمر","أشياء بسيطة بس تبقى","تمرّ السنين وهي باقية","وكل ذكرى حلوة… صافية"],
+  tags:["{b}. من زمان معك.","{b}. ذكرى تعيش.","{b}. مثل أول مرة."]},
+ future:{hooks:["بكرة وصل قبل وقته / {b} صوت جيله ووقته","اضغط… وشوف الجاي / {b} والمستقبل جاي","ضوء وسرعة وفكرة / {b} يسبق بكرة"],
+  verse:["شاشات تنبض بلون الفجر","وأفكار تسبق حدود العمر","العالم يتغيّر بلمسة إصبع","ونحنا نرسم اللي جاي ونصنع","خطوة لقدّام… ولا نرجع"],
+  tags:["{b}. الغد الآن.","{b}. اسبق وقتك.","{b}. صُنع للجاي."]},
+ poetic:{hooks:["يا نسمة المسا قولي له / {b} والقلب يميل له","كأن القمر ساكن بيتنا / {b} حكاية ليلتنا","خذ من الليل نجمة وحلم / {b} حكاية بلا كلام"],
+  verse:["في عتمة الليل نجمة تحكي","عن قلبٍ إذا اشتاق ما يشكي","وضوء خفيف على الشباك","يمرّ الهوى ويقول: هناك","حيث الجمال… يشبهك"],
+  tags:["{b}. شعرٌ يُعاش.","{b}. حكاية بلا نهاية.","{b}. كأنها قصيدة."]}
+},
+en:{
+ luxe:{hooks:["{b}, quietly gold / a story softly told","Every detail knows your name / {b}, never the same","Slow light, a finer line / {b}, where time takes its time"],
+  verse:["Low light, the story begins","Small details, where the feeling wins","Not everything that shines deserves a look","But made with care, it stays for good","And for you, it's all understood"],
+  tags:["{b}. Because you deserve it.","{b}. Luxury, quietly.","{b}. Your signature."]},
+ joy:{hooks:["Clap your hands, the day is bright / {b} makes it right","Turn it up and let it shine / {b}, every time","Sun is up, the colors new / {b}, made for you"],
+  verse:["Woke up with the sun on the street","Feel the city move to a brand new beat","Leave the worry at the door","Every good day wants a little more","And today the song is yours"],
+  tags:["{b}. Make it happy.","{b}. Brighter days.","{b}. Joy, on repeat."]},
+ epic:{hooks:["Raise it high, we carry on / {b}, rise with the dawn","When they say it can't be done / {b}, we've already begun","From the first step to the peak / {b} is the strength you seek"],
+  verse:["On ground that knows the cost of time","We write the dawn in every climb","Every giant dream began as one step","Every step a promise kept","And today we go together"],
+  tags:["{b}. To the summit.","{b}. Make the difference.","{b}. It starts here."]},
+ nost:{hooks:["Remember the first time? Same old glow / {b}, from long ago","Back to the place we used to know / {b}, wherever you go","An old song plays inside my chest / {b}, still the best"],
+  verse:["Rain on the window, grandma's door","Laughter running down the corridor","Simple things that never fade","Years go by and still they stay","Every sweet memory, clear as day"],
+  tags:["{b}. With you since forever.","{b}. Memories that live.","{b}. Like the first time."]},
+ future:{hooks:["Tomorrow's here before its time / {b}, ahead of the line","Light and speed and something new / {b}, the future's in view","Press play on the days ahead / {b}, the future, said"],
+  verse:["Screens that pulse in colors of dawn","Ideas running far beyond","The world can change with a single touch","We sketch what's next and build it true","One step forward, nothing to undo"],
+  tags:["{b}. Tomorrow, now.","{b}. Ahead of time.","{b}. Built for next."]},
+ poetic:{hooks:["Evening breeze, whisper low / {b}, the heart says so","As if the moon lived in our home / {b}, a night of our own","Take a star, take a dream / {b}, more than it seems"],
+  verse:["In the dark a single star still speaks","Of a heart that longs but never weeps","A soft light falling on the sill","The wind goes by and time stands still","And beauty there looks just like you"],
+  tags:["{b}. Poetry, lived.","{b}. A story without end.","{b}. Like a poem."]}
+}};
+
+const SHOTS = {
+ luxe:{ar:["ماكرو بطيء على ملمس المنتج تحت ضوء ذهبي","يد تلمس السطح، ظلال ناعمة، غبار ضوء في الهواء","انعكاس الوجه على سطح لامع، ابتسامة خفيفة","مائدة هادئة، شموع، عمق ميدان ضحل","الاسم يظهر محفورًا بالضوء على خلفية سوداء"],
+        en:["Slow macro over the product texture in golden light","A hand grazes the surface, soft shadows, light dust in the air","A face reflected in a glossy surface, a faint smile","A quiet table, candles, shallow depth of field","The name appears etched in light on black"]},
+ joy:{ar:["شروق على سطح بيت، ألوان مشبعة","أصدقاء يضحكون في سيارة مفتوحة، شعر يطير","تصفيق جماعي على الإيقاع، قطع سريع مع الضربة","طفل يقفز في نافورة، حركة بطيئة","المنتج في يد مرفوعة للسماء، فلاش لوني"],
+       en:["Sunrise over a rooftop, saturated color","Friends laughing in an open car, hair in the wind","Group handclaps on the beat, hard cuts on the hit","A kid jumps into a fountain, slow motion","The product held up to the sky, color flash"]},
+ epic:{ar:["لقطة جوية لكثبان عند الفجر","خطوات على صخر، صوت التنفس، ضوء جانبي","فريق يتقدّم في خط واحد، كاميرا منخفضة","قبضة يد ترتفع مع ذروة الموسيقى","الشعار فوق القمة، أشعة شمس خلفه"],
+        en:["Aerial over dunes at dawn","Footsteps on rock, breathing, side light","A team advancing in one line, low camera","A fist rises with the music's peak","The logo above the summit, sun rays behind"]},
+ nost:{ar:["حبيبات فيلم 16مم، باب خشبي قديم يُفتح","ألبوم صور، أصابع تقلب الصفحات","مطر على زجاج نافذة، ضوء دافئ من الداخل","جيلان يضحكان على نفس الطاولة","المنتج بجانب صورة قديمة، تلاشي ناعم"],
+        en:["16mm grain, an old wooden door opens","A photo album, fingers turning pages","Rain on a window, warm light inside","Two generations laughing at one table","The product beside an old photo, soft fade"]},
+ future:{ar:["مدينة ليلية بانعكاسات نيون على الأسفلت","واجهة شفافة تطفو، يد تسحب الضوء","المنتج يتجمّع من جزيئات ضوء","تتبّع سريع في نفق ضوئي على الإيقاع","الشعار ينبض مع التوقيع الصوتي"],
+          en:["Night city, neon reflections on asphalt","A floating transparent interface, a hand pulls light","The product assembles from light particles","Fast tracking through a light tunnel on the beat","The logo pulses with the sonic logo"]},
+ poetic:{ar:["قمر مكتمل فوق بحر هادئ، لقطة ثابتة طويلة","ستارة شفافة يحرّكها الهواء","وجه في ضوء الشموع، عين تنظر بعيدًا","حروف عربية تُكتب بالحبر وتتحوّل لضوء","الاسم يُكتب بخط اليد على صفحة سماء"],
+          en:["A full moon over a still sea, long static shot","A sheer curtain moved by the wind","A face in candlelight, eyes looking away","Arabic letters drawn in ink that turn into light","The name handwritten across a page of sky"]}
+};
+const CAMS = {ar:["دولي بطيء","ثابتة","تتبّع جانبي","كرين للأعلى","يدوية ناعمة","زووم داخلي"],en:["slow dolly-in","locked-off","lateral tracking","crane up","soft handheld","push-in"]};
+
+const PRESETS = [
+  {id:"ramadan",ar:["إعلان رمضان","حنين وشاعري"],en:["Ramadan spot","Nostalgic, poetic"],brand:{ar:"ليالينا",en:"Layalina"},product:{ar:"تمور فاخرة",en:"premium dates"},msg:{ar:"لمّة العيلة تبدأ من هنا",en:"Family gatherings start here"},mood:"poetic",genre:"orch",dur:30},
+  {id:"coffee",ar:["افتتاح مقهى","فخامة خليجية"],en:["Café opening","Gulf luxury"],brand:{ar:"سُرى",en:"Sura"},product:{ar:"قهوة مختصة",en:"specialty coffee"},msg:{ar:"نحمّص كل حبة على مهل",en:"We roast every bean slowly"},mood:"luxe",genre:"khaleeji",dur:30},
+  {id:"launch",ar:["إطلاق تطبيق","مستقبلي"],en:["App launch","Futuristic"],brand:{ar:"نبض",en:"Nabd"},product:{ar:"تطبيق مدفوعات",en:"a payments app"},msg:{ar:"ادفع بلمسة وحدة",en:"Pay with one touch"},mood:"future",genre:"synth",dur:15},
+  {id:"national",ar:["اليوم الوطني","ملحمي"],en:["National day","Epic"],brand:{ar:"عزم",en:"Azm"},product:{ar:"شركة طاقة",en:"an energy company"},msg:{ar:"طاقتنا من أرضنا",en:"Our energy comes from our land"},mood:"epic",genre:"orch",dur:60},
+  {id:"sale",ar:["عروض الجمعة","فرح"],en:["Friday sale","Joyful"],brand:{ar:"سلة",en:"Salla"},product:{ar:"متجر إلكتروني",en:"an online store"},msg:{ar:"خصومات توصلك لين الباب",en:"Deals delivered to your door"},mood:"joy",genre:"afro",dur:15},
+  {id:"bumper",ar:["توقيع 6 ثوان","لو-فاي"],en:["6s bumper","Lo-fi"],brand:{ar:"ورق",en:"Waraq"},product:{ar:"مكتبة ومقهى",en:"a bookshop café"},msg:{ar:"صفحة جديدة كل يوم",en:"A new page every day"},mood:"nost",genre:"lofi",dur:6}
+];
+
+const WALL = [
+  ["Suno","v4.5"],["Udio",""],["ElevenLabs Music",""],["Stable Audio",""],
+  ["ElevenLabs Voices","TTS"],["Voice design",""],["Dubbing","29+ lang"],["Speech enhance",""],
+  ["Kling","3.0"],["Veo","3"],["Runway","Gen-4"],["Hailuo · Seedance",""],
+  ["Imagen · Flux",""],["Firefly",""],["Figma · Canva",""],["Adobe Express",""]
+];
+
+/* ---------- state ---------- */
+const S = {
+  ui: store.get("ui","ar"),
+  brand:"", product:"", msg:"",
+  mood:"luxe", genre:"khaleeji", lang:"ar", dur:30, take:0,
+  ai:null, result:null, tab:0
+};
+
+/* ---------- utils ---------- */
+function hash(str){ let h1=0xdeadbeef, h2=0x41c6ce57; for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677);} h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909); return (h1>>>0); }
+function rng(seed){ let a=seed>>>0; return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}; }
+const pick = (r,arr) => arr[Math.floor(r()*arr.length)];
+function shuffle(r,arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const t = k => T[S.ui][k];
+function toast(msg){ const el=$("#toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("show"),2400); }
+function fmtTC(s){ const m=Math.floor(s/60), ss=(s%60).toFixed(1).padStart(4,"0"); return `${String(m).padStart(2,"0")}:${ss}`; }
+
+/* ---------- engine ---------- */
+function compose(){
+  const brand = S.brand.trim() || (S.ui==="ar"?"ربيع":"Rabee");
+  const product = S.product.trim() || (S.ui==="ar"?"علامتك":"your brand");
+  const msg = S.msg.trim();
+  const r = rng(hash([brand,S.mood,S.genre,S.lang,S.dur,S.take].join("|")));
+  const mood = MOODS[S.mood], genre = GENRES[S.genre];
+  const fill = s => s.replace(/\{b\}/g, brand);
+  const bankAR = BANK.ar[S.mood], bankEN = BANK.en[S.mood];
+  const verseBank = S.lang==="en" ? bankEN : bankAR;
+  const hookBank = S.lang==="ar" ? bankAR : bankEN;
+  const tagBank = S.lang==="ar" ? bankAR : bankEN;
+  const vLang = S.lang==="en" ? "en" : "ar";
+  const hLang = S.lang==="ar" ? "ar" : "en";
+
+  const hook = fill(pick(r, hookBank.hooks)).split(" / ");
+  const tag = fill(pick(r, tagBank.tags));
+  let vlines = shuffle(r, verseBank.verse);
+  const v1 = vlines.slice(0,4); if (msg) v1.splice(2,0,msg);
+  const v2 = vlines.slice(3,5);
+
+  let sections;
+  if (S.dur===6) sections=[{k:"tag",lines:[tag],lang:hLang}];
+  else if (S.dur===15) sections=[{k:"hook",lines:hook,lang:hLang},{k:"tag",lines:[tag],lang:hLang}];
+  else if (S.dur===30) sections=[{k:"verse",lines:msg?[v1[0],msg]:v1.slice(0,2),lang:vLang},{k:"hook",lines:hook,lang:hLang},{k:"tag",lines:[tag],lang:hLang}];
+  else sections=[{k:"verse",lines:v1.slice(0,5),lang:vLang},{k:"hook",lines:hook,lang:hLang},{k:"verse2",lines:v2,lang:vLang},{k:"hook",lines:hook,lang:hLang},{k:"tag",lines:[tag],lang:hLang}];
+
+  return finish({brand,product,msg,r,mood,genre,sections,source:"local"});
+}
+
+function finish(o){
+  const {brand,r,mood,genre} = o;
+  // music
+  let scaleKey = mood.scale;
+  if (genre.hijaz && S.mood!=="joy") scaleKey = "hijaz";
+  const scale = SCALES[scaleKey];
+  const rootPc = [0,2,4,5,7,9][hash(brand)%6];
+  const bpm = genre.bpm + ({luxe:-4,joy:6,epic:0,nost:-6,future:4,poetic:-8})[S.mood];
+  const hr = rng(hash(brand+"motif"+S.take));
+  const deg = [pick(hr,[0,2,4]), pick(hr,[1,2,3,4,5]), pick(hr,[3,4,5,6]), pick(hr,[0,4,7])];
+  const rhythm = pick(hr,[[1,1,1,2],[.5,.5,1,2],[1,.5,.5,2],[.75,.25,1,2]]);
+  const midiOf = d => 60 + rootPc + Math.floor(d/7)*12 + scale.iv[((d%7)+7)%7];
+  const motif = deg.map((d,i)=>({midi:midiOf(d),dur:rhythm[i]}));
+  const nameOf = m => NOTE_NAMES[m%12] + (Math.floor(m/12)-1);
+  const roman = ["I","II","III","IV","V","VI","VII"];
+  const prog = scale.prog.map(d=>roman[d]).join(" – ");
+
+  const text = o.sections.map(s=>s.lines.join(" ")).join(" ");
+  const nameCount = Math.max(1, text.split(brand).length - 1) + 1; // + sonic logo sung on the name
+  const hookSec = (8*60/bpm).toFixed(1);
+
+  // storyboard
+  const nShots = {6:2,15:4,30:6,60:9}[S.dur];
+  const sbank = shuffle(o.r, SHOTS[S.mood][S.ui].slice(0,4));
+  const finalShot = SHOTS[S.mood][S.ui][4];
+  const shots = o.shots || Array.from({length:nShots},(_,i)=>{
+    const last = i===nShots-1;
+    return {vis: last ? finalShot : sbank[i%sbank.length], cam: last ? CAMS[S.ui][1] : pick(o.r,CAMS[S.ui])};
+  });
+  const step = S.dur / shots.length;
+  shots.forEach((s,i)=>{ s.t0=i*step; s.t1=(i+1)*step; });
+
+  const moodName = mood[S.ui];
+  const R = {
+    ...o, bpm, hookSec, nameCount, prog, motif, scaleKey,
+    scaleName: scale[S.ui], key: NOTE_NAMES[rootPc] + " " + scale.en.toLowerCase(),
+    notes: motif.map(n=>nameOf(n.midi)), moodName, shots,
+    title: o.title || mood.name[S.ui],
+    idea: o.idea || T[S.ui].ideaTpl({product:o.product,moodName,motif,brand})
+  };
+  R.prompts = buildPrompts(R);
+  return R;
+}
+
+function buildPrompts(R){
+  const m = MOODS[S.mood], g = GENRES[S.genre];
+  const lyricText = R.sections.map(s=>`[${s.k}]\n${s.lines.join("\n")}`).join("\n\n");
+  const vocal = {luxe:"intimate low female vocal, breathy",joy:"bright group vocals with gang shouts",epic:"powerful male lead with choir",nost:"warm soft male vocal",future:"processed airy vocal with subtle vocoder",poetic:"tender female vocal with Arabic ornamentation"}[S.mood];
+  return {
+    music:`${S.dur}-second advertising jingle for "${R.brand}" (${R.product}).\nGenre: ${g.en}. Mood: ${m.words}.\nTempo: ${R.bpm} BPM. Key: ${R.key} (${SCALES[R.scaleKey].en} mode). Progression: ${R.prog}.\nInstruments: ${g.inst.en}.\nVocals: ${vocal}. Language: ${LANGS[S.lang].en}.\nEnd on a 4-note sonic logo (${R.notes.join(" ")}) sung on the brand name.\n\nLyrics:\n${lyricText}`,
+    video:R.shots.map((s,i)=>`Shot ${i+1} (${s.t0.toFixed(1)}–${s.t1.toFixed(1)}s): ${S.ui==="en"?s.vis:SHOTS[S.mood].en[SHOTS[S.mood][S.ui].indexOf(s.vis)]||s.vis}. Camera: ${S.ui==="en"?s.cam:CAMS.en[CAMS[S.ui].indexOf(s.cam)]||s.cam}. Style: ${m.words}, cinematic, commercial grade, 24fps.`).join("\n"),
+    voice:`Voice: ${vocal}.\nPacing: matches ${R.bpm} BPM, hook lands at ${(S.dur*0.55).toFixed(0)}s.\nDelivery: ${m.words}. Smile in the voice on the brand name.\nTag line to read last: "${R.sections[R.sections.length-1].lines[0]}"`,
+    image:`Key visual for "${R.brand}", ${R.product}. ${m.words} mood, ${({luxe:"black and champagne gold",joy:"sun yellow and coral",epic:"desert ochre and deep blue",nost:"faded film tones, warm amber",future:"midnight blue with neon cyan",poetic:"moonlit indigo and silver"})[S.mood]} palette, premium advertising photography, generous negative space for the logo, 4:5 and 16:9.`
+  };
+}
+
+/* ---------- Gemini ---------- */
+async function composeAI(){
+  const key = store.get("key",""), model = store.get("model","gemini-2.5-flash");
+  if (!key) return null;
+  const brand = S.brand.trim(), product = S.product.trim(), msg = S.msg.trim();
+  const shape = {6:"tag only",15:"hook + tag",30:"verse (2 lines) + hook + tag",60:"verse (5 lines) + hook + verse2 (2 lines) + hook + tag"}[S.dur];
+  const prompt = `You are the head creative at an elite jingle studio. Write an original advertising jingle.
+Brand: "${brand}". Product: "${product}". Key message: "${msg}".
+Mood: ${MOODS[S.mood].en} (${MOODS[S.mood].words}). Genre: ${GENRES[S.genre].en}. Length: ${S.dur} seconds, structure: ${shape}.
+Lyrics language: ${S.lang==="ar"?"Gulf Arabic dialect, rhymed, singable":S.lang==="en"?"English, rhymed, singable":"verses in Gulf Arabic, hook and tag in English"}.
+The hook is exactly 2 short lines and contains the brand name. The tag is one line that starts with the brand name.
+Concept title and idea must be written in ${S.ui==="ar"?"Arabic":"English"}. Shots (${({6:2,15:4,30:6,60:9})[S.dur]} of them) must be written in ${S.ui==="ar"?"Arabic":"English"}; the last shot is the logo reveal.
+Return JSON only: {"title":string,"idea":string,"sections":[{"k":"verse"|"hook"|"verse2"|"tag","lines":[string]}],"shots":[{"vis":string,"cam":string}]}`;
+  const ctl = new AbortController(); const timer = setTimeout(()=>ctl.abort(), 30000);
+  try{
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,{
+      method:"POST", headers:{"Content-Type":"application/json"}, signal:ctl.signal,
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",temperature:1}})
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    const j = JSON.parse(data.candidates[0].content.parts[0].text);
+    const isAr = s => /[؀-ۿ]/.test(s);
+    const sections = j.sections.filter(s=>s&&Array.isArray(s.lines)&&s.lines.length).map(s=>({k:s.k,lines:s.lines.map(String),lang:isAr(s.lines.join(""))?"ar":"en"}));
+    if (!sections.length) throw new Error("empty");
+    return finish({brand,product,msg,r:rng(hash(brand+S.take)),mood:MOODS[S.mood],genre:GENRES[S.genre],sections,
+      title:j.title, idea:j.idea, shots:Array.isArray(j.shots)&&j.shots.length?j.shots.map(s=>({vis:String(s.vis),cam:String(s.cam||"")})):null, source:"ai"});
+  } catch(e){ toast(t("aiFail")); return null; }
+  finally{ clearTimeout(timer); }
+}
+
+/* ---------- render ---------- */
+function renderStatic(){
+  const L = S.ui;
+  document.documentElement.lang = L; document.documentElement.dir = L==="ar"?"rtl":"ltr";
+  document.querySelectorAll("[data-i18n]").forEach(el=>{ const v=T[L][el.dataset.i18n]; if(typeof v==="string") { if(v.includes("<br>")) el.innerHTML=v; else el.textContent=v; } });
+  $("#langBtn").textContent = L==="ar"?"EN":"عربي";
+
+  $("#presets").innerHTML = PRESETS.map(p=>`<button class="preset" role="listitem" type="button" data-p="${p.id}"><b>${esc(p[L][0])}</b><span>${esc(p[L][1])} · ${p.dur}${T[L].sec}</span></button>`).join("");
+  const chips = (name, obj, cur) => Object.entries(obj).map(([k,v])=>`<label class="chip"><input type="radio" name="${name}" id="${name}-${k}" value="${k}" ${String(k)===String(cur)?"checked":""}><span>${esc(v[L])}</span></label>`).join("");
+  $("#moods").innerHTML = chips("mood", MOODS, S.mood);
+  $("#genres").innerHTML = chips("genre", GENRES, S.genre);
+  $("#langs").innerHTML = chips("lang", LANGS, S.lang);
+  $("#durs").innerHTML = chips("dur", Object.fromEntries(DURS.map(d=>[d,{ar:d+" ثانية",en:d+" sec"}])), S.dur);
+
+  const cols = T[L].wallCols;
+  $("#wall").innerHTML = cols.map((c,i)=>`<div class="wcol"><h3>${esc(c[0])}</h3><ul>${WALL.slice(i*4,i*4+4).map(w=>`<li><span>${esc(w[0])}</span><small>${esc(w[1])}</small></li>`).join("")}</ul></div>`).join("");
+  $("#pipe").innerHTML = T[L].pipe.map(p=>`<li><h3>${esc(p[0])}</h3><p>${esc(p[1])}</p></li>`).join("");
+  $("#tabs").innerHTML = T[L].tabs.map((n,i)=>`<button class="tab" role="tab" type="button" id="tab-${i}" aria-selected="${i===S.tab}" data-tab="${i}">${esc(n)}</button>`).join("");
+}
+
+function renderResult(){
+  const R = S.result, L = S.ui;
+  $("#rMeta").innerHTML = `<span class="badge src">${esc(R.source==="ai"?T[L].srcAI:T[L].srcLocal)}</span><span class="badge">${esc(MOODS[S.mood][L])}</span><span class="badge">${esc(GENRES[S.genre][L])}</span><span class="badge">${S.dur}${T[L].sec}</span>`;
+  $("#rTitle").textContent = R.title;
+  $("#rIdea").textContent = R.idea;
+  document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-selected", String(+b.dataset.tab===S.tab)));
+  const pane = $("#pane");
+  pane.setAttribute("role","tabpanel"); pane.setAttribute("aria-labelledby","tab-"+S.tab);
+  const stats = `<div class="stats"><div class="stat"><b>${R.bpm}</b><span>${T[L].stBpm}</span></div><div class="stat"><b>${R.hookSec}</b><span>${T[L].stHook}</span></div><div class="stat"><b>${R.nameCount}×</b><span>${T[L].stName}</span></div><div class="stat"><b>${R.shots.length}</b><span>${T[L].stShots}</span></div></div>`;
+  const player = `<div class="player"><div class="play-btns"><button class="pbtn" type="button" data-play="logo"><span class="ic"></span>${T[L].playLogo}</button>${S.dur>6?`<button class="pbtn" type="button" data-play="hook"><span class="ic"></span>${T[L].playHook}</button>`:""}</div><canvas id="scope" aria-hidden="true"></canvas></div>`;
+  const secName = {verse:T[L].secVerse,hook:T[L].secHook,verse2:T[L].secVerse2,tag:T[L].secTag};
+
+  if (S.tab===0){
+    pane.innerHTML = stats + player + `<div><p class="sec-label">${T[L].whyTitle}</p><ul class="why">${T[L].why(R).map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`;
+  } else if (S.tab===1){
+    let at = 0; const per = S.dur / R.sections.length;
+    pane.innerHTML = `<div class="lyrics">${R.sections.map(s=>{ const a=at; at+=per; return `<div class="sec ${s.k==="verse2"?"verse":s.k}"><p class="sec-label">${esc(secName[s.k]||s.k)} <i>${fmtTC(a)}</i></p><div class="lines ${s.lang==="en"?"en":""}">${s.lines.map(esc).join("<br>")}</div></div>`; }).join("")}</div>`;
+  } else if (S.tab===2){
+    const g = GENRES[S.genre];
+    pane.innerHTML = player + `<div><p class="sec-label">Sonic logo</p><div class="notes" id="notes">${R.notes.map((n,i)=>`<span class="note" data-i="${i}">${n}</span>`).join("")}</div></div>
+      <div class="kv"><div><span>${T[L].kGenre}</span><b>${esc(g[L])}</b></div><div><span>${T[L].kScale}</span><b>${esc(R.scaleName)}</b></div><div><span>${T[L].kKey}</span><b>${esc(R.key)} · ${R.bpm} BPM</b></div><div><span>${T[L].kProg}</span><b dir="ltr">${esc(R.prog)}</b></div><div><span>${T[L].kInst}</span><b>${esc(g.inst[L])}</b></div><div><span>${T[L].kVoice}</span><b>${esc(MOODS[S.mood][L])} · ${esc(LANGS[S.lang][L])}</b></div></div>`;
+  } else if (S.tab===3){
+    const ratio = (w,h,l)=>`<div class="ratio" style="width:${w}px;height:${h}px">${l}</div>`;
+    pane.innerHTML = `<div class="shots">${R.shots.map(s=>`<div class="shot"><span class="tc">${fmtTC(s.t0)}</span><div><b>${esc(s.vis)}</b><small>${esc(s.cam)}</small></div></div>`).join("")}</div>
+      <div><p class="sec-label">${T[L].ratios}</p><div class="ratios">${ratio(36,64,"9:16")}${ratio(52,52,"1:1")}${ratio(92,52,"16:9")}</div></div>`;
+  } else {
+    const block = (k,label,sub)=>`<div class="prompt"><div class="prompt-h"><div><b>${label}</b> <small>${sub}</small></div><button class="copy" type="button" data-copy="${k}">${T[L].copy}</button></div><pre id="pr-${k}">${esc(R.prompts[k])}</pre></div>`;
+    pane.innerHTML = block("music",T[L].pMusic,"Suno · Udio · ElevenLabs") + block("video",T[L].pVideo,"Kling · Veo · Runway") + block("voice",T[L].pVoice,"ElevenLabs") + block("image",T[L].pImage,"Imagen · Flux · Firefly");
+  }
+  scopeCanvas = $("#scope");
+  wake();
+}
+
+async function generate(fromSubmit){
+  readForm();
+  const btn = $("#genBtn");
+  let R = null;
+  if (fromSubmit && store.get("key","")) { btn.disabled = true; btn.textContent = t("generating"); R = await composeAI(); btn.disabled = false; btn.textContent = t("gen"); }
+  S.result = R || compose();
+  renderResult();
+}
+function readForm(){
+  S.brand = $("#fBrand").value; S.product = $("#fProduct").value; S.msg = $("#fMsg").value;
+  const v = n => (document.querySelector(`input[name=${n}]:checked`)||{}).value;
+  S.mood = v("mood")||S.mood; S.genre = v("genre")||S.genre; S.lang = v("lang")||S.lang; S.dur = +(v("dur")||S.dur);
+}
+function applyPreset(id){
+  const p = PRESETS.find(x=>x.id===id); if(!p) return;
+  const L = S.ui;
+  $("#fBrand").value = p.brand[L]; $("#fProduct").value = p.product[L]; $("#fMsg").value = p.msg[L];
+  S.mood=p.mood; S.genre=p.genre; S.dur=p.dur; S.lang = L==="ar"?"ar":"en"; S.take=0;
+  renderStatic(); generate(false);
+}
+
+/* ---------- audio ---------- */
+let ctx, master, analyser, verb, bus, scopeCanvas, playingBtn;
+function audioInit(){
+  if (!ctx){
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = .7;
+    const comp = ctx.createDynamicsCompressor();
+    analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    verb = ctx.createConvolver();
+    const len = ctx.sampleRate*2.6, ir = ctx.createBuffer(2,len,ctx.sampleRate);
+    for (let c=0;c<2;c++){ const d=ir.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.8); }
+    verb.buffer = ir; const vg = ctx.createGain(); vg.gain.value=.32; verb.connect(vg); vg.connect(master);
+    master.connect(comp); comp.connect(analyser); analyser.connect(ctx.destination);
+  }
+  if (ctx.state==="suspended") ctx.resume();
+  return true;
+}
+const hz = m => 440*Math.pow(2,(m-69)/12);
+function out(node, wet=.5){ node.connect(bus); const s=ctx.createGain(); s.gain.value=wet; node.connect(s); s.connect(verb); }
+function pluck(m,t0,d,vol=.32){
+  const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(vol,t0+.008); g.gain.exponentialRampToValueAtTime(.001,t0+Math.max(.5,d*1.6));
+  [["triangle",0],["sine",12]].forEach(([type,o])=>{ const os=ctx.createOscillator(); os.type=type; os.frequency.value=hz(m+o); const og=ctx.createGain(); og.gain.value=o?.35:1; os.connect(og); og.connect(g); os.start(t0); os.stop(t0+d*1.7+.6); });
+  out(g,.55);
+}
+function pad(ms,t0,d,vol=.05){
+  const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.setValueAtTime(700,t0); f.frequency.linearRampToValueAtTime(1600,t0+d*.6);
+  const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(vol,t0+.35); g.gain.setValueAtTime(vol,t0+d-.2); g.gain.linearRampToValueAtTime(0,t0+d+.5);
+  ms.forEach(m=>[-7,7].forEach(dt=>{ const o=ctx.createOscillator(); o.type="sawtooth"; o.frequency.value=hz(m); o.detune.value=dt; o.connect(f); o.start(t0); o.stop(t0+d+.6); }));
+  f.connect(g); out(g,.7);
+}
+function bass(m,t0,d){ const o=ctx.createOscillator(); o.type="sine"; o.frequency.value=hz(m); const g=ctx.createGain(); g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(.35,t0+.02); g.gain.exponentialRampToValueAtTime(.001,t0+d); o.connect(g); out(g,.05); o.start(t0); o.stop(t0+d+.05); }
+function kick(t0){ const o=ctx.createOscillator(); o.frequency.setValueAtTime(130,t0); o.frequency.exponentialRampToValueAtTime(42,t0+.16); const g=ctx.createGain(); g.gain.setValueAtTime(.7,t0); g.gain.exponentialRampToValueAtTime(.001,t0+.32); o.connect(g); out(g,.02); o.start(t0); o.stop(t0+.35); }
+function clap(t0){ const len=ctx.sampleRate*.18, b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,4); const s=ctx.createBufferSource(); s.buffer=b; const f=ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=1600; f.Q.value=.8; const g=ctx.createGain(); g.gain.value=.28; s.connect(f); f.connect(g); out(g,.4); s.start(t0); }
+
+function chordAt(R, deg){ const sc=SCALES[R.scaleKey].iv, tonic=48+NOTE_NAMES.indexOf(R.key.split(" ")[0]); return [0,2,4].map(st=>{ const d=deg+st; return tonic+Math.floor(d/7)*12+sc[d%7]; }); }
+
+function play(kind, R){
+  if (!audioInit()) return 0;
+  stopAudio();
+  bus = ctx.createGain(); bus.connect(master);
+  const beat = 60/R.bpm, t0 = ctx.currentTime + .06;
+  const tonic = 48 + NOTE_NAMES.indexOf(R.key.split(" ")[0]);
+  let end;
+  const motifAt = (start, transpose=0, lastLong=true) => { let tt=start; R.motif.forEach((n,i)=>{ const d=n.dur*beat; pluck(n.midi+transpose,tt,d); if(transpose===0) lightNote(i,tt); tt+=d; }); return tt; };
+  if (kind==="logo"){
+    pad(chordAt(R,0),t0,beat*5.5,.045); bass(tonic-12,t0,beat*4);
+    end = motifAt(t0) + beat*2;
+  } else {
+    const bars = 4, barLen = beat*4;
+    const prog = SCALES[R.scaleKey].prog;
+    for (let b=0;b<bars;b++){
+      const bt = t0 + b*barLen, deg = prog[b%prog.length];
+      pad(chordAt(R,deg),bt,barLen,.04);
+      bass(chordAt(R,deg)[0]-12,bt,beat*1.6); bass(chordAt(R,deg)[0]-12,bt+beat*2,beat*1.4);
+      const g = GENRES[S.genre].beat;
+      for (let q=0;q<4;q++){
+        const qt = bt + q*beat;
+        if (g==="four" || (g==="half" && q%2===0) || (g==="khaleeji" && (q===0||q===2))) kick(qt);
+        if (g==="khaleeji" && (q===1||q===3)) { clap(qt); clap(qt+beat*.5); }
+        if (g==="four" && (q===1||q===3)) clap(qt);
+      }
+    }
+    motifAt(t0); motifAt(t0+barLen*1, 0); motifAt(t0+barLen*2, 0); motifAt(t0+barLen*3, 0);
+    end = t0 + barLen*4 + beat;
+  }
+  return (end - ctx.currentTime)*1000;
+}
+let noteTimers = [];
+function lightNote(i, at){
+  const ms = (at - ctx.currentTime)*1000;
+  noteTimers.push(setTimeout(()=>{ document.querySelectorAll(".note").forEach(n=>n.classList.toggle("on", +n.dataset.i===i)); }, ms));
+}
+function stopAudio(){
+  noteTimers.forEach(clearTimeout); noteTimers=[];
+  document.querySelectorAll(".note.on").forEach(n=>n.classList.remove("on"));
+  if (bus){ const b=bus; try{ b.gain.setTargetAtTime(0,ctx.currentTime,.05); setTimeout(()=>b.disconnect(),400);}catch{} bus=null; }
+  if (playingBtn){ playingBtn.classList.remove("playing"); playingBtn=null; }
+  clearTimeout(stopAudio._t);
+}
+function toggle(btn, kind, R){
+  if (btn.classList.contains("playing")) { stopAudio(); return; }
+  const ms = play(kind, R); if (!ms) return;
+  btn.classList.add("playing"); playingBtn = btn;
+  stopAudio._t = setTimeout(()=>{ if(playingBtn===btn){ btn.classList.remove("playing"); playingBtn=null; document.querySelectorAll(".note.on").forEach(n=>n.classList.remove("on")); } }, ms);
+}
+
+/* studio signature: a fixed motif in D lydian */
+const SIGNATURE = (()=>{ const R={bpm:92,scaleKey:"lydian",key:"D lydian",motif:[{midi:62,dur:.5},{midi:69,dur:.5},{midi:68,dur:1},{midi:74,dur:2.5}]}; return R; })();
+
+/* ---------- visuals ---------- */
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const rib = $("#ribbons"), rc = rib.getContext("2d");
+let level = 0, tt = 0, looping = false;
+function sizeCanvas(c){ const dpr=Math.min(2,devicePixelRatio||1); const w=c.clientWidth, h=c.clientHeight; if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){ c.width=Math.round(w*dpr); c.height=Math.round(h*dpr);} return dpr; }
+const buf = new Uint8Array(1024);
+function frame(){
+  if (analyser){ analyser.getByteTimeDomainData(buf); let s=0; for(let i=0;i<buf.length;i++){ const v=(buf[i]-128)/128; s+=v*v; } level += (Math.min(1,Math.sqrt(s/buf.length)*5) - level)*.15; }
+  drawRibbons(); drawScope();
+  tt += reduce ? 0 : 1/60;
+  if (!reduce || level>.01 || playingBtn) requestAnimationFrame(frame); else looping=false;
+}
+function drawRibbons(){
+  const dpr = sizeCanvas(rib), W=rib.width, H=rib.height; rc.clearRect(0,0,W,H);
+  rc.globalCompositeOperation = "lighter";
+  const cols = [[228,194,143],[255,106,61],[217,87,123],[243,236,226]];
+  for (let k=0;k<7;k++){
+    const c = cols[k%cols.length];
+    const grad = rc.createLinearGradient(0,0,W,0);
+    grad.addColorStop(0,`rgba(${c},0)`); grad.addColorStop(.5,`rgba(${c},${.32 - k*.03})`); grad.addColorStop(1,`rgba(${c},0)`);
+    rc.strokeStyle = grad; rc.lineWidth = (1.4 + (k===0?1.2:0))*dpr;
+    rc.beginPath();
+    const amp = H*(.16 + level*.5)*(1 - k*.07);
+    for (let x=0;x<=W;x+=6*dpr){
+      const u = x/W, env = Math.sin(Math.PI*u);
+      const y = H*.55 + Math.sin(u*(5+k*.6)+tt*(.6+k*.13)+k)*amp*env + Math.sin(u*13 - tt*1.3 + k*2)*amp*.18*env;
+      x===0 ? rc.moveTo(x,y) : rc.lineTo(x,y);
+    }
+    rc.stroke();
+  }
+  rc.globalCompositeOperation = "source-over";
+}
+function drawScope(){
+  const c = scopeCanvas; if (!c || !c.isConnected) return;
+  const dpr=sizeCanvas(c), x=c.getContext("2d"), W=c.width, H=c.height; x.clearRect(0,0,W,H);
+  x.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--ember").trim() || "#ff6a3d";
+  x.lineWidth = 1.6*dpr; x.beginPath();
+  const n = 256;
+  for (let i=0;i<n;i++){ const v = analyser ? (buf[i*4]-128)/128 : 0; const y = H/2 + v*H*.45 + (analyser?0:Math.sin(i/n*Math.PI*6+tt*2)*H*.04); const px=i/(n-1)*W; i?x.lineTo(px,y):x.moveTo(px,y); }
+  x.stroke();
+}
+function wake(){ if (!looping){ looping=true; requestAnimationFrame(frame); } }
+addEventListener("resize", wake);
+
+/* ---------- events ---------- */
+$("#form").addEventListener("submit", e=>{ e.preventDefault(); S.take=0; generate(true); });
+$("#form").addEventListener("change", e=>{ if (e.target.type==="radio"){ readForm(); generate(false); } });
+$("#againBtn").addEventListener("click", ()=>{ S.take++; generate(true); });
+$("#presets").addEventListener("click", e=>{ const b=e.target.closest("[data-p]"); if(b) applyPreset(b.dataset.p); });
+$("#tabs").addEventListener("click", e=>{ const b=e.target.closest("[data-tab]"); if(!b) return; stopAudio(); S.tab=+b.dataset.tab; renderResult(); });
+$("#tabs").addEventListener("keydown", e=>{ if(!["ArrowLeft","ArrowRight"].includes(e.key)) return; const dir=(e.key==="ArrowRight")===(S.ui==="en")?1:-1; S.tab=(S.tab+dir+5)%5; stopAudio(); renderResult(); $("#tab-"+S.tab).focus(); });
+$("#pane").addEventListener("click", e=>{
+  const p = e.target.closest("[data-play]"); if (p){ toggle(p, p.dataset.play, S.result); wake(); return; }
+  const c = e.target.closest("[data-copy]"); if (c){
+    const pre = $("#pr-"+c.dataset.copy), text = S.result.prompts[c.dataset.copy];
+    const fallback = ()=>{ const r=document.createRange(); r.selectNodeContents(pre); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast(t("copyFail")); };
+    try { navigator.clipboard.writeText(text).then(()=>{ c.textContent=t("copied"); setTimeout(()=>c.textContent=t("copy"),1600); }, fallback); } catch { fallback(); }
+  }
+});
+$("#heroPlay").addEventListener("click", e=>{ const b=e.currentTarget; if(b.classList.contains("playing")){stopAudio();return;} const ms=play("logo",SIGNATURE); if(!ms) return; b.classList.add("playing"); playingBtn=b; stopAudio._t=setTimeout(()=>{b.classList.remove("playing"); if(playingBtn===b) playingBtn=null;},ms); wake(); });
+$("#langBtn").addEventListener("click", ()=>{
+  readForm(); const old = S.ui; S.ui = old==="ar"?"en":"ar"; store.set("ui",S.ui);
+  const p = PRESETS.find(x=>x.brand[old]===S.brand.trim());
+  if (p){ $("#fBrand").value=p.brand[S.ui]; $("#fProduct").value=p.product[S.ui]; $("#fMsg").value=p.msg[S.ui]; if (S.lang===old) S.lang=S.ui; }
+  renderStatic(); generate(false);
+});
+$("#setBtn").addEventListener("click", ()=>{ $("#kKey").value=store.get("key",""); $("#kModel").value=store.get("model","gemini-2.5-flash"); const d=$("#dlg"); if (d.showModal) d.showModal(); });
+$("#dlg").addEventListener("close", ()=>{ if ($("#dlg").returnValue==="save"){ store.set("key",$("#kKey").value.trim()); store.set("model",$("#kModel").value.trim()||"gemini-2.5-flash"); toast(t("saved")); } });
+
+/* ---------- boot ---------- */
+renderStatic();
+applyPreset("coffee");
+wake();
+})();
+</script>
+</body>
+</html>
