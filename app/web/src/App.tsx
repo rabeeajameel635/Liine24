@@ -7,6 +7,7 @@ import type { Icon as PIcon } from '@phosphor-icons/react';
 import { api, fmtDate, type Album, type Asset } from './api.ts';
 import { Library, statusOf } from './Library.tsx';
 import { Status, Toaster } from './ui.tsx';
+import { CharacterScreen } from './Character.tsx';
 
 type Route = { view: 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills'; album: string };
 const parse = (): Route => { const [, v = 'library', a = 'all'] = location.hash.split('/'); return { view: (v || 'library') as Route['view'], album: decodeURIComponent(a) }; };
@@ -85,7 +86,7 @@ export function App() {
       {route.view === 'today' && <Today albums={albums} go={go} />}
       {route.view === 'studio' && <Studio go={go} />}
       {route.view === 'song' && <SongHero />}
-      {route.view === 'characters' && <CharacterHero people={albums?.people ?? []} go={go} />}
+      {route.view === 'characters' && <CharacterScreen />}
       {(route.view === 'connections' || route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && <Inspector a={picked} />}
@@ -160,18 +161,6 @@ function SongHero() {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginTop: 10 }}><span className="big-num">71.9</span><span className="mute" style={{ paddingBottom: 14 }}>BPM</span></div>
       <Status kind="warn" label="قياس قديم · يتقاس من الملف النهائي" />
       <div className="wave" aria-hidden="true">{Array.from({ length: 96 }, (_, i) => <i key={i} style={{ height: `${18 + Math.abs(Math.sin(i * 0.37)) * 70}%`, background: colors[Math.floor(i / 24)], opacity: .35 }} />)}</div>
-    </Hero>
-  );
-}
-
-function CharacterHero({ people, go }: { people: Album[]; go: (v: Route['view'], a?: string) => void }) {
-  const donia = people[0];
-  const [err, setErr] = useState(false);
-  return (
-    <Hero art={donia?.cover && !err ? <img src={`/media/${donia.cover}/thumb`} alt="" onError={() => setErr(true)} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}><UserCircle size={140} weight="thin" color="var(--mute)" /></div>}>
-      <h1>{donia?.title ?? 'دنيا'}</h1>
-      <p className="mute" style={{ margin: '4px 0 14px' }}>Donia-Final · LIINE24</p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Status kind="wait" label="البطاقة بتتملي في الخطوة الجاية" />{donia && <button className="gbtn glass" onClick={() => go('library', donia.id)}>{donia.count} صورة</button>}</div>
     </Hero>
   );
 }

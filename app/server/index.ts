@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { openDb, NotApprovedError } from './db.ts';
 import { libraryRoutes } from './library.ts';
+import { characterRoutes, seedDonia } from './characters.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.GHORFA_DATA ?? join(homedir(), 'Library', 'Application Support', 'Ghorfa');
@@ -22,6 +23,8 @@ app.setErrorHandler((err, _req, reply) => {
 });
 
 await libraryRoutes(app, db, dataDir);
+seedDonia(db);
+await characterRoutes(app, db);
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 

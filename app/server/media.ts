@@ -57,10 +57,39 @@ async function capped(src: string, dst: string, p: Probe) {
   }
 }
 
-async function thumb(src: string, dst: string, p: Probe) {
+/** Finds the main content panel of a sheet-style image (panels on a light background with light gutters).
+ *  Returns a crop box in source pixels, or null when there is nothing worth trimming. Used for grid thumbnails only. */
+export async function contentBox(src: string, p: Probe): Promise<{ x: number; y: number; w: number; h: number } | null> {
+  if (p.kind !== 'image' || !p.width || !p.height) return null;
+  const W = 240, H = Math.max(1, Math.round(W * p.height / p.width));
+  const { stdout } = await run('ffmpeg', ['-v', 'error', '-i', src, '-vf', `scale=${W}:${H},format=gray`, '-f', 'rawvideo', '-'], { encoding: 'buffer', maxBuffer: 1 << 24 }) as unknown as { stdout: Buffer };
+  if (stdout.length < W * H) return null;
+  const light = (v: number) => v > 222;
+  // a line is a gutter when almost all of it is near-white
+  const segs = (n: number, isGutter: (i: number) => boolean) => {
+    const out: [number, number][] = []; let s = -1;
+    for (let i = 0; i <= n; i++) { const g = i === n || isGutter(i); if (!g && s < 0) s = i; if (g && s >= 0) { out.push([s, i]); s = -1; } }
+    return out;
+  };
+  const colGutter = (x: number) => { let k = 0; for (let y = 0; y < H; y++) if (light(stdout[y * W + x])) k++; return k / H > 0.9; };
+  const cols = segs(W, colGutter).filter(([a, b]) => b - a > W * 0.12);
+  if (!cols.length) return null;
+  const mid = W / 2;
+  const [x0, x1] = cols.find(([a, b]) => a <= mid && b >= mid) ?? cols.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  const rowGutter = (y: number) => { let k = 0; for (let x = x0; x < x1; x++) if (light(stdout[y * W + x])) k++; return k / (x1 - x0) > 0.9; };
+  const rows = segs(H, rowGutter).filter(([a, b]) => b - a > H * 0.12).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
+  const [y0, y1] = rows[0] ?? [0, H];
+  if ((x1 - x0) * (y1 - y0) > W * H * 0.9) return null; // nothing meaningful to trim
+  const s = p.width / W;
+  return { x: Math.floor(x0 * s), y: Math.floor(y0 * s), w: Math.ceil((x1 - x0) * s), h: Math.ceil((y1 - y0) * s) };
+}
+
+export async function thumb(src: string, dst: string, p: Probe) {
   const args = ['-v', 'error', '-y'];
   if (p.kind === 'video') args.push('-ss', String(Math.min(1, (p.duration ?? 2) / 2)));
-  args.push('-i', src, '-frames:v', '1', '-vf', "scale='if(gt(iw,ih),-2,640)':'if(gt(iw,ih),640,-2)'", '-q:v', '4', dst);
+  const box = p.kind === 'image' ? await contentBox(src, await probe(src)).catch(() => null) : null; // src may be the capped copy
+  const crop = box ? `crop=${box.w}:${box.h}:${box.x}:${box.y},` : '';
+  args.push('-i', src, '-frames:v', '1', '-vf', `${crop}scale='if(gt(iw,ih),-2,640)':'if(gt(iw,ih),640,-2)'`, '-q:v', '4', dst);
   await run('ffmpeg', args);
 }
 

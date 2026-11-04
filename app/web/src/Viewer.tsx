@@ -13,10 +13,12 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
   const [split, setSplit] = useState(0.5);
   const [dy, setDy] = useState(0);
   const [failed, setFailed] = useState<Record<string, boolean>>({});
+  const [fill, setFill] = useState(false);
+  const lastTap = useRef(0);
   const start = useRef<{ x: number; y: number } | null>(null);
   const rtl = document.dir === 'rtl' || document.documentElement.dir === 'rtl';
 
-  const go = (d: number) => { const n = index + d; if (n >= 0 && n < items.length) onIndex(n); };
+  const go = (d: number) => { const n = index + d; if (n >= 0 && n < items.length) { setFill(false); onIndex(n); } };
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { info ? setInfo(false) : cmp != null ? setCmp(null) : onClose(); }
@@ -33,6 +35,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
   const onUp = (e: React.PointerEvent) => {
     const s = start.current; start.current = null; if (!s) return;
     const dx = e.clientX - s.x, ddy = e.clientY - s.y; setDy(0);
+    if (Math.abs(dx) < 8 && Math.abs(ddy) < 8) { const now = Date.now(); if (now - lastTap.current < 300) { setFill(f => !f); lastTap.current = 0; return; } lastTap.current = now; }
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(ddy)) go((dx < 0 ? 1 : -1) * (rtl ? -1 : 1));
     else if (ddy > 110 && !info) onClose();
     else if (ddy < -60) setInfo(true);
@@ -67,7 +70,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
         </div>
       </div>
 
-      <div className="stage" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { start.current = null; setDy(0); }}
+      <div className={'stage' + (fill ? ' fill' : '')} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { start.current = null; setDy(0); }}
         style={{ transform: dy ? `translateY(${dy}px) scale(${1 - Math.min(dy / 1600, .15)})` : undefined }}>
         {other ? (
           <Compare a={a} b={other} split={split} setSplit={setSplit} render={media} />
@@ -90,21 +93,13 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
 
       <section className={'sheet glass-strong' + (info ? ' open' : '')} aria-hidden={!info}
         onPointerDown={onDown} onPointerUp={onUp}>
-        <div className="grab" />
+        <button className="grab" onClick={() => setInfo(false)} aria-label="اقفل المعلومات" />
         <h3>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h3>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}><Status kind={st} />{a.locked && <span className="pill">مرجع مقفول</span>}</div>
         <dl className="kv">
-          <dt>الأداة</dt><dd>{[prov.tool, prov.model].filter(Boolean).join(' · ') || '—'}</dd>
-          <dt>الشخصية</dt><dd>{a.character_name ?? '—'}</dd>
-          <dt>اللقطة</dt><dd>{a.shot_id ?? 'لسه مش مربوطة'}</dd>
-          <dt>الـ seed</dt><dd>{prov.seed ?? '—'}</dd>
-          <dt>النسخة</dt><dd>{prov.version ?? (a.role === 'sheet' ? 'v2' : '—')}</dd>
-          <dt>المراجع اللي اتبعتت</dt><dd>{prov.refs_sent?.length ? prov.refs_sent.join('، ') : '—'}</dd>
-          <dt>الفحص</dt><dd>{a.face_check === 'pending' ? 'تطابق الوش: لسه (النموذج بيتختار)' : a.face_check === 'pass' ? 'تطابق الوش ✓' : '⚠ الوش بعيد عن البطاقة'}</dd>
-          <dt>الرخصة</dt><dd>{prov.license ?? '—'}</dd>
-          <dt>المقاس</dt><dd><span className="ltr">{a.width ? `${a.width}×${a.height}` : '—'}{a.duration ? ` · ${fmtDur(a.duration)}` : ''}</span></dd>
+          {infoRows(a).map(([k, v]) => <Row key={k} k={k} v={v} />)}
         </dl>
-        <div className="prompt">{prov.prompt ?? (a.source === 'higgsfield' ? 'مرفوع على Higgsfield، ملوش برومبت.' : 'مفيش برومبت متسجل.')}</div>
+        {prov.prompt ? <div className="prompt">{prov.prompt}</div> : <p className="mute" style={{ margin: '14px 0 0', fontSize: 15 }}>{a.source === 'higgsfield' ? 'مرفوع على Higgsfield من غير برومبت.' : 'من غير برومبت.'}</p>}
       </section>
     </div>
   );
@@ -124,3 +119,21 @@ function Compare({ a, b, split, setSplit, render }: { a: Asset; b: Asset; split:
     </div>
   );
 }
+
+/** Only rows that carry a value; empty fields stay hidden. */
+function infoRows(a: Asset): [string, React.ReactNode][] {
+  const p = a.provenance;
+  const rows: [string, React.ReactNode][] = [
+    ['الأداة', [p.tool, p.model].filter(Boolean).join(' · ')],
+    ['الشخصية', a.character_name],
+    ['اللقطة', a.shot_id],
+    ['الـ seed', p.seed],
+    ['النسخة', p.version],
+    ['المراجع اللي اتبعتت', p.refs_sent?.length ? p.refs_sent.join('، ') : null],
+    ['الفحص', a.face_check === 'pass' ? 'تطابق الوش ✓' : a.face_check === 'warn' ? '⚠ الوش بعيد عن البطاقة' : null],
+    ['الرخصة', p.license],
+    ['المقاس', a.width ? <span className="ltr">{`${a.width}×${a.height}`}{a.duration ? ` · ${fmtDur(a.duration)}` : ''}</span> : null]
+  ];
+  return rows.filter(([, v]) => v != null && v !== '');
+}
+function Row({ k, v }: { k: string; v: React.ReactNode }) { return <><dt>{k}</dt><dd>{v}</dd></>; }
