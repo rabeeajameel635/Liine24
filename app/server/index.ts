@@ -9,6 +9,8 @@ import { openDb, NotApprovedError } from './db.ts';
 import { libraryRoutes } from './library.ts';
 import { characterRoutes, seedDonia, pieceRoutes } from './characters.ts';
 import { songRoutes, seedIatw } from './songs.ts';
+import { connectionRoutes } from './connections.ts';
+import { initSecrets } from './secrets.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.GHORFA_DATA ?? join(homedir(), 'Library', 'Application Support', 'Ghorfa');
@@ -28,6 +30,8 @@ seedDonia(db);
 await characterRoutes(app, db);
 await pieceRoutes(app, db, dataDir);
 await songRoutes(app, db, dataDir);
+initSecrets(dataDir);
+await connectionRoutes(app, db, dataDir, PORT);
 await seedIatw(db, join(root, '..'));
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));

@@ -74,7 +74,7 @@ import { existsSync as exists } from 'node:fs';
 import { join as pjoin } from 'node:path';
 
 const PIECES = [
-  { id: 'donia-clip', name: 'مشبك «سِرّ»', ref: 'fab411cb', box: { x: 0.712, y: 0.605, w: 0.06, h: 0.095 }, mode: 'red' },
+  { id: 'donia-clip', name: 'مشبك «سِرّ»', ref: 'fab411cb', box: { x: 0.72, y: 0.64, w: 0.045, h: 0.034 }, view: { x: 0.712, y: 0.605, w: 0.06, h: 0.095 }, mode: 'red' },
   { id: 'donia-jacket', name: 'الجاكيت', ref: '3b66f274', box: { x: 0.31, y: 0.16, w: 0.16, h: 0.5 }, mode: 'all' },
   { id: 'donia-blouse', name: 'البلوزة الأوف وايت', ref: '3b66f274', box: { x: 0.55, y: 0.16, w: 0.1, h: 0.32 }, mode: 'all' },
   { id: 'donia-trousers', name: 'البنطلون الأوف وايت', ref: '9edbdf00', box: { x: 0.41, y: 0.5, w: 0.13, h: 0.34 }, mode: 'all' },
@@ -85,6 +85,8 @@ function seedPieces(db: DB) {
   if (!db.prepare(`SELECT 1 FROM character WHERE id = 'donia'`).get()) return; // the card comes with the Higgsfield import
   const ins = db.prepare(`INSERT OR IGNORE INTO wardrobe_piece (id, character_id, name, asset_ref, box, mode) VALUES (?, 'donia', ?, ?, ?, ?)`);
   for (const p of PIECES) ins.run(String(p.id), String(p.name), String(p.ref), JSON.stringify(p.box), String(p.mode));
+  // keep measurement boxes in step with the code (a box change resets the measured colour)
+  for (const p of PIECES) { const r = db.prepare('SELECT box FROM wardrobe_piece WHERE id = ?').get(p.id) as { box: string } | undefined; if (r && r.box !== JSON.stringify(p.box)) db.prepare('UPDATE wardrobe_piece SET box = ?, hex = NULL, approved_at = NULL WHERE id = ?').run(JSON.stringify(p.box), p.id); }
 }
 
 async function measure(path: string, box: { x: number; y: number; w: number; h: number }, mode: string): Promise<string[]> {
@@ -94,14 +96,13 @@ async function measure(path: string, box: { x: number; y: number; w: number; h: 
   let px: number[][] = []; for (let i = 0; i + 2 < stdout.length; i += 3) px.push([stdout[i], stdout[i + 1], stdout[i + 2]]);
   if (mode === 'red') px = px.filter(([r, g, b]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return r === mx && mx > 60 && (mx - mn) / mx > 0.45 && g < r * 0.6; });
   if (px.length < 8) return [];
-  // median colour (robust to stray pixels) + the darker/lighter cluster spread
-  const med = (k: number) => px.map(p => p[k]).sort((a, b) => a - b)[Math.floor(px.length / 2)];
+  // sort by luminance: base = mean of the mid-lit band (no shadow, no sheen); shadow = darkest 15%; light = brightest 8%
   const lum = (p: number[]) => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
-  const sorted = [...px].sort((a, b) => lum(a) - lum(b));
+  const sorted = [...px].sort((a, b) => lum(a) - lum(b)); const n = sorted.length;
   const avg = (arr: number[][]) => [0, 1, 2].map(k => arr.reduce((s, p) => s + p[k], 0) / arr.length);
-  const shadow = avg(sorted.slice(0, Math.floor(px.length * 0.2))), light = avg(sorted.slice(Math.floor(px.length * 0.8)));
+  const band = (a: number, b: number) => sorted.slice(Math.floor(n * a), Math.max(Math.floor(n * a) + 1, Math.floor(n * b)));
   const hex = (c: number[]) => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
-  return [hex([med(0), med(1), med(2)]), hex(shadow), hex(light)];
+  return [hex(avg(band(0.35, 0.8))), hex(avg(band(0, 0.15))), hex(avg(band(0.92, 1)))];
 }
 
 export async function pieceRoutes(app: FastifyInstance, db: DB, dataDir: string) {
@@ -126,11 +127,13 @@ export async function pieceRoutes(app: FastifyInstance, db: DB, dataDir: string)
     const r = db.prepare('SELECT * FROM wardrobe_piece WHERE id = ?').get(id) as Row | undefined;
     const p = r && pathOf(String(r.asset_ref)); if (!r || !p) return reply.code(404).send({ what: 'مش موجود' });
     const dir = pjoin(dataDir, 'pieces'); await mkdirP(dir, { recursive: true });
-    const out = pjoin(dir, `${id}.jpg`);
+    const large = (req.query as { size?: string }).size === 'large';
+    const out = pjoin(dir, `${id}${large ? '-l' : ''}.jpg`);
     if (!exists(out)) {
-      const b = JSON.parse(String(r.box)); const pad = 0.6; // show a bit of context around the box
+      const view = (PIECES.find(p => p.id === id) as { view?: { x: number; y: number; w: number; h: number } } | undefined)?.view;
+      const b = view ?? JSON.parse(String(r.box)); const pad = large ? 0.35 : 0.6; // show a bit of context around the box
       const x = Math.max(0, b.x - b.w * pad), y = Math.max(0, b.y - b.h * pad), w = Math.min(1 - x, b.w * (1 + 2 * pad)), h = Math.min(1 - y, b.h * (1 + 2 * pad));
-      await run('ffmpeg', ['-v', 'error', '-y', '-i', p, '-vf', `crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=360:-2`, '-q:v', '3', out]);
+      await run('ffmpeg', ['-v', 'error', '-y', '-i', p, '-vf', `crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=${large ? 900 : 360}:-2:flags=lanczos`, '-q:v', '3', out]);
     }
     reply.type('image/jpeg'); const { createReadStream } = await import('node:fs'); return reply.send(createReadStream(out));
   });

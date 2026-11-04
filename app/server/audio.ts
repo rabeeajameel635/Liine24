@@ -34,6 +34,10 @@ export function tempo(x: Float32Array): { bpm: number; conf: number }[] {
     res.push({ bpm: +bpm.toFixed(1), s });
   }
   res.sort((a, b) => b.s - a.s);
+  // refine the best candidates to 0.01 BPM
+  const score = (bpm: number) => { const lag = 6000 / bpm; let s = 0; for (let k = 1; k <= 4; k++) { const L = lag * k, l0 = Math.floor(L), fr = L - l0; for (let i = 0; i + l0 + 1 < o.length; i += 2) s += o[i] * (o[i + l0] * (1 - fr) + o[i + l0 + 1] * fr) / k; } return s; };
+  for (const r of res.slice(0, 6)) { let best = r.bpm, bs = r.s; for (let b = r.bpm - 0.1; b <= r.bpm + 0.1; b += 0.01) { const v = score(b); if (v > bs) { bs = v; best = b; } } r.bpm = +best.toFixed(2); r.s = bs; }
+  res.sort((a, b) => b.s - a.s);
   const picks: typeof res = []; for (const r of res) { if (picks.every(p => Math.abs(p.bpm - r.bpm) > 3)) picks.push(r); if (picks.length === 4) break; }
   return picks.map(p => ({ bpm: p.bpm, conf: +(p.s / picks[0].s).toFixed(2) }));
 }

@@ -55,7 +55,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
   async function analyze(songId: string) {
     const s = song(songId)!; const p = audioPath(s); if (!p) return;
     const x = await decode(p); const dur = x.length / 11025;
-    const cands = tempo(x); const bpm = Number(s.bpm) || cands[0].bpm;
+    const cands = tempo(x).map(c => ({ ...c, offset: beatOffset(x, c.bpm) })); const bpm = Number(s.bpm) || cands[0].bpm;
     await writeFile(join(peaksDir, songId + '.json'), JSON.stringify(peaks(x)));
     const cues = JSON.parse(String(s.srt ?? '[]')) as Cue[];
     db.prepare(`UPDATE song SET duration = ?, bpm_candidates = ?, bpm = COALESCE(bpm, ?), bpm_source = COALESCE(bpm_source, 'measured'), beat_offset = COALESCE(beat_offset, ?),
@@ -150,6 +150,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     for (const f of FIELDS) if (f in b) { set.push(`${f} = ?`); const v = b[f]; args.push(v == null ? null : typeof v === 'object' ? JSON.stringify(v) : (v as string | number)); }
     if (!set.length) return { ok: true };
     db.prepare(`UPDATE segment SET ${set.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...args, id);
+    if ('prompt_partial' in b || 'refs' in b || 'direction' in b) db.prepare('UPDATE segment SET draft = 0 WHERE id = ?').run(id);
     if (b.status === 'done') db.prepare(`INSERT OR IGNORE INTO approval (id, subject_type, subject_id, stage) VALUES (?, 'segment', ?, 'done')`).run(randomUUID(), id);
     return shapeSeg(db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row);
   });
@@ -262,16 +263,22 @@ export function attachFromInbox(db: DB, assetId: string, fileName: string) {
 }
 
 /** First song: I Am The World, imported from the director's map (v7 shots, v7.1 long-take groups) in studio/data.js. */
+const IATW_NOTE = 'تقسيم مبدئي من خريطة v7. محتوى كل مقطع (اللقطات والبرومبت) هييجي من التايم لاين الجديد v44.';
 export async function seedIatw(db: DB, repoRoot: string) {
-  if (db.prepare(`SELECT 1 FROM song WHERE id = 'iatw-v44'`).get()) return;
+  if (db.prepare(`SELECT 1 FROM song WHERE id = 'iatw-v44'`).get()) {
+    db.prepare(`UPDATE song SET plan_note = ? WHERE id = 'iatw-v44' AND plan_note IS NULL`).run(IATW_NOTE);
+    db.prepare(`UPDATE segment SET draft = 1 WHERE song_id = 'iatw-v44' AND label IS NOT NULL AND status = 'idea' AND draft = 0 AND prompt_partial = ''`).run();
+    return;
+  }
   const src = await readFile(join(repoRoot, 'studio', 'data.js'), 'utf8').catch(() => null); if (!src) return;
   const D = JSON.parse(src.slice(src.indexOf('{'), src.lastIndexOf('}') + 1)) as { shots: Row[]; longs: Row[]; cues: Cue[]; sections: { name: string; start: number }[] };
   const poster = db.prepare(`SELECT id FROM asset WHERE label = 'Departure'`).get() as { id?: string } | undefined;
   db.prepare(`INSERT INTO song (id, project_id, title, bpm, bpm_source, bpm_approved, sections, srt, duration, beat_offset, poster_asset_id, segment_seconds, created_at)
     VALUES ('iatw-v44', 'iatw', 'I Am The World', 71.9, 'قياس سابق', 0, ?, ?, 256, 1.3, ?, 15, datetime('now'))`).run(JSON.stringify(D.sections), JSON.stringify(D.cues), poster?.id ?? null);
+  db.prepare(`UPDATE song SET plan_note = ? WHERE id = 'iatw-v44'`).run(IATW_NOTE);
   const toolOf = (t: string) => /H3/.test(t) ? 'higgsfield-minimax' : /Kling/.test(t) ? 'higgsfield-kling' : /Veo/.test(t) ? 'flow' : 'stills';
   const groupOf = (n: number) => { for (const l of D.longs) { const nums = (String(l.from_).match(/\d+/g) || []).map(Number); const rng = /→/.test(String(l.from_)) ? Array.from({ length: nums[1] - nums[0] + 1 }, (_, k) => nums[0] + k) : nums; if (rng.includes(n)) return String(l.id); } return null; };
-  const ins = db.prepare(`INSERT INTO segment (id, song_id, idx, start_s, end_s, label, group_label, lyric, direction, tool, backup) VALUES (?, 'iatw-v44', ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const ins = db.prepare(`INSERT INTO segment (id, song_id, idx, start_s, end_s, label, group_label, lyric, direction, tool, backup, draft) VALUES (?, 'iatw-v44', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
   for (const sh of D.shots) {
     const tool = toolOf(String(sh.tool));
     ins.run(randomUUID(), Number(sh.n), Number(sh.start), Number(sh.end), String(sh.n).padStart(2, '0'), groupOf(Number(sh.n)), String(sh.lyric), String(sh.desc),

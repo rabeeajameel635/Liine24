@@ -10,6 +10,7 @@ import { Status, Toaster } from './ui.tsx';
 import { CharacterScreen } from './Character.tsx';
 import { Home } from './Songs.tsx';
 import { Board, Montage } from './Board.tsx';
+import { Connections } from './Connections.tsx';
 
 type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage'; album: string; sub?: string };
 const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
@@ -91,7 +92,8 @@ export function App() {
       {route.view === 'studio' && <Studio go={go} />}
       {route.view === 'song' && <SongHero />}
       {route.view === 'characters' && <CharacterScreen />}
-      {(route.view === 'connections' || route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
+      {route.view === 'connections' && <Connections />}
+      {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && <Inspector a={picked} />}
 

@@ -7,11 +7,11 @@ import { toast } from './ui.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
-  tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string };
+  tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
 type Status = 'idea' | 'ready' | 'generating' | 'done' | 'editing';
 type Tool = { name: string; via: string; mode: 'mcp' | 'bridge'; url: string };
 type Song = { id: string; title: string; bpm: number; bpm_approved: number; beat_offset: number; bar: number; duration: number; sections: { name: string; start: number }[]; peaks: number[] | null;
-  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number }[] };
+  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number }[]; plan_note: string | null };
 
 export const STATUS: Record<Status, { t: string; c: string }> = {
   idea: { t: 'فكرة', c: '#8e8e93' }, ready: { t: 'جاهز للتوليد', c: '#0a84ff' }, generating: { t: 'بيتولّد', c: '#ff9f0a' }, done: { t: 'تمّت ✓', c: '#30d158' }, editing: { t: 'في المونتاج', c: '#5e5ce6' }
@@ -61,6 +61,8 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
           <div className="board-ring"><ProgressRing done={done} total={segs.length} size={72} /><span>{arNum(done)} من {arNum(segs.length)} ✓</span></div>
         </header>
         {!song.audio && <AudioMissing song={song} reload={load} />}
+        {song.audio && !song.bpm_approved && song.bpm_candidates.length > 0 && <BpmCompare song={song} reload={load} />}
+        {song.plan_note && <div className="banner glass soft"><span className="pill sm">مبدئي</span><span>{song.plan_note}</span></div>}
         <SplitBar song={song} reload={load} />
         <div className="filters">
           <button className="chip-f" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>الكل <b>{arNum(segs.length)}</b></button>
@@ -75,7 +77,7 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
                 <div className="seg-thumb">{thumbOf(s) ? <img src={thumbOf(s)!} alt="" loading="lazy" /> : <span className="seg-num-big">{s.label ?? s.idx}</span>}
                   <span className="seg-dot" style={{ background: STATUS[s.status].c }} title={STATUS[s.status].t} /></div>
                 <div className="seg-body">
-                  <div className="seg-top"><b>{s.label ?? String(s.idx).padStart(2, '0')}</b>{s.group_label && <span className="pill sm">{s.group_label}</span>}<span className="tc">{tc(s.start_s)}</span></div>
+                  <div className="seg-top"><b>{s.label ?? String(s.idx).padStart(2, '0')}</b>{s.group_label && <span className="pill sm">{s.group_label}</span>}{!!s.draft && <span className="pill sm ghost">مبدئي</span>}<span className="tc">{tc(s.start_s)}</span></div>
                   <p className="ltr">{s.lyric || '—'}</p>
                 </div>
               </button>
@@ -97,6 +99,24 @@ function AudioMissing({ song, reload }: { song: Song; reload: () => void }) {
       <span>ملف الأغنية مش هنا. اسحب <b className="ltr">I_Am_The_World_v44_FINAL.flac</b> عشان الموجة والتشغيل وقياس الـ BPM.</span>
       <button className="gbtn" onClick={() => inp.current?.click()} disabled={busy}>{busy ? 'بيحلل…' : 'اختار الملف'}</button>
       <input ref={inp} type="file" accept="audio/*" hidden onChange={e => up(e.target.files?.[0])} />
+    </div>
+  );
+}
+
+function BpmCompare({ song, reload }: { song: Song; reload: () => void }) {
+  const top = song.bpm_candidates[0]; const ref = 71.9;
+  const diff = +(top.bpm - song.bpm).toFixed(2);
+  const approve = async (bpm: number, offset?: number) => { await fetch(`/api/songs/${song.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bpm, beat_offset: offset }) }); await fetch(`/api/songs/${song.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bpm_approved: true }) }); toast(`الإيقاع اتعتمد: ${bpm}`); reload(); };
+  return (
+    <div className="bpm-compare glass">
+      <div><span className="mute">القياس من الملف</span><b className="big">{top.bpm}</b></div>
+      <div><span className="mute">القياس السابق</span><b className="big">{song.bpm}</b></div>
+      <div><span className="mute">الفرق</span><b className="big">{diff > 0 ? '+' : ''}{diff}</b><span className="mute">{Math.abs(diff) < 0.05 ? 'مطابق' : `≈ ${Math.abs(diff / ref * 100).toFixed(2)}٪`}</span></div>
+      <div className="bc-actions">
+        <button className="gbtn primary" onClick={() => approve(top.bpm, top.offset)}>اعتمد {top.bpm}</button>
+        <button className="gbtn" onClick={() => approve(song.bpm)}>خلّي {song.bpm}</button>
+        {song.bpm_candidates.slice(1, 3).map(c => <button key={c.bpm} className="chip-f" onClick={() => approve(c.bpm, c.offset)}>{c.bpm} <b>{Math.round(c.conf * 100)}٪</b></button>)}
+      </div>
     </div>
   );
 }
@@ -217,6 +237,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: S
   };
   const setPlan_ = (body: { tool?: string; prompt_partial?: string }) => plan === 'primary' ? save(body) : save({ backup: { ...backup, ...body } });
   const move = (i: number, d: number) => { const r = [...s.refs]; const j = i + d; if (j < 0 || j >= r.length) return; [r[i], r[j]] = [r[j], r[i]]; save({ refs: r }, true); };
+  const [dragI, setDragI] = useState<number | null>(null); const [overI, setOverI] = useState<number | null>(null);
+  const dropAt = (to: number) => { if (dragI == null || dragI === to) { setDragI(null); setOverI(null); return; } const r = [...s.refs]; const [x] = r.splice(dragI, 1); r.splice(to, 0, x); setDragI(null); setOverI(null); save({ refs: r }, true); };
   const peaks = song.peaks ? song.peaks.slice(Math.floor(s.start_s / song.duration * song.peaks.length), Math.ceil(s.end_s / song.duration * song.peaks.length)) : null;
   const video = s.video_asset_id ? assets[s.video_asset_id] : null;
 
@@ -227,7 +249,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: S
         <header className="ss-head">
           <button className="gbtn icon" onClick={close} aria-label="اقفل"><X size={20} /></button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="ss-title"><h2>مقطع {s.label ?? s.idx}</h2>{s.group_label && <span className="pill">{s.group_label}</span>}<span className="tc">{tc(s.start_s)} → {tc(s.end_s)}</span></div>
+            <div className="ss-title"><h2>مقطع {s.label ?? s.idx}</h2>{s.group_label && <span className="pill">{s.group_label}</span>}{!!s.draft && <span className="pill ghost">مبدئي · v7</span>}<span className="tc">{tc(s.start_s)} → {tc(s.end_s)}</span></div>
             <p className="ss-lyric ltr">{s.lyric || '—'}</p>
           </div>
           <span className="saved mute">{saved ? 'اتحفظ' : ''}</span>
@@ -250,10 +272,12 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: S
           {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
         </div>
 
-        <h3 className="ss-h">الصور <span className="mute">الترتيب = ترتيب الإرسال</span></h3>
+        <h3 className="ss-h">الصور <span className="mute">الترتيب = ترتيب الإرسال · اسحب لترتيبها</span></h3>
         <div className="slots">
           {s.refs.map((id, i) => { const a = assets[id]; return (
-            <figure key={id + i} className={'slot' + (a?.no_generation ? ' blocked' : '')}>
+            <figure key={id + i} className={'slot' + (a?.no_generation ? ' blocked' : '') + (dragI === i ? ' dragging' : '') + (overI === i && dragI !== i ? ' over' : '')}
+              draggable onDragStart={e => { setDragI(i); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => { setDragI(null); setOverI(null); }}
+              onDragOver={e => { e.preventDefault(); setOverI(i); }} onDrop={e => { e.preventDefault(); dropAt(i); }}>
               {a?.thumb && <img src={a.thumb} alt="" />}
               <span className="slot-n">{arNum(i + 1)}</span>
               {a?.no_generation ? <span className="slot-warn"><Warning size={14} weight="fill" /> ممنوع كمرجع</span> : null}
@@ -283,7 +307,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: S
         <div className="prompt-win">
           <div className="pw-locked"><span className="pw-k">مقفول · من بطاقة دنيا</span>{card?.locked_text}</div>
           <textarea className="pw-partial" dir="auto" value={partial} placeholder={direction || 'وصف المقطع'} onChange={e => setPlan_({ prompt_partial: e.target.value })} rows={4} />
-          {!partial && direction && <button className="gbtn sm" onClick={() => setPlan_({ prompt_partial: direction })}>استخدم وصف الخريطة</button>}
+          {!partial && direction && <button className="gbtn sm" onClick={() => setPlan_({ prompt_partial: direction })}>{s.draft ? 'استخدم وصف v7 (مبدئي)' : 'استخدم وصف الخريطة'}</button>}
           <div className="pw-mood"><span className="pw-k">الإحساس · بيتضاف لوحده</span>{mood}</div>
         </div>
 

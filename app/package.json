@@ -18,6 +18,7 @@
   "dependencies": {
     "@fastify/multipart": "^10.1.7",
     "@fastify/static": "^10.1.10",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "fastify": "^5.12.8"
   },
   "devDependencies": {

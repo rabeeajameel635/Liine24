@@ -14,6 +14,7 @@ type Card = {
 export function CharacterScreen({ id = 'donia' }: { id?: string }) {
   const [c, setC] = useState<Card | null>(null);
   const [pieces, setPieces] = useState<Piece[]>([]);
+  const [zoom, setZoom] = useState<Piece | null>(null);
   useEffect(() => { fetch(`/api/characters/${id}`).then(r => r.json()).then(setC); fetch(`/api/characters/${id}/pieces`).then(r => r.json()).then(d => setPieces(d.pieces)); }, [id]);
   const approvePiece = async (p: Piece) => { await fetch(`/api/pieces/${p.id}/approve`, { method: 'POST' }); setPieces(ps => ps.map(x => x.id === p.id ? { ...x, approved: true } : x)); toast(`${p.name}: الألوان اتقفلت`); };
   if (!c) return <div className="work"><div className="hero"><div className="hero-art" /></div></div>;
@@ -68,7 +69,7 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
           <div className="pieces">
             {pieces.map(p => (
               <div key={p.id} className="piece">
-                <img src={p.crop} alt="" />
+                <img src={p.crop} alt="" onClick={() => setZoom(p)} />
                 <div className="piece-body">
                   <b>{p.name}</b>
                   <div className="hexes">{p.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{['الأساسي', 'الظل', 'النور'][i]}</small></span>)}</div>
@@ -78,6 +79,19 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
             ))}
           </div>
         </section>
+
+        {zoom && (
+          <div className="zoom-wrap" onClick={() => setZoom(null)} role="dialog" aria-label={zoom.name}>
+            <div className="zoom-card glass-strong" onClick={e => e.stopPropagation()}>
+              <img src={`${zoom.crop}?size=large`} alt="" />
+              <div className="zoom-sw">
+                <b style={{ fontSize: 20 }}>{zoom.name}</b>
+                {zoom.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{['الأساسي · نور متوسط', 'الظل', 'النور'][i]}</small></span>)}
+                <button className="gbtn" onClick={() => setZoom(null)}>اقفل</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section className="band two">
           <div className="tile-card">
