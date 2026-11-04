@@ -12,7 +12,8 @@
     "build": "vite build --config web/vite.config.ts",
     "start": "npm run build && node server/index.ts",
     "serve": "node server/index.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "models": "node scripts/fetch-models.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.7",

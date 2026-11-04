@@ -13,6 +13,7 @@ type Item = {
   media_id: string; url: string; folder: string; created_at: string; label?: string;
   role?: 'sheet' | 'look' | 'reference'; locked?: boolean;
   approved_note?: string; // set only when the user approved this item explicitly
+  warn?: string; no_generation?: boolean; face_baseline?: boolean;
 };
 type Manifest = { project: { id: string; name: string; workspace_id: string }; character_id: string; items: Item[] };
 
@@ -31,7 +32,7 @@ const tmp = join(dataDir, 'tmp'); await mkdir(tmp, { recursive: true });
 let ok = 0, remote = 0, skipped = 0;
 for (const it of m.items) {
   const existing = db.prepare('SELECT id, original_path FROM asset WHERE source = ? AND source_ref = ?').get('higgsfield', it.media_id) as { id: string; original_path: string | null } | undefined;
-  if (existing?.original_path) { skipped++; continue; }
+  if (existing?.original_path) { db.prepare('UPDATE asset SET warn = ?, no_generation = ?, face_baseline = ?, label = COALESCE(?, label) WHERE id = ?').run(it.warn ?? null, it.no_generation ? 1 : 0, it.face_baseline ? 1 : 0, it.label ?? null, existing.id); skipped++; continue; }
   const provenance = { tool: 'Higgsfield', higgsfield_project: m.project.name, higgsfield_project_id: m.project.id, media_id: it.media_id, folder: it.folder, license: 'Higgsfield — خطة Max', prompt: null, seed: null };
   const meta = { name: it.media_id + extname(new URL(it.url).pathname), label: it.label, source: 'higgsfield' as const, sourceRef: it.media_id, folder: it.folder,
     projectId: 'iatw', createdAt: it.created_at, provenance, role: it.role, locked: !!it.locked, characterId: m.character_id, tags: 'دنيا Donia ' + (it.label ?? '') };
@@ -52,6 +53,7 @@ for (const it of m.items) {
       JSON.stringify({ ...provenance, fetch_error: String((e as Error).message) }), it.role ?? null, it.locked ? 1 : 0, m.character_id, it.created_at);
     db.prepare('INSERT INTO asset_fts (asset_id, name, label, prompt, tags) VALUES (?,?,?,?,?)').run(id, meta.name, it.label ?? '', '', meta.tags);
   }
+  db.prepare('UPDATE asset SET warn = ?, no_generation = ?, face_baseline = ? WHERE id = ?').run(it.warn ?? null, it.no_generation ? 1 : 0, it.face_baseline ? 1 : 0, id);
   if (it.approved_note) db.prepare(`INSERT OR IGNORE INTO approval (id, subject_type, subject_id, stage) VALUES (?, 'asset', ?, 'asset')`).run(randomUUID(), id);
 }
 console.log(`اتسحب ${ok} · مرجع بعيد ${remote} · موجود قبل كده ${skipped}`);

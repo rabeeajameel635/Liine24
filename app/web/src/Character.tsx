@@ -4,6 +4,7 @@ import { Prohibit, ShieldCheck, Sneaker, Sparkle, ScanSmiley } from '@phosphor-i
 import { Status, toast } from './ui.tsx';
 
 type Ref = { id: string; label: string | null; role: string | null; locked: boolean; approved: boolean; thumb: string; src: string; palette: string[] | null };
+type Piece = { id: string; name: string; hex: string[]; approved: boolean; crop: string };
 type Card = {
   id: string; name: string; brand: string; line: string; version: number; approved: boolean; locked_text: string; modesty: string; voice: string | null;
   wardrobe: { reference?: string; sheet?: string; looks?: string[]; constants?: string[] }; forbidden: string[];
@@ -12,7 +13,9 @@ type Card = {
 
 export function CharacterScreen({ id = 'donia' }: { id?: string }) {
   const [c, setC] = useState<Card | null>(null);
-  useEffect(() => { fetch(`/api/characters/${id}`).then(r => r.json()).then(setC); }, [id]);
+  const [pieces, setPieces] = useState<Piece[]>([]);
+  useEffect(() => { fetch(`/api/characters/${id}`).then(r => r.json()).then(setC); fetch(`/api/characters/${id}/pieces`).then(r => r.json()).then(d => setPieces(d.pieces)); }, [id]);
+  const approvePiece = async (p: Piece) => { await fetch(`/api/pieces/${p.id}/approve`, { method: 'POST' }); setPieces(ps => ps.map(x => x.id === p.id ? { ...x, approved: true } : x)); toast(`${p.name}: الألوان اتقفلت`); };
   if (!c) return <div className="work"><div className="hero"><div className="hero-art" /></div></div>;
 
   const hair = c.refs.find(r => r.label?.includes('المشبك'));
@@ -55,11 +58,25 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
               <figure key={r.id}>
                 <img src={r.thumb} alt="" />
                 <figcaption>{r.label ?? 'مرجع'}{r.locked && ' · مقفول'}</figcaption>
-                {r.palette && <div className="sw">{r.palette.map(h => <i key={h} style={{ background: h }} title={h} />)}</div>}
               </figure>
             ))}
           </div>
-          {(shoe?.palette || jacket?.palette) && <p className="mute" style={{ margin: '10px 0 0', fontSize: 14 }}>الألوان مقترحة من الصور، مش متسجلة لسه.</p>}
+        </section>
+
+        <section className="band">
+          <h2>الألوان <small>من القطعة نفسها</small></h2>
+          <div className="pieces">
+            {pieces.map(p => (
+              <div key={p.id} className="piece">
+                <img src={p.crop} alt="" />
+                <div className="piece-body">
+                  <b>{p.name}</b>
+                  <div className="hexes">{p.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{['الأساسي', 'الظل', 'النور'][i]}</small></span>)}</div>
+                  {p.approved ? <Status kind="ok" label="مقفول" /> : <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Status kind="wait" /><button className="gbtn sm-btn" onClick={() => approvePiece(p)}>اعتمد</button></div>}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="band two">

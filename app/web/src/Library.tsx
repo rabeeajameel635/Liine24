@@ -9,7 +9,7 @@ type Group = 'all' | 'song' | 'shot';
 const GROUP_LABEL: Record<Group, string> = { all: 'كل حاجة', song: 'بالأغنية', shot: 'باللقطة' };
 
 export function statusOf(a: Asset): 'ok' | 'warn' | 'wait' {
-  if (a.face_check === 'warn') return 'warn';
+  if (a.face_check === 'warn' || a.warn) return 'warn';
   return a.approved ? 'ok' : 'wait';
 }
 

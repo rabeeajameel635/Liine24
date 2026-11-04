@@ -6,6 +6,7 @@ export type Asset = {
   provenance: { tool?: string; model?: string; prompt?: string | null; seed?: string | number | null; version?: string; license?: string; refs_sent?: string[]; media_id?: string; higgsfield_project?: string; fetch_error?: string; size?: number };
   favorite: boolean; locked: boolean; approved: boolean; face_check: 'pending' | 'pass' | 'warn'; face_score: number | null;
   character_name: string | null; project_title: string | null; shot_id: string | null; created_at: string;
+  warn: string | null; no_generation: number; face_baseline: number;
 };
 export type Album = { id: string; title: string; icon?: string; count: number; cover: string | null };
 

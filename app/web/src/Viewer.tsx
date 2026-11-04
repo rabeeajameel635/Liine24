@@ -95,7 +95,8 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
         onPointerDown={onDown} onPointerUp={onUp}>
         <button className="grab" onClick={() => setInfo(false)} aria-label="اقفل المعلومات" />
         <h3>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h3>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}><Status kind={st} />{a.locked && <span className="pill">مرجع مقفول</span>}</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}><Status kind={a.approved ? 'ok' : 'wait'} />{a.locked && <span className="pill">مرجع مقفول</span>}{!!a.face_baseline && <span className="pill">خط أساس الوش</span>}{!!a.no_generation && <span className="pill">ممنوع كمرجع توليد</span>}</div>
+        {a.warn && <p className="warn-line"><Status kind="warn" label={a.warn} /></p>}
         <dl className="kv">
           {infoRows(a).map(([k, v]) => <Row key={k} k={k} v={v} />)}
         </dl>

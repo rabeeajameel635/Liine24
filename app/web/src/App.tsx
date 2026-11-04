@@ -8,9 +8,11 @@ import { api, fmtDate, type Album, type Asset } from './api.ts';
 import { Library, statusOf } from './Library.tsx';
 import { Status, Toaster } from './ui.tsx';
 import { CharacterScreen } from './Character.tsx';
+import { Home } from './Songs.tsx';
+import { Board, Montage } from './Board.tsx';
 
-type Route = { view: 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills'; album: string };
-const parse = (): Route => { const [, v = 'library', a = 'all'] = location.hash.split('/'); return { view: (v || 'library') as Route['view'], album: decodeURIComponent(a) }; };
+type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage'; album: string; sub?: string };
+const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
 const ALBUM_ICON: Record<string, PIcon> = { all: Images, approved: CheckCircle, favorites: Heart, locked: LockSimple, waiting: Clock, videos: VideoCamera };
 type Theme = 'auto' | 'light' | 'dark';
 const pref = { get: (k: string, d: string) => { try { return localStorage.getItem('ghorfa.' + k) ?? d; } catch { return d; } }, set: (k: string, v: string) => { try { localStorage.setItem('ghorfa.' + k, v); } catch { /* */ } } };
@@ -52,7 +54,7 @@ export function App() {
       <aside className="side" aria-label="الشريط">
         <div className="side-proj"><span className="av">L24</span><div><b className="ltr" style={{ textAlign: 'right' }}>{project?.title ?? '…'}</b><span className="ltr" style={{ textAlign: 'right' }}>{project ? `${project.brand} / ${project.line}` : ''}</span></div></div>
         <nav>
-          <SideItem icon={Sun} label="اليوم" active={route.view === 'today'} onClick={() => go('today')} />
+          <SideItem icon={Sun} label="الرئيسية" active={route.view === 'home' || route.view === 'board' || route.view === 'montage'} onClick={() => go('home')} />
           <SideItem icon={SquaresFour} label="الاستوديو" active={route.view === 'studio'} onClick={() => go('studio')} />
           <SideItem icon={Sparkle} label="المساعد" active={route.view === 'assistant'} onClick={() => go('assistant')} />
         </nav>
@@ -83,7 +85,9 @@ export function App() {
       </aside>
 
       {isLib && <Library album={route.album} title={albumTitle} onPick={setPicked} refreshAlbums={loadAlbums} />}
-      {route.view === 'today' && <Today albums={albums} go={go} />}
+      {route.view === 'home' && <Home open={(song, seg) => { location.hash = `/board/${song}${seg ? '/' + seg : ''}`; }} />}
+      {route.view === 'board' && <Board songId={route.album} segId={route.sub} go={seg => { location.hash = `/board/${route.album}${seg ? '/' + seg : ''}`; }} />}
+      {route.view === 'montage' && <Montage songId={route.album} />}
       {route.view === 'studio' && <Studio go={go} />}
       {route.view === 'song' && <SongHero />}
       {route.view === 'characters' && <CharacterScreen />}
@@ -92,8 +96,8 @@ export function App() {
       {isLib && <Inspector a={picked} />}
 
       <nav className="tabbar glass-strong" aria-label="التبويبات">
-        {([['today', 'اليوم', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => (
-          <button key={v} aria-current={route.view === v ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={route.view === v ? 'fill' : 'regular'} />{t}</button>
+        {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => (
+          <button key={v} aria-current={route.view === v || (v === 'home' && (route.view === 'board' || route.view === 'montage')) ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={route.view === v ? 'fill' : 'regular'} />{t}</button>
         ))}
       </nav>
       {palette && <Palette onClose={() => setPalette(false)} go={go} setTheme={setTheme} albums={allAlbums} />}
@@ -130,18 +134,6 @@ function Hero({ art, children }: { art?: React.ReactNode; children: React.ReactN
   return <div className="work"><div className="hero"><div className="hero-art">{art}</div><div className="hero-body">{children}</div></div></div>;
 }
 
-function Today({ albums, go }: { albums: { albums: Album[] } | null; go: (v: Route['view'], a?: string) => void }) {
-  const waiting = albums?.albums.find(a => a.id === 'waiting')?.count ?? 0;
-  return (
-    <div className="work"><div className="scroll"><div className="title-block"><h1>اليوم</h1><p>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
-      <div style={{ padding: '6px 22px', display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
-        <button className="si glass" style={{ height: 'auto', padding: 20, borderRadius: 24, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }} onClick={() => go('library', 'waiting')}>
-          <Status kind="wait" /><span className="big-num" style={{ fontSize: 56 }}>{waiting}</span><span className="mute">في المكتبة</span>
-        </button>
-      </div></div></div>
-  );
-}
-
 function Studio({ go }: { go: (v: Route['view']) => void }) {
   const cards: [Route['view'], string, PIcon][] = [['song', 'الأغنية', MusicNotes], ['characters', 'الشخصيات', User], ['connections', 'الاتصالات', PlugsConnected], ['skills', 'السكيلز', FileText]];
   return (
@@ -174,7 +166,7 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
   const [q, setQ] = useState(''); const [i, setI] = useState(0); const inp = useRef<HTMLInputElement>(null);
   const cmds = [
     ...albums.map(a => ({ id: a.id, label: 'افتح ' + a.title, icon: Images, run: () => go('library', a.id) })),
-    { id: 'today', label: 'اليوم', icon: Sun, run: () => go('today') },
+    { id: 'home', label: 'الرئيسية', icon: Sun, run: () => go('home') },
     { id: 'studio', label: 'الاستوديو', icon: SquaresFour, run: () => go('studio') },
     { id: 'song', label: 'الأغنية', icon: MusicNotes, run: () => go('song') },
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },

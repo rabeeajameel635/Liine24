@@ -52,6 +52,44 @@ CREATE TABLE IF NOT EXISTS character (
   identity_threshold REAL NOT NULL DEFAULT 0.95  -- fraction of baseline
 );
 
+-- wardrobe colours measured from the piece itself (a box inside a reference image); a suggestion until approved
+CREATE TABLE IF NOT EXISTS wardrobe_piece (
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL REFERENCES character(id),
+  name TEXT NOT NULL,
+  asset_ref TEXT NOT NULL,      -- source_ref prefix of the reference image
+  box TEXT NOT NULL,            -- {x,y,w,h} as fractions of the image
+  mode TEXT NOT NULL DEFAULT 'all', -- all | red (only saturated crimson pixels)
+  hex TEXT,                     -- measured colours, JSON array
+  approved_at TEXT
+);
+
+-- لوحة المقاطع: a song is cut into segments on whole bars; every edit is versioned (undo)
+CREATE TABLE IF NOT EXISTS segment (
+  id TEXT PRIMARY KEY,
+  song_id TEXT NOT NULL REFERENCES song(id),
+  idx INTEGER NOT NULL,
+  start_s REAL NOT NULL, end_s REAL NOT NULL,
+  label TEXT, group_label TEXT,
+  lyric TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'idea' CHECK (status IN ('idea','ready','generating','done','editing')),
+  direction TEXT NOT NULL DEFAULT '',     -- what happens (from the director's map)
+  prompt_partial TEXT NOT NULL DEFAULT '',
+  tool TEXT NOT NULL DEFAULT 'higgsfield-kling',
+  backup TEXT NOT NULL DEFAULT '{}',      -- {tool, direction, prompt_partial}: same strength, easier for the generator
+  refs TEXT NOT NULL DEFAULT '[]',        -- ordered asset ids = send order
+  video_asset_id TEXT,
+  kit_code TEXT, kit_path TEXT,
+  notes TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS segment_version (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  segment_id TEXT NOT NULL,
+  at TEXT NOT NULL DEFAULT (datetime('now')),
+  snapshot TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS shot (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES project(id),
@@ -150,10 +188,19 @@ CREATE TABLE IF NOT EXISTS skill (
 );
 `;
 
+// additive migrations for databases created by earlier steps
+const COLUMNS: [string, string][] = [
+  ['song', 'audio_asset_id TEXT'], ['song', 'srt TEXT'], ['song', 'duration REAL'], ['song', 'beat_offset REAL'],
+  ['song', 'beats_per_bar INTEGER NOT NULL DEFAULT 4'], ['song', 'segment_seconds REAL NOT NULL DEFAULT 15'],
+  ['asset', 'warn TEXT'], ['asset', 'no_generation INTEGER NOT NULL DEFAULT 0'], ['asset', 'face_baseline INTEGER NOT NULL DEFAULT 0'],
+  ['song', 'poster_asset_id TEXT'], ['song', 'bpm_candidates TEXT'], ['song', 'created_at TEXT']
+];
+
 export function openDb(path: string): DB {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec(SCHEMA);
+  for (const [t, col] of COLUMNS) { try { db.exec(`ALTER TABLE ${t} ADD COLUMN ${col}`); } catch { /* already there */ } }
   seed(db);
   return db;
 }
