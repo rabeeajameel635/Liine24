@@ -11,7 +11,8 @@ type Seg = { id: string; idx: number; start_s: number; end_s: number; label: str
 type Status = 'idea' | 'ready' | 'generating' | 'done' | 'editing';
 type Tool = { name: string; via: string; mode: 'mcp' | 'bridge'; url: string };
 type Song = { id: string; title: string; bpm: number; bpm_approved: number; beat_offset: number; bar: number; duration: number; sections: { name: string; start: number }[]; peaks: number[] | null;
-  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number }[]; plan_note: string | null; master_missing?: boolean };
+  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number; tracked?: boolean }[]; plan_note: string | null; master_missing?: boolean;
+  tempo_local?: { t: number; bpm: number }[]; grid_measured?: boolean };
 type Shot = { id: string; code: string; title: string; start_s: number; end_s: number; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind: string | null; note: string | null; source: string; segment_id: string; conflicts: number[]; questions: string[]; blocked: string | null; answers: string[] };
 type Conflict = { id: string; n: number; title: string; proposal: string; shots: string[]; status: string; decision: string | null };
 export const SHOT: Record<Shot['status'], { t: string; c: string }> = { approved: { t: 'معتمد', c: '#30d158' }, candidate: { t: 'مرشّح', c: '#0a84ff' }, redo: { t: 'قيد إعادة', c: '#ff9f0a' }, pending: { t: 'لسه', c: '#8e8e93' } };
@@ -118,14 +119,26 @@ function BpmCompare({ song, reload }: { song: Song; reload: () => void }) {
   const approve = async (bpm: number, offset?: number) => { await fetch(`/api/songs/${song.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bpm, beat_offset: offset }) }); await fetch(`/api/songs/${song.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bpm_approved: true }) }); toast(`الإيقاع اتعتمد: ${bpm}`); reload(); };
   return (
     <div className="bpm-compare glass">
-      <div><span className="mute">القياس من الملف</span><b className="big">{top.bpm}</b></div>
+      <div><span className="mute">{top.tracked ? 'متوسط القياس من الملف' : 'القياس من الملف'}</span><b className="big">{top.bpm}</b></div>
       <div><span className="mute">القياس السابق</span><b className="big">{song.bpm}</b></div>
       <div><span className="mute">الفرق</span><b className="big">{diff > 0 ? '+' : ''}{diff}</b><span className="mute">{Math.abs(diff) < 0.05 ? 'مطابق' : `≈ ${Math.abs(diff / ref * 100).toFixed(2)}٪`}</span></div>
+      {!!song.tempo_local?.length && <TempoDrift local={song.tempo_local} dur={song.duration} />}
       <div className="bc-actions">
         <button className="gbtn primary" onClick={() => approve(top.bpm, top.offset)}>اعتمد {top.bpm}</button>
         <button className="gbtn" onClick={() => approve(song.bpm)}>خلّي {song.bpm}</button>
         {song.bpm_candidates.slice(1, 3).map(c => <button key={c.bpm} className="chip-f" onClick={() => approve(c.bpm, c.offset)}>{c.bpm} <b>{Math.round(c.conf * 100)}٪</b></button>)}
       </div>
+    </div>
+  );
+}
+
+function TempoDrift({ local, dur }: { local: { t: number; bpm: number }[]; dur: number }) {
+  const lo = Math.min(...local.map(l => l.bpm)), hi = Math.max(...local.map(l => l.bpm)), span = Math.max(0.5, hi - lo);
+  const m = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  return (
+    <div className="tempo-drift">
+      <span className="mute">الإيقاع مش ثابت: من {lo} لـ {hi}. البارات ماشية على الضربات الحقيقية.</span>
+      <div className="td-bars" dir="ltr">{local.map(l => <i key={l.t} title={`${m(l.t)} · ${l.bpm}`} style={{ height: `${20 + 80 * (l.bpm - lo) / span}%`, width: `${100 * 16 / dur}%` }} />)}</div>
     </div>
   );
 }

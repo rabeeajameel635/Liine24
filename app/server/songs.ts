@@ -9,7 +9,7 @@ import { pipeline } from 'node:stream/promises';
 import { join, extname } from 'node:path';
 import type { DB } from './db.ts';
 import { importFile } from './media.ts';
-import { decode, peaks, tempo, beatOffset, parseSrt, sectionsFromCues, barLength, snapToBar, type Cue } from './audio.ts';
+import { decode, peaks, tempo, beatOffset, parseSrt, sectionsFromCues, makeGrid, trackBeats, type Cue } from './audio.ts';
 
 const run = promisify(execFile);
 type Row = Record<string, unknown>;
@@ -40,11 +40,11 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
 
   /** Cut [0,duration) into segments of ~seconds, each a whole number of bars. */
   function cut(s: Row, seconds: number) {
-    const bpm = Number(s.bpm), off = Number(s.beat_offset ?? 0), L = barLength(bpm, Number(s.beats_per_bar ?? 4));
+    const grid = makeGrid(s), L = grid.bar;
     const bars = Math.max(1, Math.round(seconds / L)), dur = Number(s.duration);
     const cues = JSON.parse(String(s.srt ?? '[]')) as Cue[];
-    const out: { start: number; end: number }[] = []; let t = 0, edge = off;
-    while (edge < dur - 0.01) { const next = Math.min(dur, edge + bars * L); out.push({ start: +t.toFixed(3), end: +next.toFixed(3) }); t = next; edge = next; }
+    const out: { start: number; end: number }[] = []; let t = 0;
+    for (let k = 1; t < dur - 0.01; k++) { const next = Math.min(dur, grid.at(k * bars)); out.push({ start: +t.toFixed(3), end: +next.toFixed(3) }); t = next; }
     if (out.length > 1 && out[out.length - 1].end - out[out.length - 1].start < L) { out[out.length - 2].end = out[out.length - 1].end; out.pop(); }
     db.prepare('DELETE FROM segment WHERE song_id = ?').run(String(s.id));
     const ins = db.prepare('INSERT INTO segment (id, song_id, idx, start_s, end_s, lyric) VALUES (?,?,?,?,?,?)');
@@ -56,6 +56,10 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const s = song(songId)!; const p = audioPath(s); if (!p) return;
     const x = await decode(p); const dur = x.length / 11025;
     const cands = tempo(x).map(c => ({ ...c, offset: beatOffset(x, c.bpm) })); const bpm = Number(s.bpm) || cands[0].bpm;
+    // the tracker follows the real beats (drift included); its whole-song mean leads the candidates
+    const beats = trackBeats(x, bpm < 100 ? bpm * 2 : bpm, bpm < 100 ? 8 : 4);
+    cands.unshift({ bpm: beats.mean, conf: 1, offset: beats.downbeats[0], tracked: true } as typeof cands[number]);
+    db.prepare('UPDATE song SET downbeats = ?, tempo_local = ? WHERE id = ?').run(JSON.stringify(beats.downbeats), JSON.stringify(beats.local), songId);
     await writeFile(join(peaksDir, songId + '.json'), JSON.stringify(peaks(x)));
     const cues = JSON.parse(String(s.srt ?? '[]')) as Cue[];
     db.prepare(`UPDATE song SET duration = ?, bpm_candidates = ?, bpm = COALESCE(bpm, ?), bpm_source = COALESCE(bpm_source, 'measured'), beat_offset = COALESCE(beat_offset, ?),
@@ -80,7 +84,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const pk = join(peaksDir, id + '.json');
     return {
       ...s, sections: JSON.parse(String(s.sections || '[]')), srt: JSON.parse(String(s.srt || '[]')), bpm_candidates: JSON.parse(String(s.bpm_candidates || '[]')),
-      bar: barLength(Number(s.bpm), Number(s.beats_per_bar ?? 4)), peaks: existsSync(pk) ? JSON.parse(await readFile(pk, 'utf8')) : null,
+      bar: makeGrid(s).bar, tempo_local: JSON.parse(String(s.tempo_local || '[]')), grid_measured: makeGrid(s).measured, peaks: existsSync(pk) ? JSON.parse(await readFile(pk, 'utf8')) : null,
       poster: s.poster_asset_id ? `/media/${s.poster_asset_id}/work` : null, audio: s.audio_asset_id ? `/api/songs/${id}/audio` : null,
       segments: segs(id).map(shapeSeg), tools: TOOLS, master_missing: !s.master_asset_id
     };
@@ -171,7 +175,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const { id } = req.params as { id: string }; const { side, t } = req.body as { side: 'start' | 'end'; t: number };
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const s = song(String(g.song_id))!;
     const list = segs(String(s.id)), i = list.findIndex(x => x.id === id);
-    const L = barLength(Number(s.bpm)), snapped = snapToBar(t, Number(s.bpm), Number(s.beat_offset ?? 0));
+    const grid = makeGrid(s), L = grid.bar, snapped = grid.snap(t);
     const lo = side === 'start' ? (i > 0 ? Number(list[i - 1].start_s) + L : 0) : Number(g.start_s) + L;
     const hi = side === 'start' ? Number(g.end_s) - L : (i < list.length - 1 ? Number(list[i + 1].end_s) - L : Number(s.duration));
     const v = Math.min(hi, Math.max(lo, snapped));
@@ -185,7 +189,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
   app.post('/api/segments/:id/split', async (req, reply) => {
     const { id } = req.params as { id: string };
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const s = song(String(g.song_id))!;
-    const mid = snapToBar((Number(g.start_s) + Number(g.end_s)) / 2, Number(s.bpm), Number(s.beat_offset ?? 0));
+    const mid = makeGrid(s).snap((Number(g.start_s) + Number(g.end_s)) / 2);
     if (mid <= Number(g.start_s) + 0.5 || mid >= Number(g.end_s) - 0.5) return reply.code(409).send({ what: 'المقطع أقصر من إنه يتقسم على البار' });
     snapshot(id); db.prepare('UPDATE segment SET end_s = ? WHERE id = ?').run(mid, id);
     db.prepare(`INSERT INTO segment (id, song_id, idx, start_s, end_s, lyric, tool) VALUES (?,?,?,?,?,?,?)`).run(randomUUID(), String(s.id), 0, mid, Number(g.end_s), String(g.lyric), String(g.tool));

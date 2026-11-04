@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { DB } from './db.ts';
-import { barLength, snapToBar, type Cue } from './audio.ts';
+import { makeGrid, type Cue } from './audio.ts';
 
 export type TShot = { n: number; code: string; from: number; to: number; title: string; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind?: string; note?: string; source: string; blocked?: string; answers?: string[]; questions?: string[] };
 export type Timeline = { source: string; duration: number; sections: { from: number; to: number; name: string }[]; shots: TShot[];
@@ -26,9 +26,10 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
   const song = db.prepare('SELECT * FROM song WHERE id = ?').get(songId) as Record<string, unknown>;
   const worked = db.prepare(`SELECT count(*) AS n FROM segment WHERE song_id = ? AND (status <> 'idea' OR refs <> '[]' OR prompt_partial <> '' OR video_asset_id IS NOT NULL)`).get(songId) as { n: number };
   if (worked.n) throw new Error('فيه مقاطع اتشغل عليها');
-  const bpm = Number(song.bpm), off = opts.beatOffset ?? Number(song.beat_offset ?? 0), L = barLength(bpm);
-  const dur = tl.duration || Number(song.duration);
-  const snap = (t: number) => Math.min(dur, Math.max(0, snapToBar(t, bpm, off)));
+  const bpm = Number(song.bpm), off = opts.beatOffset ?? Number(song.beat_offset ?? 0);
+  const grid = makeGrid({ ...song, beat_offset: off }), bars = (a: number, b: number) => grid.index(b) - grid.index(a);
+  const dur = Number(song.duration) || tl.duration; // the measured audio wins over the timeline's written length
+  const snap = (t: number) => Math.min(dur, Math.max(0, grid.snap(t)));
   // anything before the first section belongs to it (e.g. H1 at 0:00 before the intro's first line at 0:01)
   const sectionOf = (t: number) => Math.max(0, tl.sections.findIndex((s, i) => t >= (i === 0 ? -1 : s.from - 0.6) && t < (tl.sections[i + 1]?.from ?? dur + 1) - 0.6));
 
@@ -39,9 +40,9 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
     const g = groups[groups.length - 1];
     const s = snap(sh.from);
     const sameSection = g && sectionOf(g.shots[0].from) === sectionOf(sh.from);
-    const curLen = g ? s - g.start : 0;
-    const wouldBe = g ? snap(sh.to) - g.start : 0;
-    if (!g || !sameSection || curLen >= 4 * L - 0.01 || wouldBe > 8 * L + 0.01) {
+    const curLen = g ? bars(g.start, s) : 0;
+    const wouldBe = g ? bars(g.start, snap(sh.to)) : 0;
+    if (!g || !sameSection || curLen >= 4 - 0.01 || wouldBe > 8 + 0.01) {
       if (g && s <= g.start + 0.01) { g.shots.push(sh); continue; } // snapped onto the same bar: keep together
       groups.push({ shots: [sh], start: groups.length ? s : 0 });
     } else g.shots.push(sh);
@@ -49,7 +50,7 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
   // merge a short trailing group into the previous one when they share a section
   for (let i = groups.length - 1; i > 0; i--) {
     const end = i + 1 < groups.length ? groups[i + 1].start : dur;
-    if (end - groups[i].start < 2 * L && sectionOf(groups[i].shots[0].from) === sectionOf(groups[i - 1].shots[0].from)) { groups[i - 1].shots.push(...groups[i].shots); groups.splice(i, 1); }
+    if (bars(groups[i].start, end) < 2 && sectionOf(groups[i].shots[0].from) === sectionOf(groups[i - 1].shots[0].from)) { groups[i - 1].shots.push(...groups[i].shots); groups.splice(i, 1); }
   }
 
   const cues = JSON.parse(String(song.srt ?? '[]')) as Cue[];
@@ -76,7 +77,7 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
     for (const c of tl.conflicts) db.prepare(`INSERT INTO conflict (id, song_id, n, title, proposal, shots, status, decision, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'decided' THEN datetime('now') END)`)
       .run(randomUUID(), songId, c.n, c.title, c.proposal, JSON.stringify(c.shots), c.status ?? 'open', c.decision ?? null, c.status ?? 'open');
     db.prepare(`UPDATE song SET duration = ?, beat_offset = ?, sections = ?, plan_note = ? WHERE id = ?`).run(dur, off,
-      JSON.stringify(tl.sections.map(s => ({ name: s.name, start: s.from }))), `الربط من ${tl.source}. حدود المقاطع على شبكة ${bpm} BPM مؤقتة لحد ما ملف الصوت يتقاس.`, songId);
+      JSON.stringify(tl.sections.map(s => ({ name: s.name, start: s.from }))), grid.measured ? `الربط من ${tl.source}. حدود المقاطع على البارات المقاسة من ملف الصوت (الأغنية بتسرّع وبتبطّأ، فالبار مش ثابت).` : `الربط من ${tl.source}. حدود المقاطع على شبكة ${bpm} BPM مؤقتة لحد ما ملف الصوت يتقاس.`, songId);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return { segments: groups.length, shots: tl.shots.length };
@@ -103,7 +104,9 @@ export async function seedTimelineV44(db: DB, path: string) {
   migrateTimeline(db);
   if (!db.prepare(`SELECT 1 FROM song WHERE id = 'iatw-v44'`).get()) return;
   const tl = JSON.parse(await readFile(path, 'utf8').catch(() => 'null')) as Timeline | null; if (!tl) return;
-  const sig = JSON.stringify(tl).length; // re-link only when the timeline file changed
+  // re-link only when the timeline file or the measured bar grid changed
+  const grid = (db.prepare(`SELECT downbeats FROM song WHERE id = 'iatw-v44'`).get() as { downbeats?: string } | undefined)?.downbeats ?? '';
+  let sig = 0; for (const ch of JSON.stringify(tl) + grid) sig = (sig * 31 + ch.charCodeAt(0)) | 0;
   const have = db.prepare(`SELECT plan_sig FROM song WHERE id = 'iatw-v44'`).get() as { plan_sig?: number } | undefined;
   if (db.prepare(`SELECT 1 FROM shot WHERE song_id = 'iatw-v44'`).get() && have?.plan_sig === sig) return;
   try { applyTimeline(db, 'iatw-v44', tl, { beatOffset: 1.0 }); db.prepare(`UPDATE song SET plan_sig = ? WHERE id = 'iatw-v44'`).run(sig); } catch { /* work exists: leave it */ }
