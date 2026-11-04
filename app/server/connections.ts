@@ -108,7 +108,7 @@ export async function connectionRoutes(app: FastifyInstance, db: DB, dataDir: st
 
   app.get('/api/connections', async () => ({
     keychain: keychainAvailable,
-    services: SERVICES.map(s => { const r = row(s.id); return { ...s, verified: !!r?.verified_at, verified_source: r?.verified_source ?? null, status: r?.status ?? (s.kind === 'mcp' && !r?.verified_at ? 'unverified' : 'unknown'), tested_at: r?.tested_at ?? null, result: r?.result ? JSON.parse(r.result) : null }; })
+    services: SERVICES.map(s => { const r = row(s.id); return { ...s, verified: !!r?.verified_at, verified_source: r?.verified_source ?? null, verified_quote: r?.verified_quote ?? null, status: r?.status ?? (s.kind === 'mcp' && !r?.verified_at ? 'unverified' : 'unknown'), tested_at: r?.tested_at ?? null, result: r?.result ? JSON.parse(r.result) : null }; })
   }));
 
   app.post('/api/connections/:id/test', async (req, reply) => {
@@ -124,7 +124,7 @@ export async function connectionRoutes(app: FastifyInstance, db: DB, dataDir: st
     let host = ''; try { host = new URL(source).hostname; } catch { return reply.code(400).send({ what: 'الرابط مش صحيح', fix: 'حط رابط الصفحة الرسمية كامل (https://…)' }); }
     if (!s.officialDomains!.some(d => host === d || host.endsWith('.' + d))) return reply.code(400).send({ what: `الرابط مش على موقع ${s.name}`, fix: `لازم يكون على ${s.officialDomains!.join(' أو ')} مش موقع وسيط.` });
     db.prepare(`INSERT INTO connection (id, verified_url, verified_source, verified_quote, verified_at, status) VALUES (?, ?, ?, ?, datetime('now'), 'unknown')
-      ON CONFLICT(id) DO UPDATE SET verified_url = excluded.verified_url, verified_source = excluded.verified_source, verified_quote = excluded.verified_quote, verified_at = excluded.verified_at, status = 'unknown'`).run(s.id, s.url, source, quote ?? null);
+      ON CONFLICT(id) DO UPDATE SET verified_url = excluded.verified_url, verified_source = excluded.verified_source, verified_quote = excluded.verified_quote, verified_at = excluded.verified_at, status = 'unknown', result = NULL`).run(s.id, s.url, source, quote ?? null);
     return { ok: true };
   });
 

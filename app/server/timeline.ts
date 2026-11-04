@@ -6,15 +6,16 @@ import { readFile } from 'node:fs/promises';
 import type { DB } from './db.ts';
 import { barLength, snapToBar, type Cue } from './audio.ts';
 
-export type TShot = { n: number; code: string; from: number; to: number; title: string; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind?: string; note?: string; source: string };
+export type TShot = { n: number; code: string; from: number; to: number; title: string; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind?: string; note?: string; source: string; blocked?: string; answers?: string[]; questions?: string[] };
 export type Timeline = { source: string; duration: number; sections: { from: number; to: number; name: string }[]; shots: TShot[];
-  conflicts: { n: number; title: string; proposal: string; shots: string[] }[]; open_questions?: { shot: string; items: string[] }[] };
+  conflicts: { n: number; title: string; proposal: string; shots: string[]; status?: string; decision?: string }[]; open_questions?: { shot: string; items: string[] }[] };
 
 const COLS: [string, string][] = [
   ['shot', 'song_id TEXT'], ['shot', 'code TEXT'], ['shot', 'end_s REAL'], ['shot', 'title TEXT'], ['shot', 'source TEXT'],
-  ['shot', 'kind TEXT'], ['shot', 'note TEXT'], ['shot', 'segment_id TEXT'], ['shot', 'conflicts TEXT'], ['shot', 'questions TEXT']
+  ['shot', 'kind TEXT'], ['shot', 'note TEXT'], ['shot', 'segment_id TEXT'], ['shot', 'conflicts TEXT'], ['shot', 'questions TEXT'], ['shot', 'blocked TEXT'], ['shot', 'answers TEXT']
 ];
 export function migrateTimeline(db: DB) {
+  try { db.exec('ALTER TABLE song ADD COLUMN plan_sig INTEGER'); } catch { /* exists */ }
   for (const [t, c] of COLS) { try { db.exec(`ALTER TABLE ${t} ADD COLUMN ${c}`); } catch { /* exists */ } }
   db.exec(`CREATE TABLE IF NOT EXISTS conflict (id TEXT PRIMARY KEY, song_id TEXT NOT NULL, n INTEGER NOT NULL, title TEXT NOT NULL, proposal TEXT,
     shots TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'open', decision TEXT, decided_at TEXT)`);
@@ -58,9 +59,9 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
     db.prepare('DELETE FROM shot WHERE song_id = ?').run(songId);
     db.prepare('DELETE FROM conflict WHERE song_id = ?').run(songId);
     const conflictsOf = (code: string) => tl.conflicts.filter(c => c.shots.includes(code)).map(c => c.n);
-    const insSeg = db.prepare(`INSERT INTO segment (id, song_id, idx, start_s, end_s, label, group_label, lyric, direction, tool, draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'higgsfield-kling', 0)`);
-    const insShot = db.prepare(`INSERT INTO shot (id, project_id, idx, label, start_s, end_s, status, song_id, code, title, source, kind, note, segment_id, conflicts, questions)
-      VALUES (?, 'iatw', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insSeg = db.prepare(`INSERT INTO segment (id, song_id, idx, start_s, end_s, label, group_label, lyric, direction, tool, draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wan', 0)`);
+    const insShot = db.prepare(`INSERT INTO shot (id, project_id, idx, label, start_s, end_s, status, song_id, code, title, source, kind, note, segment_id, conflicts, questions, blocked, answers)
+      VALUES (?, 'iatw', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     groups.forEach((g, i) => {
       const start = g.start, end = i + 1 < groups.length ? groups[i + 1].start : dur;
       const id = randomUUID();
@@ -70,9 +71,10 @@ export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beat
       insSeg.run(id, songId, i + 1, +start.toFixed(3), +end.toFixed(3), label, sec, cues.filter(c => c.s < end && c.e > start).map(c => c.t).join(' / '),
         g.shots.map(s => `${s.code} · ${s.title}`).join('\n'));
       for (const s of g.shots) insShot.run(randomUUID(), s.n, s.code, s.from, s.to, s.status, songId, s.code, s.title, s.source, s.kind ?? null, s.note ?? null, id,
-        JSON.stringify(conflictsOf(s.code)), JSON.stringify(tl.open_questions?.find(q => q.shot === s.code)?.items ?? []));
+        JSON.stringify(conflictsOf(s.code)), JSON.stringify(s.questions ?? tl.open_questions?.find(q => q.shot === s.code)?.items ?? []), s.blocked ?? null, JSON.stringify(s.answers ?? []));
     });
-    for (const c of tl.conflicts) db.prepare('INSERT INTO conflict (id, song_id, n, title, proposal, shots) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), songId, c.n, c.title, c.proposal, JSON.stringify(c.shots));
+    for (const c of tl.conflicts) db.prepare(`INSERT INTO conflict (id, song_id, n, title, proposal, shots, status, decision, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'decided' THEN datetime('now') END)`)
+      .run(randomUUID(), songId, c.n, c.title, c.proposal, JSON.stringify(c.shots), c.status ?? 'open', c.decision ?? null, c.status ?? 'open');
     db.prepare(`UPDATE song SET duration = ?, beat_offset = ?, sections = ?, plan_note = ? WHERE id = ?`).run(dur, off,
       JSON.stringify(tl.sections.map(s => ({ name: s.name, start: s.from }))), `الربط من ${tl.source}. حدود المقاطع على شبكة ${bpm} BPM مؤقتة لحد ما ملف الصوت يتقاس.`, songId);
     db.exec('COMMIT');
@@ -84,7 +86,7 @@ export async function timelineRoutes(app: FastifyInstance, db: DB) {
   migrateTimeline(db);
   app.get('/api/songs/:id/shots', async req => {
     const { id } = req.params as { id: string };
-    const shots = (db.prepare('SELECT * FROM shot WHERE song_id = ? ORDER BY start_s').all(id) as Record<string, unknown>[]).map(s => ({ ...s, conflicts: JSON.parse(String(s.conflicts || '[]')), questions: JSON.parse(String(s.questions || '[]')) }));
+    const shots = (db.prepare('SELECT * FROM shot WHERE song_id = ? ORDER BY start_s, idx').all(id) as Record<string, unknown>[]).map(s => ({ ...s, conflicts: JSON.parse(String(s.conflicts || '[]')), questions: JSON.parse(String(s.questions || '[]')), answers: JSON.parse(String(s.answers || '[]')) }));
     const conflicts = (db.prepare('SELECT * FROM conflict WHERE song_id = ? ORDER BY n').all(id) as Record<string, unknown>[]).map(c => ({ ...c, shots: JSON.parse(String(c.shots)) }));
     return { shots, conflicts };
   });
@@ -100,7 +102,9 @@ export async function timelineRoutes(app: FastifyInstance, db: DB) {
 export async function seedTimelineV44(db: DB, path: string) {
   migrateTimeline(db);
   if (!db.prepare(`SELECT 1 FROM song WHERE id = 'iatw-v44'`).get()) return;
-  if (db.prepare(`SELECT 1 FROM shot WHERE song_id = 'iatw-v44'`).get()) return;
   const tl = JSON.parse(await readFile(path, 'utf8').catch(() => 'null')) as Timeline | null; if (!tl) return;
-  try { applyTimeline(db, 'iatw-v44', tl, { beatOffset: 1.0 }); } catch { /* work exists: leave it */ }
+  const sig = JSON.stringify(tl).length; // re-link only when the timeline file changed
+  const have = db.prepare(`SELECT plan_sig FROM song WHERE id = 'iatw-v44'`).get() as { plan_sig?: number } | undefined;
+  if (db.prepare(`SELECT 1 FROM shot WHERE song_id = 'iatw-v44'`).get() && have?.plan_sig === sig) return;
+  try { applyTimeline(db, 'iatw-v44', tl, { beatOffset: 1.0 }); db.prepare(`UPDATE song SET plan_sig = ? WHERE id = 'iatw-v44'`).run(sig); } catch { /* work exists: leave it */ }
 }

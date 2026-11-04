@@ -5,7 +5,7 @@ import { Status, toast } from './ui.tsx';
 
 type Res = { ok: boolean; status: string; what: string; fix?: string; tools?: string[]; authorize_url?: string };
 type Svc = { id: string; name: string; kind: 'mcp' | 'bridge' | 'assistant' | 'analysis'; url?: string; officialDomains?: string[]; site: string; provides: string[]; note: string; fallback?: string;
-  verified: boolean; verified_source: string | null; status: string; tested_at: string | null; result: Res | null };
+  verified: boolean; verified_source: string | null; verified_quote?: string | null; status: string; tested_at: string | null; result: Res | null };
 const KIND: Record<Svc['kind'], string> = { mcp: 'MCP', bridge: 'جسر', assistant: 'Claude Code', analysis: 'API' };
 
 export function Connections() {
@@ -41,7 +41,7 @@ function Row({ s, busy, test, reload }: { s: Svc; busy: boolean; test: () => voi
   const [src, setSrc] = useState('');
   const r = s.result;
   const kind = busy ? 'run' : s.status === 'connected' ? 'ok' : s.status === 'unverified' || s.status === 'needs_login' || s.status === 'off' ? 'wait' : s.status === 'error' ? 'warn' : 'wait';
-  const label = busy ? 'بيختبر…' : r?.what ?? (s.status === 'unverified' ? 'مستني التأكيد من موقع الشركة' : s.kind === 'analysis' ? 'مقفول' : 'لسه ما اتختبرش');
+  const label = busy ? 'بيختبر…' : r?.what ?? (s.kind === 'mcp' && !s.verified ? 'مستني التأكيد من موقع الشركة' : s.kind === 'mcp' ? 'متأكد · مستني تسجيل الدخول على الماك' : s.kind === 'analysis' ? 'مقفول' : 'لسه ما اتختبرش');
   const verify = async () => {
     const res = await fetch(`/api/connections/${s.id}/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: src }) });
     const d = await res.json(); if (res.ok) { toast('اتسجل التأكيد'); reload(); } else toast(`${d.what}. ${d.fix ?? ''}`);
@@ -61,7 +61,7 @@ function Row({ s, busy, test, reload }: { s: Svc; busy: boolean; test: () => voi
             <button className="gbtn" onClick={verify} disabled={!src}>اتأكدت</button>
           </div>
         )}
-        {s.verified && s.verified_source && <div className="mute verified-src">اتأكد من: <a className="ltr" href={s.verified_source} target="_blank" rel="noreferrer">{s.verified_source}</a></div>}
+        {s.verified && s.verified_source && <div className="verified-src"><span className="ok-tag"><ShieldCheck size={14} weight="fill" /> متأكد من موقع الشركة</span> <a className="ltr" href={s.verified_source} target="_blank" rel="noreferrer">{s.verified_source}</a>{s.verified_quote && <q>{s.verified_quote}</q>}</div>}
       </div>
       <div className="conn-actions">
         {s.kind !== 'analysis' && <button className="gbtn" onClick={test} disabled={busy}>اختبر الاتصال</button>}

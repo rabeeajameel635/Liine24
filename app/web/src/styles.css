@@ -490,3 +490,8 @@ svg{flex:none}
 
 .seg-sec{font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg-warn{z-index:2}
+
+.shot-chip.blocked{box-shadow:inset 0 0 0 1.5px #ff9f0a}
+.shot-answers{margin:2px 0 0;padding-inline-start:18px;font-size:13px;color:var(--ink-2)}
+.ok-tag{display:inline-flex;align-items:center;gap:4px;color:var(--ok);font-weight:600;font-size:12.5px}
+.verified-src q{display:block;margin-top:4px;color:var(--ink-2);font-size:12.5px}

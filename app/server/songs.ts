@@ -16,13 +16,13 @@ type Row = Record<string, unknown>;
 
 /** Generators. mode: mcp = sent straight through the official MCP once connected; bridge = numbered kit + prompt + audio clip. */
 export const TOOLS: Record<string, { name: string; via: string; mode: 'mcp' | 'bridge'; url: string }> = {
+  'wan': { name: 'Wan 3.0', via: 'Wan', mode: 'bridge', url: 'https://wan.video' },
   'higgsfield-kling': { name: 'Kling', via: 'Higgsfield', mode: 'mcp', url: 'https://higgsfield.ai' },
   'higgsfield-minimax': { name: 'MiniMax', via: 'Higgsfield', mode: 'mcp', url: 'https://higgsfield.ai' },
   'higgsfield-seedance': { name: 'Seedance', via: 'Higgsfield', mode: 'mcp', url: 'https://higgsfield.ai' },
   'runway': { name: 'Runway', via: 'Runway', mode: 'mcp', url: 'https://app.runwayml.com' },
   'grok': { name: 'Grok Imagine', via: 'Grok', mode: 'bridge', url: 'https://grok.com/imagine' },
   'flow': { name: 'Veo', via: 'Google Flow', mode: 'bridge', url: 'https://labs.google/fx/tools/flow' },
-  'wan': { name: 'Wan', via: 'Wan', mode: 'bridge', url: 'https://wan.video' },
   'stills': { name: 'صور + مونتاج', via: 'المونتاج', mode: 'bridge', url: '' }
 };
 const FIELDS = ['lyric', 'status', 'direction', 'prompt_partial', 'tool', 'backup', 'refs', 'video_asset_id', 'notes', 'start_s', 'end_s', 'label', 'group_label'] as const;
@@ -208,6 +208,8 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const toolKey = which === 'backup' ? (JSON.parse(String(g.backup || '{}')).tool ?? g.tool) : g.tool; const tool = TOOLS[String(toolKey)];
     if (!tool) return reply.code(400).send({ what: 'أداة مش معروفة' });
     const open = db.prepare(`SELECT c.n, c.title FROM conflict c, shot s WHERE s.segment_id = ? AND c.song_id = s.song_id AND c.status = 'open' AND EXISTS (SELECT 1 FROM json_each(s.conflicts) j WHERE j.value = c.n)`).all(id) as { n: number; title: string }[];
+    const blockedShot = db.prepare(`SELECT code, blocked FROM shot WHERE segment_id = ? AND blocked IS NOT NULL`).get(id) as { code: string; blocked: string } | undefined;
+    if (blockedShot) return reply.code(409).send({ what: `${blockedShot.code} مقفولة: ${blockedShot.blocked}`, fix: 'ابعت الأصول الناقصة، وبعدها القفل يتفك.' });
     const nums = [...new Set(open.map(o => o.n))];
     if (nums.length) return reply.code(409).send({ what: `فيه ${nums.length === 1 ? 'تعارض' : `${nums.length} تعارضات`} مستني قرارك (${nums.map(n => '#' + n).join('، ')})`, fix: 'قرّر في التعارض الأول. المقطع ده مش هيتولّد قبلها.' });
     if (tool.mode === 'mcp') {
