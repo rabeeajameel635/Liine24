@@ -1,7 +1,7 @@
 // الرئيسية = غرف الأغاني: poster, progress ring, one button «كمّل من حيث وقفت», and «أغنية جديدة» by dropping the files.
 import { useEffect, useRef, useState } from 'react';
-import { Plus, MusicNotes } from '@phosphor-icons/react';
-import { toast } from './ui.tsx';
+import { Plus } from '@phosphor-icons/react';
+import { toast, PageHead, Card } from './ui.tsx';
 
 export type SongCard = { id: string; title: string; bpm: number; bpm_approved: boolean; duration: number; poster: string | null; total: number; done: number; resume: string | null; has_audio: boolean };
 export const arNum = (n: number) => n.toLocaleString('ar-EG');
@@ -26,8 +26,8 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
 
   const create = async (files: File[]) => {
     const audio = files.find(f => /\.(mp3|wav|flac|m4a|aiff?|ogg)$/i.test(f.name)); const srt = files.find(f => /\.srt$/i.test(f.name));
-    if (!audio) { toast('اسحب ملف الأغنية (ومعاه SRT لو موجود)'); return; }
-    setBusy(true); toast('بيحلل الإيقاع والأقسام…');
+    if (!audio) { toast('اسحب ملف الأغنية'); return; }
+    setBusy(true); toast('بيحلل الأغنية…');
     const fd = new FormData(); fd.append('title', audio.name.replace(/\.[^.]+$/, '')); fd.append('audio', audio, audio.name); if (srt) fd.append('srt', srt, srt.name);
     const r = await fetch('/api/songs', { method: 'POST', body: fd }).then(r => r.json()).catch(() => null);
     setBusy(false);
@@ -37,28 +37,20 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
   return (
     <div className="work" onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={e => { if (e.currentTarget === e.target) setOver(false); }}
       onDrop={e => { e.preventDefault(); setOver(false); create([...e.dataTransfer.files]); }}>
-      <div className="scroll">
-        <div className="title-block"><h1>الأغاني</h1><p>{songs ? `${arNum(songs.length)} أغنية` : ' '}</p></div>
-        <div className="posters">
-          {!songs && [0, 1].map(i => <div key={i} className="poster skeleton" />)}
-          {songs?.map(s => (
-            <article key={s.id} className="poster">
-              {s.poster ? <img src={s.poster} alt="" /> : <div className="poster-blank"><MusicNotes size={72} weight="thin" /></div>}
-              <div className="poster-shade" />
-              <div className="poster-ring"><ProgressRing done={s.done} total={s.total} /><span>{arNum(s.done)} من {arNum(s.total)} ✓</span></div>
-              <div className="poster-body">
-                <h2 className="ltr">{s.title}</h2>
-                <p>{s.bpm ? `${s.bpm} BPM${s.bpm_approved ? '' : ' · مستني اعتمادك'}` : ''}</p>
-                <button className="gbtn primary big" onClick={() => open(s.id, s.resume ?? undefined)}>كمّل من حيث وقفت</button>
-              </div>
-            </article>
-          ))}
-          <button className={'poster new' + (over ? ' over' : '')} onClick={() => pick.current?.click()} disabled={busy}>
-            <Plus size={40} weight="light" /><b>أغنية جديدة</b><span>اسحب ملف الأغنية + SRT</span>
-            <input ref={pick} type="file" hidden multiple accept="audio/*,.srt" onChange={e => create([...(e.target.files ?? [])])} />
-          </button>
+      <div className="scroll"><div className="stack">
+        <PageHead title="اليوم" />
+        {songs?.map(s => (
+          <Card key={s.id} wide className="song-card" img={s.poster} ltrTitle title={s.title}
+            line={`${arNum(s.done)} من ${arNum(s.total)} مقطع خلص`}
+            action={<button className="gbtn primary" onClick={() => open(s.id, s.resume ?? undefined)}>كمّل</button>}>
+            <span className="card-ring"><ProgressRing done={s.done} total={s.total} size={56} /></span>
+          </Card>
+        ))}
+        <div className={'new-song' + (over ? ' over' : '')}>
+          <button className="gbtn soft" onClick={() => pick.current?.click()} disabled={busy}><Plus size={22} />أغنية جديدة</button>
+          <input ref={pick} type="file" hidden multiple accept="audio/*,.srt" onChange={e => create([...(e.target.files ?? [])])} />
         </div>
-      </div>
+      </div></div>
     </div>
   );
 }

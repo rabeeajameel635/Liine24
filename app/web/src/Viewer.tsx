@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Info, Heart, ArrowsLeftRight, CloudSlash } from '@phosphor-icons/react';
 import { api, fmtDate, fmtDur, type Asset } from './api.ts';
-import { Status, toast } from './ui.tsx';
+import { Status, toast, Details } from './ui.tsx';
 import { statusOf } from './Library.tsx';
 
 export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: Asset[]; index: number; onIndex: (i: number) => void; onClose: () => void; onUpdate: (a: Asset) => void }) {
@@ -45,7 +45,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
   const fav = async () => { const r = await api.favorite(a.id); onUpdate({ ...a, favorite: !!r.favorite }); };
   const approve = async () => { await api.approve(a.id); onUpdate({ ...a, approved: true }); toast('اتعتمد'); };
   const media = (x: Asset, cls?: string) => failed[x.id] || !x.src
-    ? <div className={cls} style={{ display: 'grid', placeItems: 'center', gap: 10, color: '#aaa', textAlign: 'center' }}><CloudSlash size={44} /><span>الملف لسه ما نزلش من المصدر</span></div>
+    ? <div className={cls} style={{ display: 'grid', placeItems: 'center', gap: 10, color: '#aaa', textAlign: 'center' }}><CloudSlash size={44} /><span>الملف لسه ما نزلش</span></div>
     : x.kind === 'video'
       ? <video className={cls} src={x.src} poster={x.thumb ?? undefined} controls autoPlay playsInline onError={() => setFailed(f => ({ ...f, [x.id]: true }))} />
       : <img className={cls} src={x.src} alt={x.label ?? ''} draggable={false} onError={() => setFailed(f => ({ ...f, [x.id]: true }))} />;
@@ -57,14 +57,12 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
   return (
     <div className="viewer" role="dialog" aria-label="العارض" style={{ background: `rgba(0,0,0,${1 - Math.min(dy / 500, .6)})` }}>
       <div className="vtop">
-        <div className="capsule glass"><button className="gbtn icon" onClick={onClose} aria-label="اقفل"><X size={20} /></button></div>
-        <div className="vtitle capsule glass" style={{ padding: '6px 16px', display: 'block' }}>
-          <b>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</b>{fmtDate(a.created_at)}
-        </div>
+        <div className="capsule glass"><button className="gbtn icon" onClick={onClose} aria-label="اقفل"><X size={24} /></button></div>
+        <div className="vtitle capsule glass"><b>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</b></div>
         <div className="capsule glass vactions">
-          <button className="gbtn icon" aria-pressed={info} onClick={() => setInfo(v => !v)} aria-label="معلومات"><Info size={20} weight={info ? 'fill' : 'regular'} /></button>
-          <button className="gbtn icon" aria-pressed={a.favorite} onClick={fav} aria-label="مفضّل"><Heart size={20} weight={a.favorite ? 'fill' : 'regular'} /></button>
-          <button className="gbtn icon" aria-pressed={cmp != null} onClick={() => setCmp(c => c != null ? null : (index + 1 < items.length ? index + 1 : Math.max(0, index - 1)))} aria-label="قارن"><ArrowsLeftRight size={20} weight={cmp != null ? 'bold' : 'regular'} /></button>
+          <button className="gbtn icon" aria-pressed={info} onClick={() => setInfo(v => !v)} aria-label="معلومات"><Info size={24} weight={info ? 'fill' : 'regular'} /></button>
+          <button className="gbtn icon" aria-pressed={a.favorite} onClick={fav} aria-label="مفضّل"><Heart size={24} weight={a.favorite ? 'fill' : 'regular'} /></button>
+          <button className="gbtn icon" aria-pressed={cmp != null} onClick={() => setCmp(c => c != null ? null : (index + 1 < items.length ? index + 1 : Math.max(0, index - 1)))} aria-label="قارن"><ArrowsLeftRight size={24} weight={cmp != null ? 'bold' : 'regular'} /></button>
           {a.approved ? <span className="gbtn" style={{ cursor: 'default' }}><Status kind="ok" /></span>
             : <button className="gbtn primary" onClick={approve}>اعتمد</button>}
         </div>
@@ -94,13 +92,14 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
       <section className={'sheet glass-strong' + (info ? ' open' : '')} aria-hidden={!info}
         onPointerDown={onDown} onPointerUp={onUp}>
         <button className="grab" onClick={() => setInfo(false)} aria-label="اقفل المعلومات" />
-        <h3>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h3>
+        <h2 className="sheet-title">{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h2>
+        <p className="sheet-line">{fmtDate(a.created_at)}</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}><Status kind={a.approved ? 'ok' : 'wait'} />{a.locked && <span className="pill">مرجع مقفول</span>}{!!a.face_baseline && <span className="pill">خط أساس الوش</span>}{!!a.no_generation && <span className="pill">ممنوع كمرجع توليد</span>}</div>
         {a.warn && <p className="warn-line"><Status kind="warn" label={a.warn} /></p>}
         <dl className="kv">
           {infoRows(a).map(([k, v]) => <Row key={k} k={k} v={v} />)}
         </dl>
-        {prov.prompt ? <div className="prompt">{prov.prompt}</div> : <p className="mute" style={{ margin: '14px 0 0', fontSize: 15 }}>{a.source === 'higgsfield' ? 'مرفوع على Higgsfield من غير برومبت.' : 'من غير برومبت.'}</p>}
+        {prov.prompt && <Details label="البرومبت"><div className="prompt ltr">{prov.prompt}</div></Details>}
       </section>
     </div>
   );

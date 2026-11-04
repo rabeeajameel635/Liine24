@@ -1,4 +1,5 @@
-import { CheckCircle, WarningCircle, Clock } from '@phosphor-icons/react';
+import { CheckCircle, WarningCircle, Clock, CaretLeft } from '@phosphor-icons/react';
+import type { Icon as PIcon } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 /** ◔ running: progress ring. */
@@ -27,3 +28,50 @@ export function Toaster() {
   useEffect(() => { let t: ReturnType<typeof setTimeout>; push = m => { setMsg(m); setOn(true); clearTimeout(t); t = setTimeout(() => setOn(false), 2400); }; return () => { push = null; }; }, []);
   return <div className={'toast glass-strong' + (on ? ' on' : '')} role="status" aria-live="polite">{msg}</div>;
 }
+
+// ---- shared building blocks for the type and word rules ----
+// Page: title 40 bold + one grey line (≤ 6 words). Card: optional real image, title 28 bold (≤ 3 words), one line 19 grey (≤ 6 words), one action.
+// Anything longer than a line goes inside <Details>, closed by default.
+
+export function PageHead({ title, line, action }: { title: string; line?: string; action?: React.ReactNode }) {
+  return (
+    <header className="page-head">
+      <div className="ph-text"><h1>{title}</h1>{line && <p>{line}</p>}</div>
+      {action && <div className="ph-action">{action}</div>}
+    </header>
+  );
+}
+
+export function Card({ img, imgAlt = '', title, line, action, onClick, wide, children, className = '', ltrTitle }: {
+  img?: string | null; imgAlt?: string; title: React.ReactNode; line?: React.ReactNode; action?: React.ReactNode; onClick?: () => void; wide?: boolean; children?: React.ReactNode; className?: string; ltrTitle?: boolean;
+}) {
+  const body = (
+    <>
+      {img && <div className="card-img"><img src={img} alt={imgAlt} loading="lazy" /></div>}
+      <div className="card-body">
+        <div className="card-text"><h2 className={ltrTitle ? 'ltr' : undefined}>{title}</h2>{line && <p>{line}</p>}</div>
+        {action && <div className="card-action" onClick={e => e.stopPropagation()}>{action}</div>}
+      </div>
+      {children}
+    </>
+  );
+  const cls = 'card' + (wide ? ' wide' : '') + (onClick ? ' tap' : '') + (className ? ' ' + className : '');
+  return onClick ? <div className={cls} role="button" tabIndex={0} onClick={onClick} onKeyDown={e => { if (e.key === 'Enter') onClick(); }}>{body}</div> : <section className={cls}>{body}</section>;
+}
+
+export function Details({ label = 'تفاصيل', children }: { label?: string; children: React.ReactNode }) {
+  return <details className="details"><summary>{label}</summary><div className="details-body">{children}</div></details>;
+}
+
+export function Row({ icon: I, img, title, line, action, onClick }: { icon?: PIcon; img?: string | null; title: React.ReactNode; line?: React.ReactNode; action?: React.ReactNode; onClick?: () => void }) {
+  return (
+    <div className={'card card-row' + (onClick ? ' tap' : '')} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={e => { if (onClick && e.key === 'Enter') onClick(); }}>
+      {img ? <img className="card-thumb" src={img} alt="" /> : I ? <span className="card-ico"><I size={30} /></span> : null}
+      <div className="card-body">
+        <div className="card-text"><h2>{title}</h2>{line && <p>{line}</p>}</div>
+        <div className="card-action" onClick={e => e.stopPropagation()}>{action ?? (onClick ? <CaretLeft size={24} className="chev" /> : null)}</div>
+      </div>
+    </div>
+  );
+}
+

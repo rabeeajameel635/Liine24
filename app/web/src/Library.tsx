@@ -1,8 +1,9 @@
 // المكتبة — a full-bleed photo grid with floating glass controls, like a phone's photo library.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MagnifyingGlass, CheckCircle, Heart, CloudSlash, SelectionAll, X, Plus, PaperPlaneTilt, FilmSlate } from '@phosphor-icons/react';
-import { api, fmtDur, type Asset } from './api.ts';
-import { Status, toast } from './ui.tsx';
+import { MagnifyingGlass, CheckCircle, Heart, CloudSlash, SelectionAll, X, Plus, PaperPlaneTilt, FilmSlate, Rows } from '@phosphor-icons/react';
+import { api, fmtDur, type Asset, type Album } from './api.ts';
+import { Status, toast, PageHead } from './ui.tsx';
+import { arNum } from './Songs.tsx';
 import { Viewer } from './Viewer.tsx';
 
 type Group = 'all' | 'song' | 'shot';
@@ -13,7 +14,9 @@ export function statusOf(a: Asset): 'ok' | 'warn' | 'wait' {
   return a.approved ? 'ok' : 'wait';
 }
 
-export function Library({ album, title, onPick, refreshAlbums }: { album: string; title: string; onPick: (a: Asset | null) => void; refreshAlbums: () => void }) {
+const CHIP: Record<string, string> = { all: 'الكل', approved: 'المعتمد', locked: 'المقفول', waiting: 'مستني', favorites: 'المفضّل', videos: 'الفيديو' };
+
+export function Library({ album, title, albums, people, go, onPick, refreshAlbums }: { album: string; title: string; albums: Album[]; people: Album[]; go: (album: string) => void; onPick: (a: Asset | null) => void; refreshAlbums: () => void }) {
   const [items, setItems] = useState<Asset[] | null>(null);
   const [q, setQ] = useState('');
   const [group, setGroup] = useState<Group>('all');
@@ -82,21 +85,25 @@ export function Library({ album, title, onPick, refreshAlbums }: { album: string
     <div className="work" onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={e => { if (e.currentTarget === e.target) setDrag(false); }} onDrop={onDrop}>
       <div className="topbar">
         <label className="search glass">
-          <MagnifyingGlass size={18} />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث: «دنيا»، «الجاكيت»، «Fame»" aria-label="بحث" />
-          {q && <button className="gbtn icon" style={{ height: 28, width: 28, minHeight: 28, minWidth: 28 }} onClick={() => setQ('')} aria-label="امسح"><X size={14} /></button>}
+          <MagnifyingGlass size={22} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث" aria-label="بحث" />
+          {q && <button className="gbtn icon" onClick={() => setQ('')} aria-label="امسح"><X size={18} /></button>}
         </label>
         <span className="sp" />
-        <div className="seg glass">{(Object.keys(GROUP_LABEL) as Group[]).map(g => <button key={g} aria-pressed={group === g} onClick={() => setGroup(g)}>{GROUP_LABEL[g]}</button>)}</div>
         <div className="capsule glass">
+          <button className="gbtn icon" aria-label={'اجمع: ' + GROUP_LABEL[group]} title={GROUP_LABEL[group]} onClick={() => { const n = group === 'all' ? 'song' : group === 'song' ? 'shot' : 'all'; setGroup(n); toast(GROUP_LABEL[n]); }}><Rows size={22} weight={group === 'all' ? 'regular' : 'fill'} /></button>
           <button className="gbtn" aria-pressed={selecting} onClick={() => { setSelecting(s => !s); setSel(new Set()); }}>{selecting ? 'خلاص' : 'اختيار'}</button>
         </div>
       </div>
 
       <div className="scroll" ref={scroller}>
-        <div className="title-block"><h1>{title}</h1><p>{items ? `${items.length} عنصر` : ' '}</p></div>
-        <label className="search m-search glass"><MagnifyingGlass size={18} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث" aria-label="بحث في الموبايل" /></label>
-        {items && !items.length && <div className="empty-ins">{q ? 'مفيش نتايج.' : 'فاضية. اسحب ملفات هنا.'}</div>}
+        <PageHead title={title} line={items ? `${arNum(items.length)} عنصر` : ' '} />
+        <label className="search m-search glass"><MagnifyingGlass size={22} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث" aria-label="بحث في الموبايل" /></label>
+        <div className="chips-row lib-chips">
+          {albums.filter(a => CHIP[a.id] && (a.count || a.id === 'all')).map(a => <button key={a.id} className="chip-f" aria-pressed={album === a.id} onClick={() => go(a.id)}>{CHIP[a.id]}</button>)}
+          {people.map(a => <button key={a.id} className="chip-f" aria-pressed={album === a.id} onClick={() => go(a.id)}>{a.title}</button>)}
+        </div>
+        {items && !items.length && <div className="empty-ins">{q ? 'مفيش نتايج' : 'فاضية · اسحب ملفات هنا'}</div>}
         <div className="grid" style={{ ['--cols' as string]: cols }}>
           {!items && Array.from({ length: cols * 4 }, (_, i) => <div key={i} className="tile" />)}
           {groups.map(g => (
@@ -115,8 +122,8 @@ export function Library({ album, title, onPick, refreshAlbums }: { album: string
         {selecting && sel.size > 0 ? (
           <div className="selbar glass-strong">
             <span className="count">{sel.size} مختار</span>
-            <button className="gbtn" onClick={() => toast('اللقطات بتتعمل في مرحلة الكليب')}><FilmSlate size={18} />ضيف لكيت لقطة…</button>
-            <button className="gbtn" onClick={() => toast('Higgsfield يتوصل في خطوة الاتصالات')}><PaperPlaneTilt size={18} />ابعت لـ Higgsfield</button>
+            <button className="gbtn" onClick={() => toast('اللقطات جاية في خطوة الكليب')}><FilmSlate size={22} />للقطة</button>
+            <button className="gbtn" onClick={() => toast('الإرسال جاي بعد تسجيل الدخول')}><PaperPlaneTilt size={22} />ابعت</button>
           </div>
         ) : (
           <div className="zoom glass" title="كبّر أو صغّر (أو قرّب بإصبعين)">

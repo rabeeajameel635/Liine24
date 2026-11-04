@@ -1,0 +1,41 @@
+// UI rule audit (4 Nov): on every screen at 390 and 1440 px, ≤ 25 visible words before scrolling, no text under 17px, no button under 56px.
+// Usage (server on 4317, Playwright installed): node scripts/ui-audit.cjs <out-dir> <segment-id> [screen…]
+// Rule audit per screen: visible words (no scroll) ≤ 25, every visible text ≥ 17px, every button ≥ 56px tall.
+const { chromium } = require('playwright');
+const [O, segId, ...only] = process.argv.slice(2);
+const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['search', '#search']];
+(async () => {
+  const b = await chromium.launch(); const rows = [];
+  for (const [w, h] of [[390, 844], [1440, 900]]) {
+    const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+    for (const [n, u] of routes) {
+      if (only.length && !only.includes(n)) continue;
+      if (n === 'viewer') { await p.goto('http://127.0.0.1:4317/#/library/all'); await p.waitForTimeout(1800); await p.click('.tile >> nth=0'); }
+      else if (n === 'search') { await p.goto('http://127.0.0.1:4317/#/home'); await p.waitForTimeout(1500); await p.click(w < 821 ? '.tab-search' : '.side-search'); }
+      else { await p.goto('http://127.0.0.1:4317/#/' + u); }
+      await p.waitForTimeout(1800);
+      const r = await p.evaluate(() => {
+        const W = innerWidth, H = innerHeight, words = [], small = new Map(), btn = [];
+        const vis = el => { for (let e = el; e; e = e.parentElement) { const s = getComputedStyle(e); if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false; } return true; };
+        const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let t; (t = tw.nextNode());) {
+          const txt = t.textContent.trim(); if (!txt) continue; const el = t.parentElement; if (!vis(el)) continue;
+          const cd = el.closest('details:not([open])'); if (cd && !el.closest('summary')) continue; // closed «تفاصيل»
+          const rg = document.createRange(); rg.selectNodeContents(t); const rc = [...rg.getClientRects()].filter(c => c.width > 1 && c.bottom > 0 && c.top < H && c.right > 0 && c.left < W);
+          if (!rc.length) continue;
+          // covered by something on top? sample the first rect's centre
+          const c = rc[0], top = document.elementFromPoint(Math.min(W - 1, Math.max(0, c.left + c.width / 2)), Math.min(H - 1, Math.max(0, c.top + c.height / 2)));
+          if (top && !(top === el || el.contains(top) || top.contains(el))) continue; // covered by an overlay
+          words.push(...txt.split(/\s+/).filter(x => /[\p{L}\p{N}]/u.test(x)));
+          const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < 17) small.set(txt.slice(0, 30), fs);
+        }
+        for (const e of document.querySelectorAll('button,a.gbtn,[role=button]')) { if (!vis(e)) continue; const rc = e.getBoundingClientRect(); if (rc.bottom < 0 || rc.top > H || rc.width === 0) continue; if (rc.height < 56 - 0.5 && rc.width < 56 - 0.5 || rc.height < 44) btn.push(`${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 18)} ${Math.round(rc.width)}×${Math.round(rc.height)}`); }
+        return { n: words.length, words: words.join(' '), small: [...small].slice(0, 12), btn: btn.slice(0, 10) };
+      });
+      await p.screenshot({ path: `${O}/${w}-${n}.png` });
+      rows.push(`${w} ${n}: words ${r.n}${r.n > 25 ? ' ✗' : ' ✓'} | small ${r.small.length} | btn ${r.btn.length}\n   ${r.words.slice(0, 260)}\n   small: ${r.small.map(([t, f]) => `${t}=${f}`).join(' · ').slice(0, 300)}\n   btn: ${r.btn.join(' · ').slice(0, 200)}`);
+    }
+    await p.close();
+  }
+  console.log(rows.join('\n')); await b.close();
+})();

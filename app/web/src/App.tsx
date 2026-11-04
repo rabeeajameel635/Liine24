@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sun, SquaresFour, Images, Sparkle, CheckCircle, Heart, LockSimple, Clock, VideoCamera, UserCircle, Folder,
-  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle
+  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft
 } from '@phosphor-icons/react';
 import type { Icon as PIcon } from '@phosphor-icons/react';
 import { api, fmtDate, type Album, type Asset } from './api.ts';
 import { Library, statusOf } from './Library.tsx';
-import { Status, Toaster } from './ui.tsx';
+import { Status, Toaster, PageHead, Card, Details, Row } from './ui.tsx';
+import { arNum } from './Songs.tsx';
 import { CharacterScreen } from './Character.tsx';
 import { Home } from './Songs.tsx';
 import { Board, Montage } from './Board.tsx';
@@ -41,66 +42,44 @@ export function App() {
   const go = (view: Route['view'], album = 'all') => { location.hash = `/${view}/${encodeURIComponent(album)}`; };
 
   const allAlbums = useMemo(() => [...(albums?.albums ?? []), ...(albums?.projects ?? []), ...(albums?.people ?? [])], [albums]);
-  const albumTitle = allAlbums.find(a => a.id === route.album)?.title ?? 'المكتبة';
+  const albumTitle = route.album === 'all' ? 'المكتبة' : allAlbums.find(a => a.id === route.album)?.title ?? 'المكتبة';
   const isLib = route.view === 'library';
 
-  const SideItem = ({ icon: I, label, active, count, onClick, disabled }: { icon: PIcon; label: string; active: boolean; count?: number; onClick: () => void; disabled?: boolean }) => (
-    <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick} disabled={disabled}>
-      <I size={20} weight={active ? 'fill' : 'regular'} /><span>{label}</span>{count != null && <span className="n">{count}</span>}
-    </button>
+  const SideItem = ({ icon: I, label, active, onClick }: { icon: PIcon; label: string; active: boolean; onClick: () => void }) => (
+    <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick}><I size={24} weight={active ? 'fill' : 'regular'} /><span>{label}</span></button>
   );
+  const onHome = route.view === 'home' || route.view === 'board' || route.view === 'montage';
+  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song'].includes(route.view);
 
   return (
-    <div className={'shell' + (isLib ? '' : ' no-ins')}>
+    <div className={'shell' + (isLib && picked ? '' : ' no-ins')}>
       <aside className="side" aria-label="الشريط">
-        <div className="side-proj"><span className="av">L24</span><div><b className="ltr" style={{ textAlign: 'right' }}>{project?.title ?? '…'}</b><span className="ltr" style={{ textAlign: 'right' }}>{project ? `${project.brand} / ${project.line}` : ''}</span></div></div>
+        <div className="side-proj"><span className="av">L24</span></div>
         <nav>
-          <SideItem icon={Sun} label="الرئيسية" active={route.view === 'home' || route.view === 'board' || route.view === 'montage'} onClick={() => go('home')} />
-          <SideItem icon={SquaresFour} label="الاستوديو" active={route.view === 'studio'} onClick={() => go('studio')} />
+          <SideItem icon={Sun} label="الرئيسية" active={onHome} onClick={() => go('home')} />
+          <SideItem icon={SquaresFour} label="الاستوديو" active={onStudio} onClick={() => go('studio')} />
+          <SideItem icon={Images} label="المكتبة" active={isLib} onClick={() => go('library')} />
           <SideItem icon={Sparkle} label="المساعد" active={route.view === 'assistant'} onClick={() => go('assistant')} />
         </nav>
-        <div>
-          <h6>المكتبة</h6>
-          <nav>{(albums?.albums ?? []).map(a => <SideItem key={a.id} icon={ALBUM_ICON[a.id] ?? Images} label={a.title} count={a.count} active={isLib && route.album === a.id} onClick={() => go('library', a.id)} />)}</nav>
-        </div>
-        <div>
-          <h6>الأشخاص</h6>
-          <nav>{(albums?.people ?? []).map(a => <SideItem key={a.id} icon={UserCircle} label={a.title} count={a.count} active={isLib && route.album === a.id} onClick={() => go('library', a.id)} />)}</nav>
-        </div>
-        <div>
-          <h6>المشاريع</h6>
-          <nav>{(albums?.projects ?? []).map(a => <SideItem key={a.id} icon={Folder} label={a.title} count={a.count} active={isLib && route.album === a.id} onClick={() => go('library', a.id)} />)}</nav>
-        </div>
-        <div>
-          <h6>الاستوديو</h6>
-          <nav>
-            <SideItem icon={MusicNotes} label="الأغنية" active={route.view === 'song'} onClick={() => go('song')} />
-            <SideItem icon={User} label="الشخصيات" active={route.view === 'characters'} onClick={() => go('characters')} />
-            <SideItem icon={PlugsConnected} label="الاتصالات" active={route.view === 'connections'} onClick={() => go('connections')} />
-            <SideItem icon={FileText} label="السكيلز" active={route.view === 'skills'} onClick={() => go('skills')} />
-          </nav>
-        </div>
-        <div className="seg" style={{ marginTop: 'auto', background: 'var(--hover)' }}>
-          {([['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'غامق']] as [Theme, string][]).map(([v, t]) => <button key={v} aria-pressed={theme === v} onClick={() => setTheme(v)} style={{ flex: 1 }}>{t}</button>)}
-        </div>
+        <button className="si side-search" onClick={() => setPalette(true)}><MagnifyingGlass size={24} /><span>بحث</span></button>
       </aside>
 
-      {isLib && <Library album={route.album} title={albumTitle} onPick={setPicked} refreshAlbums={loadAlbums} />}
+      {isLib && <Library album={route.album} title={albumTitle} albums={albums?.albums ?? []} people={albums?.people ?? []} go={a => go('library', a)} onPick={setPicked} refreshAlbums={loadAlbums} />}
       {route.view === 'home' && <Home open={(song, seg) => { location.hash = `/board/${song}${seg ? '/' + seg : ''}`; }} />}
       {route.view === 'board' && <Board songId={route.album} segId={route.sub} go={seg => { location.hash = `/board/${route.album}${seg ? '/' + seg : ''}`; }} />}
       {route.view === 'montage' && <Montage songId={route.album} />}
       {route.view === 'studio' && <Studio go={go} />}
-      {route.view === 'song' && <SongHero />}
+      {route.view === 'song' && <Redirect to="#/board/iatw-v44" />}
       {route.view === 'characters' && <CharacterScreen />}
       {route.view === 'connections' && <Connections />}
       {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
-      {isLib && <Inspector a={picked} />}
+      {isLib && picked && <Inspector a={picked} />}
 
       <div className="tabbar">
         <nav className="tabs glass-strong" aria-label="التبويبات">
           {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => {
-            const on = route.view === v || (v === 'home' && (route.view === 'board' || route.view === 'montage'));
+            const on = v === 'home' ? onHome : v === 'studio' ? onStudio : route.view === v;
             return <button key={v} aria-current={on ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={on ? 'fill' : 'regular'} />{t}</button>;
           })}
         </nav>
@@ -112,60 +91,54 @@ export function App() {
   );
 }
 
-function Inspector({ a }: { a: Asset | null }) {
-  if (!a) return <aside className="inspector"><div className="empty-ins">اختار صورة.</div></aside>;
+function Inspector({ a }: { a: Asset }) {
   const p = a.provenance;
   return (
     <aside className="inspector" aria-label="المفتش">
       <div className="ins-hero">{a.thumb && <img src={a.thumb} alt="" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}</div>
-      <div className="ins-card"><h4>الحالة</h4><Status kind={statusOf(a)} /></div>
       <div className="ins-card">
-        <h4>الملف</h4>
+        <h2 className="ins-title">{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h2>
+        <Status kind={statusOf(a)} />
+      </div>
+      <Details>
         <dl className="kv">
-          <dt>الاسم</dt><dd className="ltr mono">{a.name}</dd>
           <dt>المصدر</dt><dd>{a.source === 'higgsfield' ? 'Higgsfield' : a.source === 'watch' ? 'الفولدر المراقَب' : 'سحب وإفلات'}</dd>
           {p.higgsfield_project && <><dt>المشروع</dt><dd className="ltr">{p.higgsfield_project}</dd></>}
-          {a.source_ref && <><dt>المعرّف</dt><dd className="ltr mono">{a.source_ref}</dd></>}
           {a.folder && <><dt>الفولدر</dt><dd className="ltr">{a.folder}</dd></>}
           <dt>الإضافة</dt><dd>{fmtDate(a.created_at)}</dd>
           <dt>الأصل</dt><dd>{a.original && !a.remote_url ? 'محفوظ' : 'لسه ما نزلش'}</dd>
         </dl>
-      </div>
-      {a.remote_url && <div className="ins-card"><h4>التحميل</h4><p style={{ margin: 0, fontSize: 13.5 }}>الملف متسجل، والتحميل مستني الاتصال بمخزن Higgsfield.</p></div>}
+      </Details>
     </aside>
   );
 }
 
-function Hero({ art, children }: { art?: React.ReactNode; children: React.ReactNode }) {
-  return <div className="work"><div className="hero"><div className="hero-art">{art}</div><div className="hero-body">{children}</div></div></div>;
-}
+function Redirect({ to }: { to: string }) { useEffect(() => { location.replace(to); }, [to]); return null; }
 
 function Studio({ go }: { go: (v: Route['view']) => void }) {
-  const cards: [Route['view'], string, PIcon][] = [['song', 'الأغنية', MusicNotes], ['characters', 'الشخصيات', User], ['connections', 'الاتصالات', PlugsConnected], ['skills', 'السكيلز', FileText]];
+  const [d, setD] = useState<{ poster: string | null; title: string; donia: string | null; waiting: number } | null>(null);
+  useEffect(() => {
+    Promise.all([fetch('/api/songs').then(r => r.json()), fetch('/api/characters/donia').then(r => r.json()).catch(() => null), fetch('/api/connections').then(r => r.json()).catch(() => null)]).then(([s, c, k]) => {
+      const song = s.songs?.[0]; const hair = c?.refs?.find((r: { label?: string }) => r.label?.includes('المشبك'));
+      setD({ poster: song?.poster ?? null, title: song?.title ?? '', donia: hair?.thumb ?? c?.refs?.[0]?.thumb ?? null, waiting: (k?.services ?? []).filter((x: { kind: string; status: string }) => x.kind === 'mcp' && x.status !== 'connected').length });
+    });
+  }, []);
   return (
-    <div className="work"><div className="scroll"><div className="title-block"><h1>الاستوديو</h1></div>
-      <div style={{ padding: '6px 22px 120px', display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))' }}>
-        {cards.map(([v, t, I]) => <button key={v} className="si" style={{ height: 120, borderRadius: 24, background: 'var(--card)', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, fontSize: 17, fontWeight: 700 }} onClick={() => go(v)}><I size={30} />{t}</button>)}
-      </div></div></div>
-  );
-}
-
-function SongHero() {
-  // placeholder bars until the song studio step measures the real file
-  const colors = ['#b0102c', '#6e6e73', '#2c2c2e', '#8e8e93'];
-  return (
-    <Hero art={<div style={{ height: '100%', display: 'grid', placeItems: 'center', background: 'linear-gradient(160deg,#141416,#2a0a12)' }}><MusicNotes size={120} color="#ffffff40" /></div>}>
-      <h1 className="ltr" style={{ textAlign: 'right' }}>I Am The World</h1>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginTop: 10 }}><span className="big-num">71.9</span><span className="mute" style={{ paddingBottom: 14 }}>BPM</span></div>
-      <Status kind="warn" label="قياس قديم · يتقاس من الملف النهائي" />
-      <div className="wave" aria-hidden="true">{Array.from({ length: 96 }, (_, i) => <i key={i} style={{ height: `${18 + Math.abs(Math.sin(i * 0.37)) * 70}%`, background: colors[Math.floor(i / 24)], opacity: .35 }} />)}</div>
-    </Hero>
+    <div className="work"><div className="scroll"><div className="stack">
+      <PageHead title="الاستوديو" line="كل أدوات الكليب" />
+      <div className="studio-grid">
+        <Card img={d?.poster} title="الأغنية" line="الكليب الحالي" onClick={() => { location.hash = '/board/iatw-v44'; }} />
+        <Card img={d?.donia} title="الشخصيات" line="دنيا معتمدة" onClick={() => go('characters')} />
+      </div>
+      <Row icon={PlugsConnected} title="الاتصالات" line={d ? (d.waiting ? `${arNum(d.waiting)} مستنية الدخول` : 'كلها متوصلة') : ' '} onClick={() => go('connections')} />
+      <Row icon={FileText} title="السكيلز" line="جاية قريب" onClick={() => go('skills')} />
+    </div></div></div>
   );
 }
 
 function Soon({ view }: { view: string }) {
   const t: Record<string, string> = { connections: 'الاتصالات', skills: 'السكيلز', assistant: 'المساعد' };
-  return <div className="work"><div className="scroll"><div className="title-block"><h1>{t[view]}</h1><p>جاية في المرحلة دي، خطوة خطوة.</p></div></div></div>;
+  return <div className="work"><div className="scroll"><div className="stack"><PageHead title={t[view]} line="جاية في الخطوة الجاية" /></div></div></div>;
 }
 
 function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (v: Route['view'], a?: string) => void; setTheme: (t: Theme) => void; albums: Album[] }) {
@@ -176,23 +149,23 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
     { id: 'studio', label: 'الاستوديو', icon: SquaresFour, run: () => go('studio') },
     { id: 'song', label: 'الأغنية', icon: MusicNotes, run: () => go('song') },
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },
-    { id: 'assist', label: 'المساعد ⌘J', icon: Sparkle, run: () => go('assistant') },
+    { id: 'assist', label: 'المساعد', icon: Sparkle, run: () => go('assistant') },
     { id: 'light', label: 'المظهر: فاتح', icon: Sun, run: () => setTheme('light') },
     { id: 'dark', label: 'المظهر: غامق', icon: Moon, run: () => setTheme('dark') },
     { id: 'auto', label: 'المظهر: تلقائي', icon: Circle, run: () => setTheme('auto') }
-  ].filter(c => c.label.includes(q.trim()));
+  ].filter(c => c.label.includes(q.trim())).slice(0, q.trim() ? 12 : 6);
   useEffect(() => inp.current?.focus(), []);
   const run = (c?: (typeof cmds)[number]) => { if (c) { c.run(); onClose(); } };
   return (
     <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,.25)', display: 'flex', justifyContent: 'center', paddingTop: '14vh' }}>
       <div className="glass-strong" onMouseDown={e => e.stopPropagation()} role="dialog" aria-label="الأوامر" style={{ width: 'min(600px,92vw)', borderRadius: 24, overflow: 'hidden', alignSelf: 'flex-start' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 18px', borderBottom: '1px solid var(--line)' }}>
-          <MagnifyingGlass size={20} className="mute" />
-          <input ref={inp} value={q} onChange={e => { setQ(e.target.value); setI(0); }} placeholder="اكتب أمر…" style={{ flex: 1, border: 0, background: 'none', outline: 'none', height: 56, fontSize: 17 }}
+          <MagnifyingGlass size={24} className="mute" />
+          <input ref={inp} value={q} onChange={e => { setQ(e.target.value); setI(0); }} placeholder="دوّر" style={{ flex: 1, border: 0, background: 'none', outline: 'none', height: 64, fontSize: 21 }}
             onKeyDown={e => { if (e.key === 'ArrowDown') setI(x => Math.min(x + 1, cmds.length - 1)); if (e.key === 'ArrowUp') setI(x => Math.max(0, x - 1)); if (e.key === 'Enter') run(cmds[i]); if (e.key === 'Escape') onClose(); }} />
         </label>
         <div style={{ padding: 6, maxHeight: '50vh', overflow: 'auto' }}>
-          {cmds.map((c, n) => <button key={c.id} className="si" aria-current={n === i ? 'page' : undefined} style={{ width: '100%' }} onMouseEnter={() => setI(n)} onClick={() => run(c)}><c.icon size={20} />{c.label}</button>)}
+          {cmds.map((c, n) => <button key={c.id} className="si" aria-current={n === i ? 'page' : undefined} style={{ width: '100%' }} onMouseEnter={() => setI(n)} onClick={() => run(c)}><c.icon size={24} />{c.label}</button>)}
         </div>
       </div>
     </div>
