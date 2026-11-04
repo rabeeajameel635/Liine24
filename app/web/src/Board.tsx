@@ -11,7 +11,10 @@ type Seg = { id: string; idx: number; start_s: number; end_s: number; label: str
 type Status = 'idea' | 'ready' | 'generating' | 'done' | 'editing';
 type Tool = { name: string; via: string; mode: 'mcp' | 'bridge'; url: string };
 type Song = { id: string; title: string; bpm: number; bpm_approved: number; beat_offset: number; bar: number; duration: number; sections: { name: string; start: number }[]; peaks: number[] | null;
-  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number }[]; plan_note: string | null };
+  poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number }[]; plan_note: string | null; master_missing?: boolean };
+type Shot = { id: string; code: string; title: string; start_s: number; end_s: number; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind: string | null; note: string | null; source: string; segment_id: string; conflicts: number[]; questions: string[] };
+type Conflict = { id: string; n: number; title: string; proposal: string; shots: string[]; status: string };
+export const SHOT: Record<Shot['status'], { t: string; c: string }> = { approved: { t: 'معتمد', c: '#30d158' }, candidate: { t: 'مرشّح', c: '#0a84ff' }, redo: { t: 'قيد إعادة', c: '#ff9f0a' }, pending: { t: 'لسه', c: '#8e8e93' } };
 
 export const STATUS: Record<Status, { t: string; c: string }> = {
   idea: { t: 'فكرة', c: '#8e8e93' }, ready: { t: 'جاهز للتوليد', c: '#0a84ff' }, generating: { t: 'بيتولّد', c: '#ff9f0a' }, done: { t: 'تمّت ✓', c: '#30d158' }, editing: { t: 'في المونتاج', c: '#5e5ce6' }
@@ -25,7 +28,9 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
   const [view, setView] = useState<'cards' | 'strip'>('cards');
   const [filter, setFilter] = useState<Status | 'all'>('all');
   const [assets, setAssets] = useState<Record<string, Asset>>({});
-  const load = useCallback(() => fetch(`/api/songs/${songId}`).then(r => r.json()).then(setSong), [songId]);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const load = useCallback(() => { fetch(`/api/songs/${songId}`).then(r => r.json()).then(setSong); fetch(`/api/songs/${songId}/shots`).then(r => r.json()).then(d => { setShots(d.shots); setConflicts(d.conflicts); }); }, [songId]);
   useEffect(() => { load(); api.assets('all').then(d => setAssets(Object.fromEntries(d.items.map(a => [a.id, a])))); }, [load]);
   if (!song) return <div className="work"><div className="title-block"><h1> </h1></div></div>;
 
@@ -62,7 +67,9 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
         </header>
         {!song.audio && <AudioMissing song={song} reload={load} />}
         {song.audio && !song.bpm_approved && song.bpm_candidates.length > 0 && <BpmCompare song={song} reload={load} />}
-        {song.plan_note && <div className="banner glass soft"><span className="pill sm">مبدئي</span><span>{song.plan_note}</span></div>}
+        {song.plan_note && <div className="banner glass soft"><span className="pill sm">{shots.length ? 'v44' : 'مبدئي'}</span><span>{song.plan_note}</span></div>}
+        {song.master_missing && <div className="banner glass soft"><Warning size={18} weight="fill" color="#ff9f0a" /><span>ملف الماستر FLAC لسه ناقص للتصدير النهائي.</span></div>}
+        {conflicts.some(c => c.status === 'open') && <ConflictList conflicts={conflicts} />}
         <SplitBar song={song} reload={load} />
         <div className="filters">
           <button className="chip-f" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>الكل <b>{arNum(segs.length)}</b></button>
@@ -76,16 +83,18 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
               <button key={s.id} className="seg-card" onClick={() => go(s.id)}>
                 <div className="seg-thumb">{thumbOf(s) ? <img src={thumbOf(s)!} alt="" loading="lazy" /> : <span className="seg-num-big">{s.label ?? s.idx}</span>}
                   <span className="seg-dot" style={{ background: STATUS[s.status].c }} title={STATUS[s.status].t} /></div>
+                {(() => { const mine = shots.filter(x => x.segment_id === s.id); const warn = mine.some(x => x.conflicts.some(n => conflicts.find(c => c.n === n && c.status === 'open'))); return warn ? <span className="seg-warn" title="فيه تعارض مستني قرارك"><Warning size={16} weight="fill" /></span> : null; })()}
                 <div className="seg-body">
-                  <div className="seg-top"><b>{s.label ?? String(s.idx).padStart(2, '0')}</b>{s.group_label && <span className="pill sm">{s.group_label}</span>}{!!s.draft && <span className="pill sm ghost">مبدئي</span>}<span className="tc">{tc(s.start_s)}</span></div>
-                  <p className="ltr">{s.lyric || '—'}</p>
+                  <div className="seg-top"><b>{s.label ?? String(s.idx).padStart(2, '0')}</b>{!!s.draft && <span className="pill sm ghost">مبدئي</span>}<span className="tc">{tc(s.start_s)}</span></div>
+                  {s.group_label && <span className="seg-sec">{s.group_label}</span>}
+                  {shots.some(x => x.segment_id === s.id) ? <div className="shot-chips">{shots.filter(x => x.segment_id === s.id).map(x => <span key={x.id} className="shot-chip" title={`${x.title} · ${SHOT[x.status].t}`}><i style={{ background: SHOT[x.status].c }} />{x.code}</span>)}</div> : <p className="ltr">{s.lyric || '—'}</p>}
                 </div>
               </button>
             ))}
           </div>
         ) : <Strip song={song} reload={load} open={go} />}
       </div>
-      {sel && <SegmentSheet song={song} seg={sel} assets={assets} close={() => go()} reload={load} setAssets={setAssets} />}
+      {sel && <SegmentSheet song={song} seg={sel} assets={assets} close={() => go()} reload={load} setAssets={setAssets} shots={shots.filter(x => x.segment_id === sel.id)} conflicts={conflicts} />}
     </div>
   );
 }
@@ -184,7 +193,17 @@ function Strip({ song, reload, open }: { song: Song; reload: () => void; open: (
 
 function useSaved() { const [at, setAt] = useState<number>(0); return { saved: at, mark: () => setAt(Date.now()) }; }
 
-function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: Song; seg: Seg; assets: Record<string, Asset>; close: () => void; reload: () => void; setAssets: (f: (a: Record<string, Asset>) => Record<string, Asset>) => void }) {
+function ConflictList({ conflicts }: { conflicts: Conflict[] }) {
+  const [open, setOpen] = useState(false); const n = conflicts.filter(c => c.status === 'open').length;
+  return (
+    <div className="conflicts glass">
+      <button className="conf-head" onClick={() => setOpen(o => !o)}><Warning size={18} weight="fill" color="#ff9f0a" /><b>{arNum(n)} تعارضات مستنية قرارك</b><span className="mute">المقاطع اللي فيها ⚠ مش هتتولّد قبلها</span><span className="sp" /><span className="mute">{open ? 'اخفي' : 'اعرض'}</span></button>
+      {open && <ol>{conflicts.map(c => <li key={c.id}><b>{c.title}</b><p><span className="mute">الاقتراح:</span> {c.proposal}</p><div className="shot-chips">{c.shots.map(x => <span key={x} className="shot-chip">{x}</span>)}</div></li>)}</ol>}
+    </div>
+  );
+}
+
+function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [], conflicts = [] }: { song: Song; seg: Seg; assets: Record<string, Asset>; close: () => void; reload: () => void; setAssets: (f: (a: Record<string, Asset>) => Record<string, Asset>) => void; shots?: Shot[]; conflicts?: Conflict[] }) {
   const [s, setS] = useState<Seg>(seg);
   const [plan, setPlan] = useState<'primary' | 'backup'>('primary');
   const [card, setCard] = useState<{ locked_text: string } | null>(null);
@@ -271,6 +290,21 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets }: { song: S
           </div>
           {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
         </div>
+
+        {shots.length > 0 && <>
+          <h3 className="ss-h">اللقطات <span className="mute">من تايم لاين v44</span></h3>
+          <div className="shot-list">
+            {shots.map(x => { const cf = x.conflicts.map(n => conflicts.find(c => c.n === n)).filter(c => c && c.status === 'open') as Conflict[]; return (
+              <div key={x.id} className="shot-row">
+                <span className="shot-code">{x.code}</span>
+                <div className="shot-main"><b>{x.title}</b><span className="mute tc">{tc(x.start_s)} → {tc(x.end_s)}</span>{x.source && <span className="mute src">{x.source}</span>}
+                  {cf.map(c => <span key={c.id} className="shot-conf"><Warning size={14} weight="fill" /> تعارض #{c.n}: {c.title}</span>)}
+                  {x.questions.length > 0 && <span className="shot-q">محتاج قرارك: {x.questions.join(' · ')}</span>}</div>
+                <span className="shot-st" style={{ color: SHOT[x.status].c }}><i style={{ background: SHOT[x.status].c }} />{SHOT[x.status].t}{x.kind ? ` (${x.kind})` : ''}{x.note ? ` · ${x.note}` : ''}</span>
+              </div>
+            ); })}
+          </div>
+        </>}
 
         <h3 className="ss-h">الصور <span className="mute">الترتيب = ترتيب الإرسال · اسحب لترتيبها</span></h3>
         <div className="slots">

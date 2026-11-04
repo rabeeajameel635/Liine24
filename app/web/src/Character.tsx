@@ -72,7 +72,7 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
                 <img src={p.crop} alt="" onClick={() => setZoom(p)} />
                 <div className="piece-body">
                   <b>{p.name}</b>
-                  <div className="hexes">{p.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{['الأساسي', 'الظل', 'النور'][i]}</small></span>)}</div>
+                  <div className="hexes">{p.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{(p.hex.length === 2 ? ['الأساسي', 'ظل القطيفة'] : ['الأساسي', 'الظل', 'النور'])[i]}</small></span>)}</div>
                   {p.approved ? <Status kind="ok" label="مقفول" /> : <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Status kind="wait" /><button className="gbtn sm-btn" onClick={() => approvePiece(p)}>اعتمد</button></div>}
                 </div>
               </div>
@@ -86,7 +86,7 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
               <img src={`${zoom.crop}?size=large`} alt="" />
               <div className="zoom-sw">
                 <b style={{ fontSize: 20 }}>{zoom.name}</b>
-                {zoom.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{['الأساسي · نور متوسط', 'الظل', 'النور'][i]}</small></span>)}
+                {zoom.hex.map((h, i) => <span key={h + i} className="hex"><i style={{ background: h }} /><code className="ltr">{h}</code><small>{(zoom.hex.length === 2 ? ['الأساسي', 'ظل القطيفة'] : ['الأساسي · نور متوسط', 'الظل', 'النور'])[i]}</small></span>)}
                 <button className="gbtn" onClick={() => setZoom(null)}>اقفل</button>
               </div>
             </div>

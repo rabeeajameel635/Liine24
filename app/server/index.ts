@@ -10,6 +10,7 @@ import { libraryRoutes } from './library.ts';
 import { characterRoutes, seedDonia, pieceRoutes } from './characters.ts';
 import { songRoutes, seedIatw } from './songs.ts';
 import { connectionRoutes } from './connections.ts';
+import { timelineRoutes, seedTimelineV44 } from './timeline.ts';
 import { initSecrets } from './secrets.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -33,6 +34,8 @@ await songRoutes(app, db, dataDir);
 initSecrets(dataDir);
 await connectionRoutes(app, db, dataDir, PORT);
 await seedIatw(db, join(root, '..'));
+await timelineRoutes(app, db);
+await seedTimelineV44(db, join(root, '..', 'projects', 'i-am-the-world', 'timeline_v44.json'));
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 

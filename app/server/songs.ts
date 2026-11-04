@@ -82,7 +82,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
       ...s, sections: JSON.parse(String(s.sections || '[]')), srt: JSON.parse(String(s.srt || '[]')), bpm_candidates: JSON.parse(String(s.bpm_candidates || '[]')),
       bar: barLength(Number(s.bpm), Number(s.beats_per_bar ?? 4)), peaks: existsSync(pk) ? JSON.parse(await readFile(pk, 'utf8')) : null,
       poster: s.poster_asset_id ? `/media/${s.poster_asset_id}/work` : null, audio: s.audio_asset_id ? `/api/songs/${id}/audio` : null,
-      segments: segs(id).map(shapeSeg), tools: TOOLS
+      segments: segs(id).map(shapeSeg), tools: TOOLS, master_missing: !s.master_asset_id
     };
   });
 
@@ -207,7 +207,15 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const s = song(String(g.song_id))!;
     const toolKey = which === 'backup' ? (JSON.parse(String(g.backup || '{}')).tool ?? g.tool) : g.tool; const tool = TOOLS[String(toolKey)];
     if (!tool) return reply.code(400).send({ what: 'أداة مش معروفة' });
-    if (tool.mode === 'mcp') return reply.code(409).send({ what: `${tool.via} MCP لسه مش متوصل`, fix: 'بيتوصل في خطوة الاتصالات. لحد ساعتها اختار أداة جسر أو جهّز البديلة.' });
+    const open = db.prepare(`SELECT c.n, c.title FROM conflict c, shot s WHERE s.segment_id = ? AND c.song_id = s.song_id AND c.status = 'open' AND EXISTS (SELECT 1 FROM json_each(s.conflicts) j WHERE j.value = c.n)`).all(id) as { n: number; title: string }[];
+    const nums = [...new Set(open.map(o => o.n))];
+    if (nums.length) return reply.code(409).send({ what: `فيه ${nums.length === 1 ? 'تعارض' : `${nums.length} تعارضات`} مستني قرارك (${nums.map(n => '#' + n).join('، ')})`, fix: 'قرّر في التعارض الأول. المقطع ده مش هيتولّد قبلها.' });
+    if (tool.mode === 'mcp') {
+      const conn = db.prepare('SELECT status FROM connection WHERE id = ?').get(tool.via.toLowerCase()) as { status?: string } | undefined;
+      return reply.code(409).send(conn?.status === 'connected'
+        ? { what: `${tool.via} متوصل، والإرسال المباشر بييجي في الخطوة الجاية`, fix: 'لحد ساعتها جهّز البديلة أو استخدم جسر.' }
+        : { what: `${tool.via} مش متوصل لسه`, fix: 'من «الاتصالات» دوس «اختبر الاتصال» وسجّل دخول بحسابك (على الماك).' });
+    }
     const code = String(g.kit_code || randomBytes(3).toString('hex'));
     const slug = String(s.title).replace(/[^A-Za-z0-9]+/g, '').slice(0, 10) || 'SONG';
     const name = `${slug}_${String(g.idx).padStart(2, '0')}_${code}`;
@@ -267,7 +275,8 @@ const IATW_NOTE = 'تقسيم مبدئي من خريطة v7. محتوى كل م�
 export async function seedIatw(db: DB, repoRoot: string) {
   if (db.prepare(`SELECT 1 FROM song WHERE id = 'iatw-v44'`).get()) {
     db.prepare(`UPDATE song SET plan_note = ? WHERE id = 'iatw-v44' AND plan_note IS NULL`).run(IATW_NOTE);
-    db.prepare(`UPDATE segment SET draft = 1 WHERE song_id = 'iatw-v44' AND label IS NOT NULL AND status = 'idea' AND draft = 0 AND prompt_partial = ''`).run();
+    // only the old v7 cut is tentative; once the v44 timeline is linked (shots exist) this no longer applies
+    try { if (!db.prepare(`SELECT 1 FROM shot WHERE song_id = 'iatw-v44'`).get()) db.prepare(`UPDATE segment SET draft = 1 WHERE song_id = 'iatw-v44' AND label IS NOT NULL AND status = 'idea' AND draft = 0 AND prompt_partial = ''`).run(); } catch { /* shot columns not migrated yet */ }
     return;
   }
   const src = await readFile(join(repoRoot, 'studio', 'data.js'), 'utf8').catch(() => null); if (!src) return;
