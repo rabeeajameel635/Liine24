@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { openDb, NotApprovedError } from './db.ts';
+import { libraryRoutes } from './library.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.GHORFA_DATA ?? join(homedir(), 'Library', 'Application Support', 'Ghorfa');
@@ -19,6 +20,8 @@ app.setErrorHandler((err, _req, reply) => {
   if (err instanceof NotApprovedError) return reply.code(409).send({ what: err.message, fix: 'افتح الورقة ودوس «اعتمد».' });
   reply.code(500).send({ what: 'حصل خطأ في السيرفر', fix: 'جرّب تاني. لو اتكرر، ابعت السطر ده للمساعد.', detail: err instanceof Error ? err.message : String(err) });
 });
+
+await libraryRoutes(app, db, dataDir);
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 

@@ -84,14 +84,29 @@ CREATE TABLE IF NOT EXISTS job (
 CREATE TABLE IF NOT EXISTS asset (
   id TEXT PRIMARY KEY,
   project_id TEXT REFERENCES project(id),
-  path TEXT NOT NULL,
+  name TEXT NOT NULL,            -- original file name (shown in the inspector only)
+  label TEXT,                    -- short human label: «Departure»، «الجزمة»
   sha256 TEXT UNIQUE,
   kind TEXT NOT NULL,            -- video | image | audio | doc
-  width INTEGER, height INTEGER, duration REAL,
-  provenance TEXT NOT NULL DEFAULT '{}', -- {tool, prompt, seed, version, license, job_id}
+  width INTEGER, height INTEGER, duration REAL,         -- of the original
+  original_path TEXT,            -- untouched original, always kept
+  work_path TEXT,                -- capped working copy (video ≤1080p, image ≤2K); = original when already within cap
+  thumb_path TEXT,
+  remote_url TEXT,               -- when the bytes could not be fetched yet
+  source TEXT NOT NULL DEFAULT 'drop',  -- drop | watch | higgsfield
+  source_ref TEXT,               -- e.g. higgsfield media id
+  folder TEXT,                   -- source folder name
+  provenance TEXT NOT NULL DEFAULT '{}', -- {tool, model, prompt, seed, version, license, refs_sent, job_id}
+  shot_id TEXT, song_id TEXT, character_id TEXT,
+  role TEXT,                     -- primary | backup | reference | look | sheet
+  favorite INTEGER NOT NULL DEFAULT 0,
+  locked INTEGER NOT NULL DEFAULT 0,       -- locked reference
+  face_check TEXT NOT NULL DEFAULT 'pending', -- pending | pass | warn (needs the commercial face model)
+  face_score REAL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),  -- when the source made it
   imported_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS asset_fts USING fts5(asset_id UNINDEXED, name, prompt, tags);
+CREATE VIRTUAL TABLE IF NOT EXISTS asset_fts USING fts5(asset_id UNINDEXED, name, label, prompt, tags);
 -- semantic search is designed now, filled later
 CREATE TABLE IF NOT EXISTS asset_embedding (
   asset_id TEXT NOT NULL REFERENCES asset(id),
