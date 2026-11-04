@@ -97,11 +97,15 @@ export function App() {
 
       {isLib && <Inspector a={picked} />}
 
-      <nav className="tabbar glass-strong" aria-label="التبويبات">
-        {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => (
-          <button key={v} aria-current={route.view === v || (v === 'home' && (route.view === 'board' || route.view === 'montage')) ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={route.view === v ? 'fill' : 'regular'} />{t}</button>
-        ))}
-      </nav>
+      <div className="tabbar">
+        <nav className="tabs glass-strong" aria-label="التبويبات">
+          {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => {
+            const on = route.view === v || (v === 'home' && (route.view === 'board' || route.view === 'montage'));
+            return <button key={v} aria-current={on ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={on ? 'fill' : 'regular'} />{t}</button>;
+          })}
+        </nav>
+        <button className="tab-search glass-strong" aria-label="بحث (⌘K)" onClick={() => setPalette(true)}><MagnifyingGlass size={26} weight="bold" /></button>
+      </div>
       {palette && <Palette onClose={() => setPalette(false)} go={go} setTheme={setTheme} albums={allAlbums} />}
       <Toaster />
     </div>
@@ -141,7 +145,7 @@ function Studio({ go }: { go: (v: Route['view']) => void }) {
   return (
     <div className="work"><div className="scroll"><div className="title-block"><h1>الاستوديو</h1></div>
       <div style={{ padding: '6px 22px 120px', display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))' }}>
-        {cards.map(([v, t, I]) => <button key={v} className="si" style={{ height: 120, borderRadius: 24, background: 'var(--bg-2)', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, fontSize: 17, fontWeight: 700 }} onClick={() => go(v)}><I size={30} />{t}</button>)}
+        {cards.map(([v, t, I]) => <button key={v} className="si" style={{ height: 120, borderRadius: 24, background: 'var(--card)', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, fontSize: 17, fontWeight: 700 }} onClick={() => go(v)}><I size={30} />{t}</button>)}
       </div></div></div>
   );
 }
