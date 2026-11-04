@@ -1,0 +1,31 @@
+{
+  "name": "ghorfat-al-ikhraj",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "غرفة الإخراج — استوديو إنتاج شخصي (أغنية + كليب + ٣ ريلز + نشر كل ٥ أيام)",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --watch server/index.ts & vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts",
+    "start": "npm run build && node server/index.ts",
+    "serve": "node server/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.10",
+    "fastify": "^5.12.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
