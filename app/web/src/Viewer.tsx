@@ -58,7 +58,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
         <div className="vtitle capsule glass" style={{ padding: '6px 16px', display: 'block' }}>
           <b>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</b>{fmtDate(a.created_at)}
         </div>
-        <div className="capsule glass">
+        <div className="capsule glass vactions">
           <button className="gbtn icon" aria-pressed={info} onClick={() => setInfo(v => !v)} aria-label="معلومات"><Info size={20} weight={info ? 'fill' : 'regular'} /></button>
           <button className="gbtn icon" aria-pressed={a.favorite} onClick={fav} aria-label="مفضّل"><Heart size={20} weight={a.favorite ? 'fill' : 'regular'} /></button>
           <button className="gbtn icon" aria-pressed={cmp != null} onClick={() => setCmp(c => c != null ? null : (index + 1 < items.length ? index + 1 : Math.max(0, index - 1)))} aria-label="قارن"><ArrowsLeftRight size={20} weight={cmp != null ? 'bold' : 'regular'} /></button>

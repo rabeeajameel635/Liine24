@@ -201,5 +201,9 @@ svg{flex:none}
   .hero-body{padding:0 16px 120px}
   .big-num{font-size:76px}
   .sheet{max-height:72%}
+  .viewer .vtop{justify-content:flex-start;gap:10px}
+  .viewer .vtitle{max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .viewer .vactions{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));z-index:6}
+  .viewer .vactions .gbtn.icon{width:48px;height:44px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
