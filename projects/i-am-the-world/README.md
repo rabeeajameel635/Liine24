@@ -110,7 +110,7 @@ https://app.notion.com/p/3fb690fc916181d2bcd8e0d770e9c95f
   - **متوسط الأغنية كلها 72.25.** الفرق عن 71.9 هو ‎+0.35 (≈ 0.5٪).
   - شبكة ثابتة على 71.9 بتبعد عن الضربات الحقيقية لحد **1.3 ث**. عشان كده البارات دلوقتي ماشية على الضربات المقاسة نفسها (beat tracker في `server/audio.ts` → `song.downbeats`)، مش على رقم ثابت.
   - أول downbeat عند 0.005 ث، والبار حوالي 3.2–3.4 ث.
-  - الرقم نفسه لسه مستني اعتماد ربيع. القياس النهائي يتعاد من الـ FLAC لما يوصل.
+  - **ربيع اعتمد 72.25 (٤ نوفمبر).** القياس النهائي يتعاد من الـ FLAC لما يوصل.
 - **تأكيد الـ MCPs (أكّدها ربيع بنفسه من المواقع الرسمية):** Higgsfield `https://mcp.higgsfield.ai/mcp` (help center: how-do-i-connect-higgsfield-to-claude، اشتراك مدفوع)، Suno `https://api.suno.com/mcp` (help.suno.com/en/articles/14551425، Beta)، Runway `https://mcp.runwayml.com/mcp` (help.runwayml.com Runway-MCP + runwayml.com/news/mcp، بالكريدت من غير Explore Mode). تجربة الدخول على الماك.
 - **الاتصالات:** MCP رسمي على الاشتراكات، ومن غير API keys: Higgsfield (خطة Max، ومنه Kling وMiniMax وSeedance)، وSuno MCP الرسمي (Beta من ٢٨ أكتوبر ٢٠٢٦)، وRunway MCP المستضاف (OAuth). أما Grok وGoogle Flow وWan فـ bridge (كيت مترقم + برومبت + فولدر مراقَب)، وجسر Grok لازم يبقى أسهل حاجة. ممنوع أي وسيط أو سيرفر بيطلب الباسورد. أي رابط MCP يتأكد من موقع الشركة نفسها قبل ما يتضاف. ولو Claude أو Gemini جوّه البرنامج محتاجين API key، التكلفة تتقال الأول.
 

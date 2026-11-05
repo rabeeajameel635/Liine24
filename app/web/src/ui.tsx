@@ -33,7 +33,7 @@ export function Toaster() {
 // Page: title 40 bold + one grey line (≤ 6 words). Card: optional real image, title 28 bold (≤ 3 words), one line 19 grey (≤ 6 words), one action.
 // Anything longer than a line goes inside <Details>, closed by default.
 
-export function PageHead({ title, line, action }: { title: string; line?: string; action?: React.ReactNode }) {
+export function PageHead({ title, line, action }: { title: string; line?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <header className="page-head">
       <div className="ph-text"><h1>{title}</h1>{line && <p>{line}</p>}</div>
@@ -42,12 +42,12 @@ export function PageHead({ title, line, action }: { title: string; line?: string
   );
 }
 
-export function Card({ img, imgAlt = '', title, line, action, onClick, wide, children, className = '', ltrTitle }: {
-  img?: string | null; imgAlt?: string; title: React.ReactNode; line?: React.ReactNode; action?: React.ReactNode; onClick?: () => void; wide?: boolean; children?: React.ReactNode; className?: string; ltrTitle?: boolean;
+export function Card({ img, imgAlt = '', imgClass, title, line, action, onClick, wide, children, className = '', ltrTitle }: {
+  img?: string | null; imgAlt?: string; imgClass?: string; title: React.ReactNode; line?: React.ReactNode; action?: React.ReactNode; onClick?: () => void; wide?: boolean; children?: React.ReactNode; className?: string; ltrTitle?: boolean;
 }) {
   const body = (
     <>
-      {img && <div className="card-img"><img src={img} alt={imgAlt} loading="lazy" /></div>}
+      {img && <div className="card-img"><img src={img} alt={imgAlt} loading="lazy" className={imgClass || undefined} /></div>}
       <div className="card-body">
         <div className="card-text"><h2 className={ltrTitle ? 'ltr' : undefined}>{title}</h2>{line && <p>{line}</p>}</div>
         {action && <div className="card-action" onClick={e => e.stopPropagation()}>{action}</div>}

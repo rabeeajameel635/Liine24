@@ -1,7 +1,7 @@
 // لوحة المقاطع: cards like the library, a strip view on the waveform, status filters, and the segment sheet.
 // No save button: every change is saved as it happens, with versions and undo (⌘Z).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, Images as ImagesIcon, TextAa, NotePencil } from '@phosphor-icons/react';
+import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil } from '@phosphor-icons/react';
 import { api, type Asset } from './api.ts';
 import { toast, PageHead, Card, Row } from './ui.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
@@ -15,10 +15,12 @@ type Song = { id: string; title: string; bpm: number; bpm_approved: number; beat
   tempo_local?: { t: number; bpm: number }[]; grid_measured?: boolean };
 type Shot = { id: string; code: string; title: string; start_s: number; end_s: number; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind: string | null; note: string | null; source: string; segment_id: string; conflicts: number[]; questions: string[]; blocked: string | null; answers: string[] };
 type Conflict = { id: string; n: number; title: string; proposal: string; shots: string[]; status: string; decision: string | null };
-export const SHOT: Record<Shot['status'], { t: string; c: string }> = { approved: { t: 'معتمد', c: '#30d158' }, candidate: { t: 'مرشّح', c: '#0a84ff' }, redo: { t: 'قيد إعادة', c: '#ff9f0a' }, pending: { t: 'لسه', c: '#8e8e93' } };
+// dots: green = ready or confirmed, orange = waiting, grey = idea
+const G = 'var(--ok)', O = 'var(--warn)', N = '#8E8E93';
+export const SHOT: Record<Shot['status'], { t: string; c: string }> = { approved: { t: 'معتمد', c: G }, candidate: { t: 'مرشّح', c: O }, redo: { t: 'قيد إعادة', c: O }, pending: { t: 'لسه', c: N } };
 
 export const STATUS: Record<Status, { t: string; c: string }> = {
-  idea: { t: 'فكرة', c: '#8e8e93' }, ready: { t: 'جاهز للتوليد', c: '#0a84ff' }, generating: { t: 'بيتولّد', c: '#ff9f0a' }, done: { t: 'تمّت ✓', c: '#30d158' }, editing: { t: 'في المونتاج', c: '#5e5ce6' }
+  idea: { t: 'فكرة', c: N }, ready: { t: 'جاهز للتوليد', c: G }, generating: { t: 'بيتولّد', c: O }, done: { t: 'تمّت ✓', c: G }, editing: { t: 'في المونتاج', c: G }
 };
 const tc = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 const patch = (id: string, body: Partial<Seg>) => fetch(`/api/segments/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async r => ({ ok: r.ok, data: await r.json() }));
@@ -49,24 +51,24 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
   const list = filter === 'all' ? segs : segs.filter(s => s.status === filter);
   const sel = segId ? segs.find(s => s.id === segId) : undefined;
   const thumbOf = (s: Seg) => (s.video_asset_id && assets[s.video_asset_id]?.thumb) || (s.refs[0] && assets[s.refs[0]]?.thumb) || null;
-  const picOf = (s: Seg) => thumbOf(s) ?? (s.idx === 1 && song.poster ? song.poster : fallback.length ? fallback[(s.idx - 1) % fallback.length] : song.poster);
+  const picOf = (s: Seg) => thumbOf(s) ?? (fallback.length ? fallback[(s.idx - 1) % fallback.length] : song.poster);
   const warnOf = (s: Seg) => shots.filter(x => x.segment_id === s.id).some(x => x.blocked || x.conflicts.some(n => conflicts.find(c => c.n === n && c.status === 'open')));
 
   return (
     <div className="work">
       <div className="topbar">
-        <a className="gbtn icon glass" href="#/home" aria-label="رجوع"><CaretRight size={24} /></a>
         <span className="sp" />
-        <div className="seg glass">
-          <button aria-pressed={view === 'cards'} onClick={() => setView('cards')} aria-label="كروت"><SquaresFour size={22} /></button>
-          <button aria-pressed={view === 'strip'} onClick={() => setView('strip')} aria-label="شريط"><Waveform size={22} /></button>
-        </div>
-        <a className="gbtn icon glass" href={`#/montage/${song.id}`} aria-label="المونتاج"><FilmStrip size={24} /></a>
+        <MoreMenu items={[
+          { icon: view === 'cards' ? Waveform : SquaresFour, label: view === 'cards' ? 'عرض الشريط' : 'عرض الكروت', run: () => setView(v => v === 'cards' ? 'strip' : 'cards') },
+          { icon: FilmStrip, label: 'المونتاج', href: `#/montage/${song.id}` },
+          { icon: CaretRight, label: 'الرئيسية', href: '#/home' }
+        ]} />
       </div>
       <div className="scroll"><div className="stack">
-        <PageHead title={song.title} line={`${arNum(done)} من ${arNum(segs.length)} خلصوا`} />
+        <PageHead title={song.title} line={<><span className="ltr bpm-small">{song.bpm} BPM</span>{song.bpm_approved ? '' : ' · مستني اعتمادك'}</>} />
+        <div className="progress" role="progressbar" aria-label={`${done} من ${segs.length}`} aria-valuenow={done} aria-valuemax={segs.length}><i style={{ width: `${segs.length ? done / segs.length * 100 : 0}%` }} /></div>
         {resume && (
-          <Card wide img={picOf(resume)} title={resume.label ?? `مقطع ${arNum(resume.idx)}`} ltrTitle line={`${secShort(resume.group_label)} · ${STATUS[resume.status].t}`}
+          <Card wide img={picOf(resume)} imgClass={thumbOf(resume) ? '' : 'temp'} title={resume.label ?? `مقطع ${arNum(resume.idx)}`} ltrTitle line={`${secShort(resume.group_label)} · ${STATUS[resume.status].t}`}
             action={<button className="gbtn primary" onClick={() => go(resume.id)}>كمّل</button>} />
         )}
         {!song.audio && <AudioMissing song={song} reload={load} />}
@@ -103,7 +105,7 @@ function NotesCard({ song, conflicts, hasShots }: { song: Song; conflicts: Confl
   return (
     <Card title="ملاحظات" line={line} onClick={() => setOpen(o => !o)} action={<button className="gbtn icon soft" aria-label={open ? 'اخفي' : 'اعرض'} aria-expanded={open} onClick={() => setOpen(o => !o)}><CaretDown size={22} style={{ transform: open ? 'rotate(180deg)' : undefined }} /></button>}>
       {open && <div className="card-more" onClick={e => e.stopPropagation()}>
-        {song.master_missing && <p><Warning size={20} weight="fill" color="#ff9f0a" /> ملف الماستر (FLAC) لسه ناقص للتصدير النهائي.</p>}
+        {song.master_missing && <p><Warning size={20} weight="fill" color="var(--warn)" /> ملف الماستر (FLAC) لسه ناقص للتصدير النهائي.</p>}
         {song.plan_note && <p>{hasShots ? 'الخطة: ' : ''}{song.plan_note}</p>}
         {conflicts.length > 0 && <ConflictList conflicts={conflicts} />}
       </div>}
@@ -219,7 +221,7 @@ function ConflictList({ conflicts }: { conflicts: Conflict[] }) {
   const [open, setOpen] = useState(false); const n = conflicts.filter(c => c.status === 'open').length;
   return (
     <div className="conflicts" onClick={e => e.stopPropagation()}>
-      <button className="conf-head" onClick={() => setOpen(o => !o)}>{n ? <Warning size={18} weight="fill" color="#ff9f0a" /> : <CheckCircle size={18} weight="fill" color="#30d158" />}<b>{n ? `${arNum(n)} تعارضات مستنية قرارك` : `${arNum(conflicts.length)} تعارضات اتقررت`}</b><span className="sp" /><CaretDown size={20} style={{ transform: open ? 'rotate(180deg)' : undefined }} /></button>
+      <button className="conf-head" onClick={() => setOpen(o => !o)}>{n ? <Warning size={18} weight="fill" color="var(--warn)" /> : <CheckCircle size={18} weight="fill" color="var(--ok)" />}<b>{n ? `${arNum(n)} تعارضات مستنية قرارك` : `${arNum(conflicts.length)} تعارضات اتقررت`}</b><span className="sp" /><CaretDown size={20} style={{ transform: open ? 'rotate(180deg)' : undefined }} /></button>
       {open && <ol>{conflicts.map(c => <li key={c.id}><b>{c.title}</b><p><span className="mute">{c.status === 'decided' ? 'اتقرر:' : 'الاقتراح:'}</span> {c.proposal}</p><div className="shot-chips">{c.shots.map(x => <span key={x} className="shot-chip">{x}</span>)}</div></li>)}</ol>}
     </div>
   );
@@ -432,7 +434,7 @@ function Picker({ kind, assets, chosen, onPick, onClose }: { kind: 'refs' | 'vid
               onClick={() => setSel(x => kind === 'video' ? [a.id] : x.includes(a.id) ? x.filter(i => i !== a.id) : [...x, a.id])}>
               {a.thumb && <img src={a.thumb} alt="" />}
               {n >= 0 && <span className="pick-n">{arNum(n + 1)}</span>}
-              {a.no_generation ? <span className="st"><Warning size={18} weight="fill" color="#ff9f0a" /></span> : a.approved ? <span className="st"><CheckCircle size={18} weight="fill" color="#30d158" /></span> : null}
+              {a.no_generation ? <span className="st"><Warning size={18} weight="fill" color="var(--warn)" /></span> : a.approved ? <span className="st"><CheckCircle size={18} weight="fill" color="var(--ok)" /></span> : null}
             </button>
           ); }) : <p className="mute" style={{ padding: 20 }}>{kind === 'video' ? 'مفيش فيديوهات لسه' : 'مفيش صور'}</p>}
         </div>
@@ -461,5 +463,21 @@ export function Montage({ songId }: { songId: string }) {
         <a className="gbtn primary big" href={`/api/songs/${song.id}/fcpxml`} download>صدّر لـ Final Cut</a>
       </div>
     </div></div></div>
+  );
+}
+
+type MenuItem = { icon: React.ComponentType<{ size?: number }>; label: string; run?: () => void; href?: string };
+export function MoreMenu({ items }: { items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (!open) return; const f = () => setOpen(false); const t = setTimeout(() => addEventListener('click', f), 0); return () => { clearTimeout(t); removeEventListener('click', f); }; }, [open]);
+  return (
+    <div className="more-wrap">
+      <button className="gbtn icon glass" aria-label="المزيد" aria-expanded={open} onClick={() => setOpen(o => !o)}><DotsThree size={28} weight="bold" /></button>
+      {open && <div className="more-menu glass-strong" role="menu">
+        {items.map(it => it.href
+          ? <a key={it.label} role="menuitem" href={it.href}><it.icon size={24} />{it.label}</a>
+          : <button key={it.label} role="menuitem" onClick={() => { it.run?.(); setOpen(false); }}><it.icon size={24} />{it.label}</button>)}
+      </div>}
+    </div>
   );
 }

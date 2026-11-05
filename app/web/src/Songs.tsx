@@ -7,11 +7,11 @@ export type SongCard = { id: string; title: string; bpm: number; bpm_approved: b
 export const arNum = (n: number) => n.toLocaleString('ar-EG');
 
 export function ProgressRing({ done, total, size = 64 }: { done: number; total: number; size?: number }) {
-  const r = size / 2 - 4, c = 2 * Math.PI * r, f = total ? done / total : 0;
+  const r = size / 2 - 2, c = 2 * Math.PI * r, f = total ? done / total : 0;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="5" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#30d158" strokeWidth="5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - f)} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - f)} />
     </svg>
   );
 }
@@ -43,7 +43,8 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
           <Card key={s.id} wide className="song-card" img={s.poster} ltrTitle title={s.title}
             line={`${arNum(s.done)} من ${arNum(s.total)} مقطع خلص`}
             action={<button className="gbtn primary" onClick={() => open(s.id, s.resume ?? undefined)}>كمّل</button>}>
-            <span className="card-ring"><ProgressRing done={s.done} total={s.total} size={56} /></span>
+            <div className="card-band" aria-hidden="true" />
+            <span className="ring-thin" aria-label={`${s.done} من ${s.total}`}><ProgressRing done={s.done} total={s.total} size={64} /><b>{arNum(s.done)}/{arNum(s.total)}</b></span>
           </Card>
         ))}
         <div className={'new-song' + (over ? ' over' : '')}>

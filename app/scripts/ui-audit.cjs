@@ -27,7 +27,7 @@ const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-
           const c = rc[0], top = document.elementFromPoint(Math.min(W - 1, Math.max(0, c.left + c.width / 2)), Math.min(H - 1, Math.max(0, c.top + c.height / 2)));
           if (top && !(top === el || el.contains(top) || top.contains(el))) continue; // covered by an overlay
           words.push(...txt.split(/\s+/).filter(x => /[\p{L}\p{N}]/u.test(x)));
-          const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < 17) small.set(txt.slice(0, 30), fs);
+          const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < 17 && !el.closest('.tabbar')) small.set(txt.slice(0, 30), fs); // tab bar: Apple-style 13px exception
         }
         for (const e of document.querySelectorAll('button,a.gbtn,[role=button]')) { if (!vis(e)) continue; const rc = e.getBoundingClientRect(); if (rc.bottom < 0 || rc.top > H || rc.width === 0) continue; if (rc.height < 56 - 0.5 && rc.width < 56 - 0.5 || rc.height < 44) btn.push(`${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 18)} ${Math.round(rc.width)}×${Math.round(rc.height)}`); }
         return { n: words.length, words: words.join(' '), small: [...small].slice(0, 12), btn: btn.slice(0, 10) };

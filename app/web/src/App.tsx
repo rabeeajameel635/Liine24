@@ -76,11 +76,12 @@ export function App() {
 
       {isLib && picked && <Inspector a={picked} />}
 
+      <div className="tab-fade" aria-hidden="true" />
       <div className="tabbar">
         <nav className="tabs glass-strong" aria-label="التبويبات">
           {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => {
             const on = v === 'home' ? onHome : v === 'studio' ? onStudio : route.view === v;
-            return <button key={v} aria-current={on ? 'page' : undefined} onClick={() => go(v)}><I size={24} weight={on ? 'fill' : 'regular'} />{t}</button>;
+            return <button key={v} aria-current={on ? 'page' : undefined} aria-label={t} onClick={() => go(v)}><I size={26} weight={on ? 'fill' : 'regular'} /><span className="t-label">{t}</span></button>;
           })}
         </nav>
         <button className="tab-search glass-strong" aria-label="بحث (⌘K)" onClick={() => setPalette(true)}><MagnifyingGlass size={26} weight="bold" /></button>
