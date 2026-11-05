@@ -30,6 +30,9 @@ export const TOOLS: Record<string, { name: string; via: string; mode: 'mcp' | 'b
 const FIELDS = ['lyric', 'status', 'direction', 'prompt_partial', 'tool', 'backup', 'refs', 'video_asset_id', 'notes', 'start_s', 'end_s', 'label', 'group_label'] as const;
 const STATUSES = ['idea', 'ready', 'generating', 'done', 'editing'];
 
+/** Set once songRoutes runs: measures a song's audio (beats, bars, peaks). */
+export let analyzeSong: (songId: string) => Promise<void> = async () => {};
+
 export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) {
   const peaksDir = join(dataDir, 'peaks'); await mkdir(peaksDir, { recursive: true });
   const song = (id: string) => db.prepare('SELECT * FROM song WHERE id = ?').get(id) as Row | undefined;
@@ -68,6 +71,8 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
       sections = CASE WHEN sections IS NULL OR sections = '[]' THEN ? ELSE sections END WHERE id = ?`).run(
       +dur.toFixed(3), JSON.stringify(cands), bpm, beatOffset(x, bpm), JSON.stringify(sectionsFromCues(cues, dur)), songId);
   }
+  analyzeSong = analyze; // reachable from the first-run sync too
+
 
   app.get('/api/songs', async () => {
     const rows = db.prepare('SELECT s.*, p.title AS project FROM song s JOIN project p ON p.id = s.project_id ORDER BY s.created_at').all() as Row[];
@@ -304,7 +309,7 @@ export async function seedIatw(db: DB, repoRoot: string) {
   const D = JSON.parse(src.slice(src.indexOf('{'), src.lastIndexOf('}') + 1)) as { shots: Row[]; longs: Row[]; cues: Cue[]; sections: { name: string; start: number }[] };
   const poster = db.prepare(`SELECT id FROM asset WHERE label = 'Departure'`).get() as { id?: string } | undefined;
   db.prepare(`INSERT INTO song (id, project_id, title, bpm, bpm_source, bpm_approved, sections, srt, duration, beat_offset, poster_asset_id, segment_seconds, created_at)
-    VALUES ('iatw-v44', 'iatw', 'I Am The World', 71.9, 'قياس سابق', 0, ?, ?, 256, 1.3, ?, 15, datetime('now'))`).run(JSON.stringify(D.sections), JSON.stringify(D.cues), poster?.id ?? null);
+    VALUES ('iatw-v44', 'iatw', 'I Am The World', 72.25, 'manual', 1, ?, ?, 256, 0.0051, ?, 15, datetime('now'))`).run(JSON.stringify(D.sections), JSON.stringify(D.cues), poster?.id ?? null);
   db.prepare(`UPDATE song SET plan_note = ? WHERE id = 'iatw-v44'`).run(IATW_NOTE);
   const toolOf = (t: string) => /H3/.test(t) ? 'higgsfield-minimax' : /Kling/.test(t) ? 'higgsfield-kling' : /Veo/.test(t) ? 'flow' : 'stills';
   const groupOf = (n: number) => { for (const l of D.longs) { const nums = (String(l.from_).match(/\d+/g) || []).map(Number); const rng = /→/.test(String(l.from_)) ? Array.from({ length: nums[1] - nums[0] + 1 }, (_, k) => nums[0] + k) : nums; if (rng.includes(n)) return String(l.id); } return null; };

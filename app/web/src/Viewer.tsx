@@ -52,7 +52,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
       : <img className={cls} src={x.src} alt={x.label ?? ''} draggable={false} onError={() => setFailed(f => ({ ...f, [x.id]: true }))} />;
 
   const st = statusOf(a);
-  const { qc, busy, rerun } = useQc(a.id);
+  const { qc, busy, rerun, today } = useQc(a.id);
   const prov = a.provenance;
   const other = cmp != null ? items[cmp] : null;
 
@@ -94,7 +94,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
       <section className={'sheet glass-strong' + (info ? ' open' : '')} aria-hidden={!info}
         onPointerDown={onDown} onPointerUp={onUp}>
         <button className="grab" onClick={() => setInfo(false)} aria-label="اقفل المعلومات" />
-        <QcCard qc={qc} busy={busy} rerun={rerun} />
+        <QcCard qc={qc} busy={busy} rerun={rerun} today={today} />
         <h2 className="sheet-title">{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h2>
         <p className="sheet-line">{fmtDate(a.created_at)}</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}><Status kind={a.approved ? 'ok' : 'wait'} />{a.locked && <span className="pill">مرجع مقفول</span>}{!!a.face_baseline && <span className="pill">خط أساس الوش</span>}{!!a.no_generation && <span className="pill">ممنوع كمرجع توليد</span>}</div>

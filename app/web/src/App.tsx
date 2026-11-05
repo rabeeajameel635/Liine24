@@ -14,8 +14,9 @@ import { Board, Montage } from './Board.tsx';
 import { Connections } from './Connections.tsx';
 import { InspirationPage } from './Inspiration.tsx';
 import { ConstantsPage } from './Constants.tsx';
+import { SetupPage } from './Setup.tsx';
 
-type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration' | 'constants'; album: string; sub?: string };
+type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration' | 'constants' | 'setup'; album: string; sub?: string };
 const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
 const ALBUM_ICON: Record<string, PIcon> = { all: Images, approved: CheckCircle, favorites: Heart, locked: LockSimple, waiting: Clock, videos: VideoCamera };
 type Theme = 'auto' | 'light' | 'dark';
@@ -51,7 +52,7 @@ export function App() {
     <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick}><I size={24} weight={active ? 'fill' : 'regular'} /><span>{label}</span></button>
   );
   const onHome = route.view === 'home' || route.view === 'board' || route.view === 'montage';
-  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration', 'constants'].includes(route.view);
+  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration', 'constants', 'setup'].includes(route.view);
 
   return (
     <div className={'shell' + (isLib && picked ? '' : ' no-ins')}>
@@ -76,6 +77,7 @@ export function App() {
       {route.view === 'connections' && <Connections />}
       {route.view === 'inspiration' && <InspirationPage />}
       {route.view === 'constants' && <ConstantsPage />}
+      {route.view === 'setup' && <SetupPage />}
       {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && picked && <Inspector a={picked} />}
@@ -159,6 +161,7 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },
     { id: 'inspo', label: 'الإلهام', icon: Lightbulb, run: () => go('inspiration') },
     { id: 'const', label: 'الثوابت', icon: At, run: () => go('constants') },
+    { id: 'setup', label: 'أول تشغيل', icon: Sparkle, run: () => go('setup') },
     { id: 'assist', label: 'المساعد', icon: Sparkle, run: () => go('assistant') },
     { id: 'light', label: 'المظهر: فاتح', icon: Sun, run: () => setTheme('light') },
     { id: 'dark', label: 'المظهر: غامق', icon: Moon, run: () => setTheme('dark') },

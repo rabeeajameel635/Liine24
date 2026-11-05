@@ -1,0 +1,492 @@
+{
+ "exported": "2026-11-05",
+ "items": [
+  {
+   "ids": [
+    "859d8b5f-b42b-497c-ac28-66461d8d7406"
+   ],
+   "sha256": "5eab956e031906679cf1af26b5ac573e15cc0af8d92f863804da7cc7438a7d5c",
+   "kind": "image",
+   "label": "الجزمة",
+   "folder": "02 Locked References (shoe · hair · jacket)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T03:40:44.6Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "02 Locked References (shoe · hair · jacket)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "3b66f274-8dd0-445a-b68b-78f57812b834"
+   ],
+   "sha256": "d84d0e31ffa3714c9120ba02bf2cf671be2c655274615b4de700a969d72cb464",
+   "kind": "image",
+   "label": "الجاكيت",
+   "folder": "02 Locked References (shoe · hair · jacket)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T03:40:44Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "02 Locked References (shoe · hair · jacket)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "fab411cb-c3c8-4e9d-9c35-bef3ebe9cb65"
+   ],
+   "sha256": "b8c3c728befadbd6fc86f3527cb5bb07c75a39265f7e62400cdffd95c99cb7ab",
+   "kind": "image",
+   "label": "الشعر والمشبك «سِرّ»",
+   "folder": "02 Locked References (shoe · hair · jacket)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T03:55:43Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "02 Locked References (shoe · hair · jacket)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "9edbdf00-a148-45a9-b80b-0772b681715a"
+   ],
+   "sha256": "c40c642be7cfe24be1fc2164b1afb56ff2f73bd457562c2c9d57c1aa76468033",
+   "kind": "image",
+   "label": "Departure",
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T04:19:01Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "ad5ac19b-d485-4f25-9013-b56d2eb5a6f4"
+   ],
+   "sha256": "11899bbec1420773f52db534b333addbbc3062d2f63a50859d0ea04ac61e63cd",
+   "kind": "image",
+   "label": "Fame",
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T04:59:03Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "7a83063c-7af2-4d49-903b-0018b1b4b49a"
+   ],
+   "sha256": "8ac9832ef2c95d756b7e53d6c40667790e4eec598ef1ddf93b607f2e6490cd23",
+   "kind": "image",
+   "label": null,
+   "folder": "(جذر المشروع)",
+   "role": null,
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T05:29:38.9Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "(جذر المشروع)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "acac6ef7-df54-4483-a5ee-57e4cfbdfe3c"
+   ],
+   "sha256": "158b8f2c0ee0ff9bacb65a9ab115adba4553004acc770faa9b7cc8eb4b9e6c34",
+   "kind": "image",
+   "label": null,
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T05:29:39Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "8bc69bb1-654a-48d4-b6a9-82fca4033f0f"
+   ],
+   "sha256": "b36c8785d878d0620ebb8d2f42885e5e3116d61df68a90e53cd07037822a04fd",
+   "kind": "image",
+   "label": "DONIA_WARDROBE_LOCK_v2",
+   "folder": "(جذر المشروع)",
+   "role": "sheet",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T06:33:35.66Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "(جذر المشروع)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "1bf7925e-2ff1-4da0-a9c4-46aad0b96528"
+   ],
+   "sha256": "1560becc77c396badc2785fcef48037bea8640fdc544d2a6ec2c08bbc11e4f9d",
+   "kind": "image",
+   "label": "Love v2",
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T06:33:35.67Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "2ac37c26-7dc7-47a2-84c4-7584278cc4cc"
+   ],
+   "sha256": "508b563a6e81ee33745b990e997b5459ea9589abecad5c6f956a1efeb2abd933",
+   "kind": "image",
+   "label": null,
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T06:33:35.70Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "2825d7f6-aaea-498e-a873-6bb4c93292f0"
+   ],
+   "sha256": "0af8abfa23cef8db6b6661989345d1ab119157395d802e494212404e897f543c",
+   "kind": "image",
+   "label": null,
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T06:33:35.71Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "7877d913-205b-447f-ab93-07fa7b183143"
+   ],
+   "sha256": "f36bc9d6082fd7d4009c6622066cfcc6e071f8b13ba7e70b5fcd2c5ff63b87b7",
+   "kind": "image",
+   "label": null,
+   "folder": "(جذر المشروع)",
+   "role": null,
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T06:33:35.72Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "(جذر المشروع)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "349e15ad-6c9c-418d-8994-60294d4b6406",
+    "18085611-6aaf-4b4d-a21f-a6371b077968"
+   ],
+   "sha256": "02ba49ac8c67a39221c378334ac6d2762ba28feb9505522cc0ca3b0c2fdc511a",
+   "kind": "image",
+   "label": "العُقدة (لوحة الرحيل)",
+   "folder": "H2 · لوحات الممر (مقفولة)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T15:52:27Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "md5": "0993761dd692ff11690ab43dae63aa7c",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "H2 · لوحات الممر (مقفولة)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "2cd50840-4348-4da6-9c86-864a28c4eb7c",
+    "21c39052-84c2-40e5-9b0c-9a8fae83a7a9"
+   ],
+   "sha256": "f87df30fb4533d3f721e8aa22767fc3e8d23a4bf0df5f54437fea3a9e8f0db32",
+   "kind": "image",
+   "label": "بعد المطر (لوحة الحب)",
+   "folder": "H2 · لوحات الممر (مقفولة)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T15:54:32Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "md5": "80e759db7f3ddccea969cd4ca01de5ef",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "H2 · لوحات الممر (مقفولة)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "febcc613-cd9e-48cf-8d2d-c186db5b1e93",
+    "b82c0396-7a1d-4a72-a51f-bfdb7ba467f2"
+   ],
+   "sha256": "3229bfdb415316bcb61eee73c5f17d550930b93df72bef66efcc148868438d64",
+   "kind": "image",
+   "label": "الانفصال (لوحة الشهرة)",
+   "folder": "H2 · لوحات الممر (مقفولة)",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-10-31T17:36:06Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "md5": "3f373b6ed525b0983590bca9b384c4d6",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "H2 · لوحات الممر (مقفولة)",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "96de4660-88bb-449f-9566-b944124e0e82",
+    "22506759-429e-4f63-af73-481c5a7ac5df"
+   ],
+   "sha256": "f8d04b57b76fd92ffce980cf6acfb9c0550a2fded85719128c41f8b94033fe65",
+   "kind": "image",
+   "label": "وش دنيا A · خط الأساس",
+   "folder": "وش دنيا · خلفية بيضا",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": "فيه حلق صغير في لقطة ٣/٤ والجنب: للمقارنة بالوش بس، ممنوع كمرجع توليد لحد ما الحلق يتشال",
+   "no_generation": true,
+   "face_baseline": true,
+   "character_id": "donia",
+   "created_at": "2026-11-04T22:11:47.288Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "02 Locked References (shoe · hair · jacket)",
+    "license": "Higgsfield — خطة Max",
+    "md5": "4c828d86cae88c1ef4caa98c90b725b7",
+    "note": "خط أساس تطابق الوش (٥ نوفمبر)"
+   }
+  },
+  {
+   "ids": [
+    "19f36f51-50ae-4b5a-b8e1-226be74dee36"
+   ],
+   "sha256": "d1a4a75ff4a7d7382d62356761cbfbc338e8feafaf9bc37662965a2ae670c69d",
+   "kind": "image",
+   "label": "DONIA_LOOKS_HALF_3",
+   "folder": "01 Approved Looks",
+   "role": "look",
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-11-04T22:11:47.309Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "01 Approved Looks",
+    "license": "Higgsfield — خطة Max"
+   }
+  },
+  {
+   "ids": [
+    "473bf977-8dac-4924-9a5a-c74145076f0a",
+    "7eea7c7f-16b9-4b79-bb41-da27c5b5a674"
+   ],
+   "sha256": "720239943f4d7212335f656063f3cdf8994aa2c95adfa7c8bbe377a70ff7e0df",
+   "kind": "image",
+   "label": "وش دنيا B · زاوية تانية",
+   "folder": "وش دنيا · خلفية بيضا",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-11-04T22:11:47.499Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "02 Locked References (shoe · hair · jacket)",
+    "license": "Higgsfield — خطة Max",
+    "md5": "3dfec2779ec9ffe483139122234b48d4"
+   }
+  },
+  {
+   "ids": [
+    "453add2b-40f7-4183-bcaa-edf702cbb6d3"
+   ],
+   "sha256": "207d8e1f5e04ffaa05bbbab114a434e93790cd65c98542770fb61ef33fd755f9",
+   "kind": "audio",
+   "label": null,
+   "folder": null,
+   "role": null,
+   "locked": false,
+   "approved": false,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": null,
+   "created_at": "2026-11-04T23:03:25.447Z",
+   "song_audio": "iatw-v44",
+   "provenance": {}
+  },
+  {
+   "ids": [
+    "e7f33b2c-0a17-4e22-8417-d7b5e19c231d"
+   ],
+   "sha256": "3ccf1955b81c0fb59695f41ab6b00132468d2411635a96a0da641c402296e8fb",
+   "kind": "image",
+   "label": "وش دنيا A · من غير حلق",
+   "folder": "وش دنيا · خلفية بيضا",
+   "role": "reference",
+   "locked": true,
+   "approved": true,
+   "warn": null,
+   "no_generation": false,
+   "face_baseline": false,
+   "character_id": "donia",
+   "created_at": "2026-11-05T00:00:00Z",
+   "provenance": {
+    "tool": "Higgsfield",
+    "md5": "eb3cd627a480224949be50a579fcf3c4",
+    "higgsfield_project": "I Am The World — Donia Wardrobe (Locked)",
+    "higgsfield_project_id": "77e73ccb-d102-4150-98fa-bfe33729694d",
+    "folder": "وش دنيا · خلفية بيضا",
+    "license": "Higgsfield — خطة Max"
+   }
+  }
+ ]
+}

@@ -515,4 +515,4 @@ function VideoRow({ id, thumb, open }: { id: string; thumb: string | null; open:
   const { qc } = useQc(id);
   return <Row icon={FilmStrip} img={thumb} title="الفيديو" line={qc ? `${qc.score != null ? qc.score.toLocaleString('ar-EG') + ' · ' : ''}${QC_LABEL[qc.status]}` : 'وصل · بيتفحص'} onClick={open} />;
 }
-function VideoQc({ id }: { id: string }) { const { qc, busy, rerun } = useQc(id); return <QcCard qc={qc} busy={busy} rerun={rerun} />; }
+function VideoQc({ id }: { id: string }) { const { qc, busy, rerun, today } = useQc(id); return <QcCard qc={qc} busy={busy} rerun={rerun} today={today} />; }

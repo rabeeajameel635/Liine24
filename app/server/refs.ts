@@ -164,12 +164,12 @@ export function seedRefs(db: DB) {
   const id = (label: string) => (db.prepare('SELECT id FROM asset WHERE label = ?').get(label) as { id?: string } | undefined)?.id;
   const card = db.prepare(`SELECT locked_text FROM character WHERE id = 'donia'`).get() as { locked_text?: string } | undefined;
   const make = (r: Parameters<typeof createRef>[1], approve: boolean) => { if (!db.prepare('SELECT 1 FROM ref WHERE handle = ?').get(r.handle)) createRef(db, r, approve); };
-  // film constants
-  make({ handle: 'دنيا', scope: 'film', kind: 'character', title_ar: 'دنيا', name_en: 'Donia', text_en: card?.locked_text ?? null,
+  // film constants: only once their pictures are in the library (a version can't be filled in later, so never create it empty)
+  if (id('وش دنيا B · زاوية تانية') && id('وش دنيا A · من غير حلق')) make({ handle: 'دنيا', scope: 'film', kind: 'character', title_ar: 'دنيا', name_en: 'Donia', text_en: card?.locked_text ?? null,
     assets: [id('وش دنيا A · من غير حلق'), id('وش دنيا B · زاوية تانية')].filter(Boolean) as string[], element_id: '84b9e386-8647-4d78-9671-c1fd3079a616',
     note_ar: 'Donia-Final. وش A الأصل خط أساس للمقارنة بس (فيه حلق) فمش بيتبعت.' }, true);
-  make({ handle: 'اللوفر', scope: 'film', kind: 'prop', title_ar: 'اللوفر الأبيض', name_en: 'the white loafers', text_en: 'Exactly the same white loafers as the loafer reference.', assets: [id('الجزمة')].filter(Boolean) as string[] }, true);
-  make({ handle: 'المشبك', scope: 'film', kind: 'prop', title_ar: 'مشبك «سِرّ»', name_en: 'the crimson «سِرّ» claw clip', text_en: 'The crimson velvet «سِرّ» claw clip in her hair, exactly as the clip reference.', assets: [id('الشعر والمشبك «سِرّ»')].filter(Boolean) as string[] }, true);
+  if (id('الجزمة')) make({ handle: 'اللوفر', scope: 'film', kind: 'prop', title_ar: 'اللوفر الأبيض', name_en: 'the white loafers', text_en: 'Exactly the same white loafers as the loafer reference.', assets: [id('الجزمة')].filter(Boolean) as string[] }, true);
+  if (id('الشعر والمشبك «سِرّ»')) make({ handle: 'المشبك', scope: 'film', kind: 'prop', title_ar: 'مشبك «سِرّ»', name_en: 'the crimson «سِرّ» claw clip', text_en: 'The crimson velvet «سِرّ» claw clip in her hair, exactly as the clip reference.', assets: [id('الشعر والمشبك «سِرّ»')].filter(Boolean) as string[] }, true);
   // places (only what is decided; the rest waits for a description and a picture)
   make({ handle: 'الممر', scope: 'place', kind: 'place', title_ar: 'الممر', name_en: 'the corridor',
     text_en: 'Location — the corridor: wide but oppressive, walls of light-grey and dark-grey concrete blocks laid in a random rhythm, black carpet with a single 12 cm crimson line running its length. Light: cold, soft and simple, coming from the left; never warm, never amber.',

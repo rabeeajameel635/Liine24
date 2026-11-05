@@ -30,6 +30,19 @@ if (process.env.GHORFA_TEST_MCP) SERVICES.push({ id: 'local-test', name: 'سير
 
 type Result = { ok: boolean; status: string; what: string; fix?: string; tools?: string[]; authorize_url?: string };
 
+/** Things that wait for a service to be connected (e.g. the first-run library sync after the Higgsfield login). */
+export const onConnected: ((id: string) => void)[] = [];
+
+/** Call one tool on a connected official MCP server, with the login saved in the Keychain. */
+export async function callMcpTool(db: DB, id: string, port: number, tool: string, args: Record<string, unknown>) {
+  const v = db.prepare('SELECT verified_url FROM connection WHERE id = ? AND verified_at IS NOT NULL').get(id) as { verified_url?: string } | undefined;
+  if (!v?.verified_url) throw new Error('الخدمة مش متأكدة لسه');
+  const client = new Client({ name: 'ghorfa', version: '0.1.0' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(v.verified_url), { authProvider: new Provider(id, port) }));
+  try { return await client.callTool({ name: tool, arguments: args }) as { content?: { type: string; text?: string }[]; isError?: boolean }; }
+  finally { await client.close().catch(() => {}); }
+}
+
 /** «حصل إيه / نصلّحه إزاي» for the errors people actually hit. */
 function explain(e: unknown): Result {
   const m = e instanceof Error ? `${e.message} ${(e as { cause?: { code?: string } }).cause?.code ?? ''}` : String(e);
@@ -68,7 +81,7 @@ export async function connectionRoutes(app: FastifyInstance, db: DB, dataDir: st
     status TEXT NOT NULL DEFAULT 'unknown', tested_at TEXT, result TEXT)`);
   if (process.env.GHORFA_TEST_MCP) db.prepare(`INSERT OR REPLACE INTO connection (id, verified_url, verified_source, verified_quote, verified_at) VALUES ('local-test', ?, ?, 'test', datetime('now'))`).run(process.env.GHORFA_TEST_MCP, process.env.GHORFA_TEST_MCP);
   const row = (id: string) => db.prepare('SELECT * FROM connection WHERE id = ?').get(id) as Record<string, string | null> | undefined;
-  const record = (id: string, r: Result) => { db.prepare(`INSERT INTO connection (id, status, tested_at, result) VALUES (?, ?, datetime('now'), ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, tested_at = excluded.tested_at, result = excluded.result`).run(id, r.status, JSON.stringify(r)); return r; };
+  const record = (id: string, r: Result) => { db.prepare(`INSERT INTO connection (id, status, tested_at, result) VALUES (?, ?, datetime('now'), ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, tested_at = excluded.tested_at, result = excluded.result`).run(id, r.status, JSON.stringify(r)); if (r.status === 'connected') for (const f of onConnected) f(id); return r; };
   const providers = new Map<string, Provider>();
   const pending = new Map<string, { transport: StreamableHTTPClientTransport }>();
 

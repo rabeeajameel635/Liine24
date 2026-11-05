@@ -26,8 +26,12 @@ const LABEL: Record<CheckKey, string> = { face: 'الوش', clip: 'المشبك'
 const ar = (n: number, d = 0) => n.toLocaleString('ar-EG', { maximumFractionDigits: d });
 
 export function migrateQc(db: DB) {
+  // the paid look (Claude Code) is done once per file, keyed by its SHA-256; free checks run every time
+  db.exec(`CREATE TABLE IF NOT EXISTS qc_vision (sha256 TEXT NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), forced INTEGER NOT NULL DEFAULT 0)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS qc_vision_sha ON qc_vision (sha256, created_at)`);
   db.exec(`CREATE TABLE IF NOT EXISTS qc_run (id TEXT PRIMARY KEY, asset_id TEXT NOT NULL, score REAL, status TEXT NOT NULL, reason TEXT NOT NULL, checks TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+  try { db.exec('ALTER TABLE qc_run ADD COLUMN vision_cached INTEGER NOT NULL DEFAULT 0'); } catch { /* exists */ }
 }
 
 // ---------- the checks that run anywhere ----------
@@ -116,10 +120,11 @@ function lookChecks(l: Look): Check[] {
 }
 
 // ---------- one run ----------
-export async function runQc(db: DB, dataDir: string, assetId: string): Promise<QcResult> {
+export async function runQc(db: DB, dataDir: string, assetId: string, force = false): Promise<QcResult & { vision_cached: boolean }> {
   migrateQc(db);
   const a = db.prepare('SELECT * FROM asset WHERE id = ?').get(assetId) as Record<string, string | number | null> | undefined;
   if (!a) throw new Error('مش موجود');
+  let vision_cached = false;
   const kind = String(a.kind); const work = String(a.work_path ?? ''); if (!work || !existsSync(work)) throw new Error('الملف لسه ما نزلش');
   const checks: Check[] = [];
   const { stdout: dims } = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', work]);
@@ -143,7 +148,14 @@ export async function runQc(db: DB, dataDir: string, assetId: string): Promise<Q
     }
     // constants + modesty
     const ref = (label: string) => (db.prepare('SELECT work_path FROM asset WHERE label = ?').get(label) as { work_path?: string } | undefined)?.work_path;
-    try { checks.push(...lookChecks(await look(frames, { clip: ref('الشعر والمشبك «سِرّ»'), loafers: ref('الجزمة') }))); }
+    const sha = String(a.sha256 ?? '');
+    const cached = !force && sha ? db.prepare('SELECT result FROM qc_vision WHERE sha256 = ? ORDER BY created_at DESC LIMIT 1').get(sha) as { result: string } | undefined : undefined;
+    if (cached) vision_cached = true;
+    try {
+      const l = cached ? JSON.parse(cached.result) as Look : await look(frames, { clip: ref('الشعر والمشبك «سِرّ»'), loafers: ref('الجزمة') });
+      if (!cached && sha) db.prepare(`INSERT INTO qc_vision (sha256, result, forced) VALUES (?, ?, ?)`).run(sha, JSON.stringify(l), force ? 1 : 0);
+      checks.push(...lookChecks(l));
+    }
     catch (e) { checks.push({ key: 'clip', label: 'الثوابت', state: 'error', score: null, line: `ما اشتغلش: ${(e as Error).message.slice(0, 60)}` }); }
     // face
     if (!modelsReady(dataDir)) checks.push({ key: 'face', label: LABEL.face, state: 'pending', score: null, line: 'مستني الماك (موديلات الوش)' });
@@ -158,8 +170,8 @@ export async function runQc(db: DB, dataDir: string, assetId: string): Promise<Q
   } finally { await rm(tmp, { recursive: true, force: true }); }
 
   const sum = summarize(checks);
-  const res: QcResult = { asset_id: assetId, ...sum, checks, at: new Date().toISOString() };
-  db.prepare('INSERT INTO qc_run (id, asset_id, score, status, reason, checks) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), assetId, sum.score, sum.status, sum.reason, JSON.stringify(checks));
+  const res = { asset_id: assetId, ...sum, checks, at: new Date().toISOString(), vision_cached };
+  db.prepare('INSERT INTO qc_run (id, asset_id, score, status, reason, checks, vision_cached) VALUES (?, ?, ?, ?, ?, ?, ?)').run(randomUUID(), assetId, sum.score, sum.status, sum.reason, JSON.stringify(checks), vision_cached ? 1 : 0);
   return res;
 }
 
@@ -174,10 +186,13 @@ export function queueQc(db: DB, dataDir: string, assetId: string, log?: (m: stri
 export async function qcRoutes(app: FastifyInstance, db: DB, dataDir: string) {
   migrateQc(db);
   const latest = (id: string) => { const r = db.prepare('SELECT * FROM qc_run WHERE asset_id = ? ORDER BY created_at DESC LIMIT 1').get(id) as Record<string, string | number | null> | undefined; return r ? { ...r, checks: JSON.parse(String(r.checks)) } : null; };
-  app.get('/api/assets/:id/qc', async req => ({ qc: latest((req.params as { id: string }).id), running: queue.includes((req.params as { id: string }).id) || false }));
+  // paid looks done today (local day), shown under «تفاصيل» in the check card
+  const today = () => (db.prepare(`SELECT count(*) AS n FROM qc_vision WHERE date(created_at, 'localtime') = date('now', 'localtime')`).get() as { n: number }).n;
+  app.get('/api/assets/:id/qc', async req => ({ qc: latest((req.params as { id: string }).id), running: queue.includes((req.params as { id: string }).id) || false, vision_today: today() }));
+  // «افحص تاني» sends force: true and pays for a new look; anything else reuses the look stored for this file's SHA
   app.post('/api/assets/:id/qc', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    try { return { qc: await runQc(db, dataDir, id) }; } catch (e) { return reply.code(409).send({ what: (e as Error).message }); }
+    const { id } = req.params as { id: string }; const { force } = (req.body ?? {}) as { force?: boolean };
+    try { const qc = await runQc(db, dataDir, id, !!force); return { qc, vision_today: today() }; } catch (e) { return reply.code(409).send({ what: (e as Error).message }); }
   });
   app.get('/api/qc', async () => ({ items: db.prepare(`SELECT q.asset_id, q.score, q.status, q.reason FROM qc_run q WHERE q.created_at = (SELECT max(created_at) FROM qc_run x WHERE x.asset_id = q.asset_id)`).all() }));
 }

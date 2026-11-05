@@ -13,7 +13,8 @@
     "start": "npm run build && node server/index.ts",
     "serve": "node server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "models": "node scripts/fetch-models.ts"
+    "models": "node scripts/fetch-models.ts",
+    "mac-setup": "node scripts/mac-setup.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.7",
