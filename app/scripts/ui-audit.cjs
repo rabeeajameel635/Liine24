@@ -3,11 +3,14 @@
 // Rule audit per screen: visible words (no scroll) ≤ 25, every visible text ≥ 17px, every button ≥ 56px tall.
 const { chromium } = require('playwright');
 const [O, segId, ...only] = process.argv.slice(2);
-const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['search', '#search']];
+const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['inspiration', 'inspiration'], ['search', '#search']];
 (async () => {
   const b = await chromium.launch(); const rows = [];
   for (const [w, h] of [[390, 844], [1440, 900]]) {
     const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+    // LAYOUT_STANDIN: where feed thumbnails can't be reached (cloud container), measure with a same-size neutral image.
+    // Layout measurement only: screenshots from this script are not shown as the real page.
+    if (process.env.LAYOUT_STANDIN) await p.route(/admin\.promonews\.tv|directorsnotes\.com\/wp-content/, r => r.fulfill({ path: process.env.LAYOUT_STANDIN, contentType: 'image/jpeg' }));
     for (const [n, u] of routes) {
       if (only.length && !only.includes(n)) continue;
       if (n === 'viewer') { await p.goto('http://127.0.0.1:4317/#/library/all'); await p.waitForTimeout(1800); await p.click('.tile >> nth=0'); }

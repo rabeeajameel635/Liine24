@@ -237,6 +237,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
   const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes'>(null);
+  const [inspo, setInspo] = useState<{ id: string; label: string; thumb: string | null; link: string; watch: string | null; source: string; line: string | null }[]>([]);
+  useEffect(() => { if (panel === 'refs') fetch(`/api/segments/${seg.id}/inspiration`).then(r => r.json()).then(d => setInspo(d.items)); }, [panel, seg.id]);
   const audio = useRef<HTMLAudioElement>(null);
   const { saved, mark } = useSaved();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -376,6 +378,14 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               ); })}
               <button className="slot add" onClick={() => setPicker('refs')}><Plus size={30} /><span>ضيف</span></button>
             </div>
+            {inspo.length > 0 && <>
+              <div className="section-h"><h2>مراجع إلهام</h2><span>مش بتتبعت للتوليد</span></div>
+              <div className="h-scroll">{inspo.map(x => (
+                <a key={x.id} className="inspo-mini" href={x.watch ?? x.link} target="_blank" rel="noreferrer">
+                  {x.thumb && <img src={x.thumb} alt="" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                  <b className="ltr">{x.label}</b><span>{x.line}</span><small className="ltr">{x.source}</small>
+                </a>))}</div>
+            </>}
           </>}
 
           {panel === 'prompt' && <>

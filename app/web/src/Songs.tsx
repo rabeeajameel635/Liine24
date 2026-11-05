@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from '@phosphor-icons/react';
 import { toast, PageHead, Card } from './ui.tsx';
+import { InspoCarousel } from './Inspiration.tsx';
 
 export type SongCard = { id: string; title: string; bpm: number; bpm_approved: boolean; duration: number; poster: string | null; total: number; done: number; resume: string | null; has_audio: boolean };
 export const arNum = (n: number) => n.toLocaleString('ar-EG');
@@ -43,7 +44,6 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
           <Card key={s.id} wide className="song-card" img={s.poster} ltrTitle title={s.title}
             line={`${arNum(s.done)} من ${arNum(s.total)} مقطع خلص`}
             action={<button className="gbtn primary" onClick={() => open(s.id, s.resume ?? undefined)}>كمّل</button>}>
-            <div className="card-band" aria-hidden="true" />
             <span className="ring-thin" aria-label={`${s.done} من ${s.total}`}><ProgressRing done={s.done} total={s.total} size={64} /><b>{arNum(s.done)}/{arNum(s.total)}</b></span>
           </Card>
         ))}
@@ -51,6 +51,7 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
           <button className="gbtn soft" onClick={() => pick.current?.click()} disabled={busy}><Plus size={22} />أغنية جديدة</button>
           <input ref={pick} type="file" hidden multiple accept="audio/*,.srt" onChange={e => create([...(e.target.files ?? [])])} />
         </div>
+        <InspoCarousel />
       </div></div>
     </div>
   );

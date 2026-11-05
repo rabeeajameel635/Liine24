@@ -36,7 +36,7 @@ export function Toaster() {
 export function PageHead({ title, line, action }: { title: string; line?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <header className="page-head">
-      <div className="ph-text"><h1>{title}</h1>{line && <p>{line}</p>}</div>
+      <div className="ph-text"><h1 className={/^[\x00-\x7F]+$/.test(title) ? 'ltr' : undefined}>{title}</h1>{line && <p>{line}</p>}</div>
       {action && <div className="ph-action">{action}</div>}
     </header>
   );

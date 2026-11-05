@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sun, SquaresFour, Images, Sparkle, CheckCircle, Heart, LockSimple, Clock, VideoCamera, UserCircle, Folder,
-  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft
+  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft, House, Lightbulb
 } from '@phosphor-icons/react';
 import type { Icon as PIcon } from '@phosphor-icons/react';
 import { api, fmtDate, type Album, type Asset } from './api.ts';
@@ -12,8 +12,9 @@ import { CharacterScreen } from './Character.tsx';
 import { Home } from './Songs.tsx';
 import { Board, Montage } from './Board.tsx';
 import { Connections } from './Connections.tsx';
+import { InspirationPage } from './Inspiration.tsx';
 
-type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage'; album: string; sub?: string };
+type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration'; album: string; sub?: string };
 const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
 const ALBUM_ICON: Record<string, PIcon> = { all: Images, approved: CheckCircle, favorites: Heart, locked: LockSimple, waiting: Clock, videos: VideoCamera };
 type Theme = 'auto' | 'light' | 'dark';
@@ -49,14 +50,14 @@ export function App() {
     <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick}><I size={24} weight={active ? 'fill' : 'regular'} /><span>{label}</span></button>
   );
   const onHome = route.view === 'home' || route.view === 'board' || route.view === 'montage';
-  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song'].includes(route.view);
+  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration'].includes(route.view);
 
   return (
     <div className={'shell' + (isLib && picked ? '' : ' no-ins')}>
       <aside className="side" aria-label="الشريط">
         <div className="side-proj"><span className="av">L24</span></div>
         <nav>
-          <SideItem icon={Sun} label="الرئيسية" active={onHome} onClick={() => go('home')} />
+          <SideItem icon={House} label="الرئيسية" active={onHome} onClick={() => go('home')} />
           <SideItem icon={SquaresFour} label="الاستوديو" active={onStudio} onClick={() => go('studio')} />
           <SideItem icon={Images} label="المكتبة" active={isLib} onClick={() => go('library')} />
           <SideItem icon={Sparkle} label="المساعد" active={route.view === 'assistant'} onClick={() => go('assistant')} />
@@ -72,6 +73,7 @@ export function App() {
       {route.view === 'song' && <Redirect to="#/board/iatw-v44" />}
       {route.view === 'characters' && <CharacterScreen />}
       {route.view === 'connections' && <Connections />}
+      {route.view === 'inspiration' && <InspirationPage />}
       {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && picked && <Inspector a={picked} />}
@@ -79,7 +81,7 @@ export function App() {
       <div className="tab-fade" aria-hidden="true" />
       <div className="tabbar">
         <nav className="tabs glass-strong" aria-label="التبويبات">
-          {([['home', 'الرئيسية', Sun], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => {
+          {([['home', 'الرئيسية', House], ['studio', 'الاستوديو', SquaresFour], ['library', 'المكتبة', Images], ['assistant', 'المساعد', Sparkle]] as [Route['view'], string, PIcon][]).map(([v, t, I]) => {
             const on = v === 'home' ? onHome : v === 'studio' ? onStudio : route.view === v;
             return <button key={v} aria-current={on ? 'page' : undefined} aria-label={t} onClick={() => go(v)}><I size={26} weight={on ? 'fill' : 'regular'} /><span className="t-label">{t}</span></button>;
           })}
@@ -117,11 +119,12 @@ function Inspector({ a }: { a: Asset }) {
 function Redirect({ to }: { to: string }) { useEffect(() => { location.replace(to); }, [to]); return null; }
 
 function Studio({ go }: { go: (v: Route['view']) => void }) {
-  const [d, setD] = useState<{ poster: string | null; title: string; donia: string | null; waiting: number } | null>(null);
+  const [d, setD] = useState<{ poster: string | null; title: string; donia: string | null; waiting: number; inspo: string | null; inspoN: number } | null>(null);
   useEffect(() => {
-    Promise.all([fetch('/api/songs').then(r => r.json()), fetch('/api/characters/donia').then(r => r.json()).catch(() => null), fetch('/api/connections').then(r => r.json()).catch(() => null)]).then(([s, c, k]) => {
+    Promise.all([fetch('/api/songs').then(r => r.json()), fetch('/api/characters/donia').then(r => r.json()).catch(() => null), fetch('/api/connections').then(r => r.json()).catch(() => null), fetch('/api/inspiration').then(r => r.json()).catch(() => null)]).then(([s, c, k, ins]) => {
       const song = s.songs?.[0]; const hair = c?.refs?.find((r: { label?: string }) => r.label?.includes('المشبك'));
-      setD({ poster: song?.poster ?? null, title: song?.title ?? '', donia: hair?.thumb ?? c?.refs?.[0]?.thumb ?? null, waiting: (k?.services ?? []).filter((x: { kind: string; status: string }) => x.kind === 'mcp' && x.status !== 'connected').length });
+      setD({ poster: song?.poster ?? null, title: song?.title ?? '', donia: hair?.thumb ?? c?.refs?.[0]?.thumb ?? null, waiting: (k?.services ?? []).filter((x: { kind: string; status: string }) => x.kind === 'mcp' && x.status !== 'connected').length,
+        inspo: ins?.items?.find((x: { thumb: string | null }) => x.thumb?.startsWith('/'))?.thumb ?? null, inspoN: ins?.items?.length ?? 0 });
     });
   }, []);
   return (
@@ -131,6 +134,7 @@ function Studio({ go }: { go: (v: Route['view']) => void }) {
         <Card img={d?.poster} title="الأغنية" line="الكليب الحالي" onClick={() => { location.hash = '/board/iatw-v44'; }} />
         <Card img={d?.donia} title="الشخصيات" line="دنيا معتمدة" onClick={() => go('characters')} />
       </div>
+      <Row icon={Lightbulb} img={d?.inspo} title="الإلهام" line={d ? `${arNum(d.inspoN)} عمل من المصادر` : ' '} onClick={() => go('inspiration')} />
       <Row icon={PlugsConnected} title="الاتصالات" line={d ? (d.waiting ? `${arNum(d.waiting)} مستنية الدخول` : 'كلها متوصلة') : ' '} onClick={() => go('connections')} />
       <Row icon={FileText} title="السكيلز" line="جاية قريب" onClick={() => go('skills')} />
     </div></div></div>
@@ -146,10 +150,11 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
   const [q, setQ] = useState(''); const [i, setI] = useState(0); const inp = useRef<HTMLInputElement>(null);
   const cmds = [
     ...albums.map(a => ({ id: a.id, label: 'افتح ' + a.title, icon: Images, run: () => go('library', a.id) })),
-    { id: 'home', label: 'الرئيسية', icon: Sun, run: () => go('home') },
+    { id: 'home', label: 'الرئيسية', icon: House, run: () => go('home') },
     { id: 'studio', label: 'الاستوديو', icon: SquaresFour, run: () => go('studio') },
     { id: 'song', label: 'الأغنية', icon: MusicNotes, run: () => go('song') },
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },
+    { id: 'inspo', label: 'الإلهام', icon: Lightbulb, run: () => go('inspiration') },
     { id: 'assist', label: 'المساعد', icon: Sparkle, run: () => go('assistant') },
     { id: 'light', label: 'المظهر: فاتح', icon: Sun, run: () => setTheme('light') },
     { id: 'dark', label: 'المظهر: غامق', icon: Moon, run: () => setTheme('dark') },

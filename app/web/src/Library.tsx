@@ -14,7 +14,7 @@ export function statusOf(a: Asset): 'ok' | 'warn' | 'wait' {
   return a.approved ? 'ok' : 'wait';
 }
 
-const CHIP: Record<string, string> = { all: 'الكل', approved: 'المعتمد', locked: 'المقفول', waiting: 'مستني', favorites: 'المفضّل', videos: 'الفيديو' };
+const CHIP: Record<string, string> = { all: 'الكل', approved: 'المعتمد', locked: 'المقفول', waiting: 'مستني', favorites: 'المفضّل', videos: 'الفيديو', inspiration: 'الإلهام' };
 
 export function Library({ album, title, albums, people, go, onPick, refreshAlbums }: { album: string; title: string; albums: Album[]; people: Album[]; go: (album: string) => void; onPick: (a: Asset | null) => void; refreshAlbums: () => void }) {
   const [items, setItems] = useState<Asset[] | null>(null);

@@ -20,7 +20,8 @@ export const ALBUMS = [
   { id: 'favorites', title: 'المفضّل', icon: 'heart' },
   { id: 'locked', title: 'المراجع المقفولة', icon: 'lock' },
   { id: 'waiting', title: 'مستني اعتمادك', icon: 'clock' },
-  { id: 'videos', title: 'الفيديوهات', icon: 'video' }
+  { id: 'videos', title: 'الفيديوهات', icon: 'video' },
+  { id: 'inspiration', title: 'الإلهام', icon: 'lightbulb' }
 ] as const;
 
 function where(album: string): string {
@@ -31,6 +32,7 @@ function where(album: string): string {
     case 'locked': return 'a.locked = 1';
     case 'waiting': return `NOT ${approved} AND a.kind IN ('image','video')`;
     case 'videos': return `a.kind = 'video'`;
+    case 'inspiration': return `a.kind = 'link'`;
     default:
       if (album.startsWith('project:')) return `a.project_id = '${album.slice(8).replace(/'/g, '')}'`;
       if (album.startsWith('person:')) return `a.character_id = '${album.slice(7).replace(/'/g, '')}'`;
