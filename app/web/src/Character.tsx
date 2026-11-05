@@ -53,7 +53,7 @@ export function CharacterScreen({ id = 'donia' }: { id?: string }) {
           action={p.approved ? <span className="swatches">{p.hex.map((h, i) => <i key={h + i} style={{ background: h }} />)}</span> : <button className="gbtn secondary" onClick={() => approvePiece(p)}>اعتمد</button>} />
       ))}
 
-      <Card title="تطابق الوش" line="٩٥٪ · النموذج مستني الصور" />
+      <Card title="تطابق الوش" line="٩٥٪ · خط الأساس جاهز" />
       <Card title="الاحتشام" line="الصدر والضهر مغطيين">
         <div className="card-more"><Details><p>{c.modesty}</p></Details></div>
       </Card>
