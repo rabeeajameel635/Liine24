@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sun, SquaresFour, Images, Sparkle, CheckCircle, Heart, LockSimple, Clock, VideoCamera, UserCircle, Folder,
-  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft, House, Lightbulb
+  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft, House, Lightbulb, At
 } from '@phosphor-icons/react';
 import type { Icon as PIcon } from '@phosphor-icons/react';
 import { api, fmtDate, type Album, type Asset } from './api.ts';
@@ -13,8 +13,9 @@ import { Home } from './Songs.tsx';
 import { Board, Montage } from './Board.tsx';
 import { Connections } from './Connections.tsx';
 import { InspirationPage } from './Inspiration.tsx';
+import { ConstantsPage } from './Constants.tsx';
 
-type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration'; album: string; sub?: string };
+type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration' | 'constants'; album: string; sub?: string };
 const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
 const ALBUM_ICON: Record<string, PIcon> = { all: Images, approved: CheckCircle, favorites: Heart, locked: LockSimple, waiting: Clock, videos: VideoCamera };
 type Theme = 'auto' | 'light' | 'dark';
@@ -50,7 +51,7 @@ export function App() {
     <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick}><I size={24} weight={active ? 'fill' : 'regular'} /><span>{label}</span></button>
   );
   const onHome = route.view === 'home' || route.view === 'board' || route.view === 'montage';
-  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration'].includes(route.view);
+  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration', 'constants'].includes(route.view);
 
   return (
     <div className={'shell' + (isLib && picked ? '' : ' no-ins')}>
@@ -74,6 +75,7 @@ export function App() {
       {route.view === 'characters' && <CharacterScreen />}
       {route.view === 'connections' && <Connections />}
       {route.view === 'inspiration' && <InspirationPage />}
+      {route.view === 'constants' && <ConstantsPage />}
       {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && picked && <Inspector a={picked} />}
@@ -134,6 +136,7 @@ function Studio({ go }: { go: (v: Route['view']) => void }) {
         <Card img={d?.poster} title="الأغنية" line="الكليب الحالي" onClick={() => { location.hash = '/board/iatw-v44'; }} />
         <Card img={d?.donia} title="الشخصيات" line="دنيا معتمدة" onClick={() => go('characters')} />
       </div>
+      <Row icon={At} title="الثوابت" line="@دنيا · @الممر · @اللوفر" onClick={() => go('constants')} />
       <Row icon={Lightbulb} img={d?.inspo} title="الإلهام" line={d ? `${arNum(d.inspoN)} عمل من المصادر` : ' '} onClick={() => go('inspiration')} />
       <Row icon={PlugsConnected} title="الاتصالات" line={d ? (d.waiting ? `${arNum(d.waiting)} مستنية الدخول` : 'كلها متوصلة') : ' '} onClick={() => go('connections')} />
       <Row icon={FileText} title="السكيلز" line="جاية قريب" onClick={() => go('skills')} />
@@ -155,6 +158,7 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
     { id: 'song', label: 'الأغنية', icon: MusicNotes, run: () => go('song') },
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },
     { id: 'inspo', label: 'الإلهام', icon: Lightbulb, run: () => go('inspiration') },
+    { id: 'const', label: 'الثوابت', icon: At, run: () => go('constants') },
     { id: 'assist', label: 'المساعد', icon: Sparkle, run: () => go('assistant') },
     { id: 'light', label: 'المظهر: فاتح', icon: Sun, run: () => setTheme('light') },
     { id: 'dark', label: 'المظهر: غامق', icon: Moon, run: () => setTheme('dark') },

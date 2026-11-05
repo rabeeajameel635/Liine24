@@ -10,6 +10,7 @@ import { join, extname } from 'node:path';
 import type { DB } from './db.ts';
 import { importFile } from './media.ts';
 import { decode, peaks, tempo, beatOffset, parseSrt, sectionsFromCues, makeGrid, trackBeats, type Cue } from './audio.ts';
+import { resolvePrompt } from './refs.ts';
 
 const run = promisify(execFile);
 type Row = Record<string, unknown>;
@@ -216,6 +217,9 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     if (blockedShot) return reply.code(409).send({ what: `${blockedShot.code} مقفولة: ${blockedShot.blocked}`, fix: 'ابعت الأصول الناقصة، وبعدها القفل يتفك.' });
     const nums = [...new Set(open.map(o => o.n))];
     if (nums.length) return reply.code(409).send({ what: `فيه ${nums.length === 1 ? 'تعارض' : `${nums.length} تعارضات`} مستني قرارك (${nums.map(n => '#' + n).join('، ')})`, fix: 'قرّر في التعارض الأول. المقطع ده مش هيتولّد قبلها.' });
+    // @ handles → what this generator needs, in its order (server-side, so the kit and the preview can never disagree)
+    const res = resolvePrompt(db, prompt ?? '', String(toolKey), tool.mode);
+    if (res.problems.length) return reply.code(409).send({ what: res.problems[0], fix: res.problems.length > 1 ? `و${res.problems.length - 1} حاجات تانية في «المراجع»` : 'افتح «المراجع» في المقطع.' });
     if (tool.mode === 'mcp') {
       const conn = db.prepare('SELECT status FROM connection WHERE id = ?').get(tool.via.toLowerCase()) as { status?: string } | undefined;
       return reply.code(409).send(conn?.status === 'connected'
@@ -226,17 +230,20 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const slug = String(s.title).replace(/[^A-Za-z0-9]+/g, '').slice(0, 10) || 'SONG';
     const name = `${slug}_${String(g.idx).padStart(2, '0')}_${code}`;
     const dir = join(dataDir, 'kits', name); await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
-    const refs = JSON.parse(String(g.refs || '[]')) as string[];
-    const blocked = refs.map(r => db.prepare('SELECT label FROM asset WHERE id = ? AND no_generation = 1').get(r) as { label?: string } | undefined).filter(Boolean);
-    if (blocked.length) return reply.code(409).send({ what: `${blocked.map(b => b!.label).join('، ')} ممنوع كمرجع توليد`, fix: 'شيله من خانات الصور، أو استخدم نسخة من غير المشكلة.' });
-    for (const [n, aid] of refs.entries()) {
+    // extra pictures dropped in the slots go after the @ references
+    const extra = (JSON.parse(String(g.refs || '[]')) as string[]).filter(a => !res.files.some(f => f.asset === a));
+    const blocked = extra.map(r => db.prepare('SELECT label FROM asset WHERE id = ? AND no_generation = 1').get(r) as { label?: string } | undefined).filter(Boolean);
+    if (blocked.length) return reply.code(409).send({ what: `${blocked.map(b => b!.label).join('، ')} ممنوع كمرجع توليد`, fix: 'شيله من الصور الزيادة، أو استخدم نسخة من غير المشكلة.' });
+    const order = [...res.files.map(f => f.asset), ...extra];
+    for (const [n, aid] of order.entries()) {
       const a = db.prepare('SELECT work_path, label FROM asset WHERE id = ?').get(aid) as { work_path?: string; label?: string } | undefined;
       if (a?.work_path) await copyFile(a.work_path, join(dir, `${String(n + 1).padStart(2, '0')}${extname(a.work_path)}`));
     }
-    await writeFile(join(dir, 'prompt.txt'), prompt);
+    const refs = order;
+    await writeFile(join(dir, 'prompt.txt'), res.prompt_out);
     const ap = audioPath(s);
     if (ap) await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(g.start_s), '-to', String(g.end_s), '-i', ap, '-c:a', 'aac', '-b:a', '192k', join(dir, 'audio.m4a')]);
-    await writeFile(join(dir, 'README.txt'), `${s.title} — مقطع ${g.idx}\nالأداة: ${tool.name} (${tool.via})\nالصور بالترتيب: ${refs.length}\nسمّي الفيديو اللي يطلع بأي اسم فيه ${name} وحطه في فولدر Inbox، وهيترتبط بالمقطع لوحده.\n`);
+    await writeFile(join(dir, 'README.txt'), `${s.title} — مقطع ${g.idx}\nالأداة: ${tool.name} (${tool.via})\nالصور بالترتيب: ${refs.length}\n${res.refs.map(r => `@${r.handle}: ${r.how}`).join('\n')}\nسمّي الفيديو اللي يطلع بأي اسم فيه ${name} وحطه في فولدر Inbox، وهيترتبط بالمقطع لوحده.\n`);
     await run('zip', ['-qrj', dir + '.zip', dir]).catch(() => {});
     db.prepare(`UPDATE segment SET kit_code = ?, kit_path = ?, status = CASE WHEN status IN ('idea','ready') THEN 'generating' ELSE status END, updated_at = datetime('now') WHERE id = ?`).run(code, dir, id);
     return { kit: name, zip: existsSync(dir + '.zip') ? `/api/kits/${name}.zip` : null, files: refs.length, audio: !!ap, open: tool.url, mode: tool.mode };

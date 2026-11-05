@@ -3,7 +3,7 @@
 // Rule audit per screen: visible words (no scroll) ≤ 25, every visible text ≥ 17px, every button ≥ 56px tall.
 const { chromium } = require('playwright');
 const [O, segId, ...only] = process.argv.slice(2);
-const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['inspiration', 'inspiration'], ['search', '#search']];
+const routes = [['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['inspiration', 'inspiration'], ['constants', 'constants'], ['search', '#search']];
 (async () => {
   const b = await chromium.launch(); const rows = [];
   for (const [w, h] of [[390, 844], [1440, 900]]) {

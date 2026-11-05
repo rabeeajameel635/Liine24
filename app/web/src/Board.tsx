@@ -1,9 +1,10 @@
 // لوحة المقاطع: cards like the library, a strip view on the waveform, status filters, and the segment sheet.
 // No save button: every change is saved as it happens, with versions and undo (⌘Z).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil } from '@phosphor-icons/react';
+import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil, At } from '@phosphor-icons/react';
 import { api, type Asset } from './api.ts';
 import { toast, PageHead, Card, Row } from './ui.tsx';
+import { useRefs, useResolution, PromptBox, RefsList } from './Refs.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
@@ -230,7 +231,6 @@ function ConflictList({ conflicts }: { conflicts: Conflict[] }) {
 function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [], conflicts = [] }: { song: Song; seg: Seg; assets: Record<string, Asset>; close: () => void; reload: () => void; setAssets: (f: (a: Record<string, Asset>) => Record<string, Asset>) => void; shots?: Shot[]; conflicts?: Conflict[] }) {
   const [s, setS] = useState<Seg>(seg);
   const [plan, setPlan] = useState<'primary' | 'backup'>('primary');
-  const [card, setCard] = useState<{ locked_text: string } | null>(null);
   const [picker, setPicker] = useState<'refs' | 'video' | null>(null);
   const [kit, setKit] = useState<{ kit: string; zip: string | null; files: number; audio: boolean; open: string } | null>(null);
   const [err, setErr] = useState<{ what: string; fix?: string } | null>(null);
@@ -244,7 +244,6 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setS(seg); setKit(null); setErr(null); setPanel(null); }, [seg.id]);
-  useEffect(() => { fetch('/api/characters/donia').then(r => r.json()).then(setCard); }, []);
   const loadVersions = useCallback(() => fetch(`/api/segments/${seg.id}/versions`).then(r => r.json()).then(d => setVersions(d.versions)), [seg.id]);
   useEffect(() => { loadVersions(); }, [loadVersions, saved]);
 
@@ -256,7 +255,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   };
   const undo = async (version?: number) => { const r = await post(`/api/segments/${seg.id}/undo`, version ? { version } : {}); if (r.ok) { setS({ ...s, ...r.data }); reload(); loadVersions(); toast('رجعت'); } else toast(r.data.what); };
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !(e.target as HTMLElement).closest('textarea,input')) { e.preventDefault(); undo(); } if (e.key === 'Escape' && !picker) { if (panel) setPanel(null); else close(); } };
+    const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !(e.target as HTMLElement).closest('textarea,input')) { e.preventDefault(); undo(); } if (e.key === 'Escape' && !picker && !e.defaultPrevented) { if (panel) setPanel(null); else close(); } };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   });
 
@@ -267,7 +266,11 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const partial = plan === 'primary' ? s.prompt_partial : (backup.prompt_partial ?? '');
   const direction = plan === 'primary' ? s.direction : (backup.direction ?? '');
   const mood = `Mood: ${section?.name ?? ''}${s.lyric ? ` — “${s.lyric.split(' / ')[0]}”` : ''}. Cut on the downbeat; ${bars} bars at ${song.bpm} BPM.`;
-  const prompt = useMemo(() => [card?.locked_text, partial || direction, mood].filter(Boolean).join('\n\n'), [card, partial, direction, mood]);
+  // your words (with @handles) + the mood line; constants' fixed text is added server-side from the @ references
+  const prompt = useMemo(() => [partial || direction, mood].filter(Boolean).join('\n\n'), [partial, direction, mood]);
+  const allRefs = useRefs();
+  const res = useResolution(prompt, toolKey);
+  const firstPic = res?.refs.flatMap(r => r.images)[0]?.thumb ?? (s.refs[0] ? assets[s.refs[0]]?.thumb : null);
 
   const edge = async (d: number) => { const r = await post(`/api/segments/${seg.id}/edge`, { side: 'end', t: s.end_s + d * song.bar }); if (r.ok) { setS(x => ({ ...x, end_s: r.data.t })); reload(); mark(); } else toast(r.data.what); };
   const play = () => {
@@ -289,7 +292,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const video = s.video_asset_id ? assets[s.video_asset_id] : null;
 
   const redo = shots.filter(x => x.status === 'redo' || x.blocked).length;
-  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'الصور', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات' };
+  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات' };
   const primary = video && s.status !== 'done' && s.status !== 'editing'
     ? <button className="gbtn primary big" onClick={() => save({ status: 'done' }, true)}><CheckCircle size={24} weight="fill" /> تمّت</button>
     : <button className="gbtn primary big" onClick={prepare}>جهّز للتوليد</button>;
@@ -317,7 +320,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
 
           <div className="ss-rows">
             {shots.length > 0 && <Row icon={FilmSlate} title="اللقطات" line={`${arNum(shots.length)} لقطات${redo ? ` · ${arNum(redo)} محتاجة شغل` : ''}`} onClick={() => setPanel('shots')} />}
-            <Row icon={ImagesIcon} img={s.refs[0] ? assets[s.refs[0]]?.thumb : null} title="الصور" line={s.refs.length ? `${arNum(s.refs.length)} صور بالترتيب` : 'مفيش صور لسه'} onClick={() => setPanel('refs')} />
+            <Row icon={At} img={firstPic} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
             <Row icon={FilmStrip} img={video?.thumb} title="الفيديو" line={video ? 'وصل' : 'مستني التوليد'} onClick={() => setPanel('video')} />
           </div>
@@ -328,7 +331,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               action={kit.zip ? <a className="gbtn secondary" href={kit.zip}><DownloadSimple size={22} /> نزّل</a> : undefined}>
               <div className="card-more">
                 <div className="row-btns">
-                  <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ البرومبت</button>
+                  <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(res?.prompt_out ?? prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ البرومبت</button>
                   {kit.open && <a className="gbtn soft" href={kit.open} target="_blank" rel="noreferrer"><ArrowSquareOut size={22} /> افتح الموقع</a>}
                 </div>
               </div>
@@ -360,7 +363,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </div>}
 
           {panel === 'refs' && <>
-            <p className="panel-line">الترتيب هو ترتيب الإرسال</p>
+            <RefsList res={res} toolName={song.tools[toolKey]?.name ?? toolKey} />
+            <div className="section-h"><h2>صور زيادة</h2><span>بعد المراجع</span></div>
             <div className="slots">
               {s.refs.map((id, i) => { const a = assets[id]; return (
                 <figure key={id + i} className={'slot' + (a?.no_generation ? ' blocked' : '') + (dragI === i ? ' dragging' : '') + (overI === i && dragI !== i ? ' over' : '')}
@@ -398,10 +402,10 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
                 <button key={k} className="tool" aria-pressed={toolKey === k} onClick={() => setPlan_({ tool: k })}><b className="ltr">{t.name}</b></button>
               ))}
             </div>
-            <textarea className="pw-partial" dir="auto" value={partial} placeholder="وصف المقطع" onChange={e => setPlan_({ prompt_partial: e.target.value })} rows={5} />
+            <PromptBox value={partial} onChange={v => setPlan_({ prompt_partial: v })} placeholder="وصف المقطع · اكتب @ للمراجع" refs={allRefs} res={res} />
             {!partial && direction && <button className="gbtn soft" onClick={() => setPlan_({ prompt_partial: direction })}>استخدم وصف اللقطات</button>}
-            <details className="details"><summary>البرومبت كامل</summary><div className="details-body"><div className="prompt ltr">{prompt}</div>
-              <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ</button></div></details>
+            <details className="details"><summary>البرومبت كامل</summary><div className="details-body"><div className="prompt ltr">{res?.prompt_out ?? prompt}</div>
+              <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(res?.prompt_out ?? prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ</button></div></details>
           </>}
 
           {panel === 'video' && <>
