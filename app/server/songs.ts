@@ -10,7 +10,8 @@ import { join, extname } from 'node:path';
 import type { DB } from './db.ts';
 import { importFile } from './media.ts';
 import { decode, peaks, tempo, beatOffset, parseSrt, sectionsFromCues, makeGrid, trackBeats, type Cue } from './audio.ts';
-import { resolvePrompt } from './refs.ts';
+import { resolvePrompt, doniaHint } from './refs.ts';
+import { queueQc } from './qc.ts';
 
 const run = promisify(execFile);
 type Row = Record<string, unknown>;
@@ -157,6 +158,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     db.prepare(`UPDATE segment SET ${set.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...args, id);
     if ('prompt_partial' in b || 'refs' in b || 'direction' in b) db.prepare('UPDATE segment SET draft = 0 WHERE id = ?').run(id);
     if (b.status === 'done') db.prepare(`INSERT OR IGNORE INTO approval (id, subject_type, subject_id, stage) VALUES (?, 'segment', ?, 'done')`).run(randomUUID(), id);
+    if (b.video_asset_id && b.video_asset_id !== cur.video_asset_id) queueQc(db, dataDir, String(b.video_asset_id), m => app.log.warn(m)); // a video put in the segment is checked against its bars
     return shapeSeg(db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row);
   });
 
@@ -208,7 +210,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
 
   // «جهّز للتوليد»: MCP tools wait for the connection step; bridge tools get one numbered kit (images + prompt + audio clip)
   app.post('/api/segments/:id/prepare', async (req, reply) => {
-    const { id } = req.params as { id: string }; const { prompt, which } = req.body as { prompt: string; which?: 'primary' | 'backup' };
+    const { id } = req.params as { id: string }; const { prompt, which, confirm_no_donia } = req.body as { prompt: string; which?: 'primary' | 'backup'; confirm_no_donia?: boolean };
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const s = song(String(g.song_id))!;
     const toolKey = which === 'backup' ? (JSON.parse(String(g.backup || '{}')).tool ?? g.tool) : g.tool; const tool = TOOLS[String(toolKey)];
     if (!tool) return reply.code(400).send({ what: 'أداة مش معروفة' });
@@ -220,6 +222,12 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     // @ handles → what this generator needs, in its order (server-side, so the kit and the preview can never disagree)
     const res = resolvePrompt(db, prompt ?? '', String(toolKey), tool.mode);
     if (res.problems.length) return reply.code(409).send({ what: res.problems[0], fix: res.problems.length > 1 ? `و${res.problems.length - 1} حاجات تانية في «المراجع»` : 'افتح «المراجع» في المقطع.' });
+    // Donia is in this segment but the prompt never says @دنيا: warn before the kit (you can still go ahead)
+    if (!confirm_no_donia && !res.refs.some(r => r.handle === 'دنيا')) {
+      const shots = db.prepare('SELECT code, title, answers, note, prompt FROM shot WHERE segment_id = ?').all(id) as Record<string, string | null>[];
+      const hit = doniaHint([String(g.direction ?? ''), String(g.lyric ?? ''), ...shots.flatMap(x => [x.title, x.answers, x.note, x.prompt])]);
+      if (hit) return reply.code(409).send({ what: 'المقطع فيه دنيا ومفيش @دنيا في البرومبت', fix: `لقيت «${hit}» في وصف المقطع أو لقطاته. ضيف @دنيا، أو جهّز برضه لو اللقطة من غيرها.`, confirm: 'no_donia' });
+    }
     if (tool.mode === 'mcp') {
       const conn = db.prepare('SELECT status FROM connection WHERE id = ?').get(tool.via.toLowerCase()) as { status?: string } | undefined;
       return reply.code(409).send(conn?.status === 'connected'

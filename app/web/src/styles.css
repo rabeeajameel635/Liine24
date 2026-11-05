@@ -880,3 +880,38 @@ h1.ltr,h2.ltr,b.ltr.seg-title,.seg-tile > b.ltr,.page-head h1:lang(en){letter-sp
 .ver-row b{font-weight:600}
 .ver-row span{color:var(--mute);flex:1}
 @media (min-width:821px){.const-cards{grid-template-columns:1fr 1fr}}
+
+/* ================= الفحص ================= */
+.qc-chip{display:inline-flex;align-items:baseline;gap:6px;margin-inline-start:10px;font-weight:600;font-size:19px}
+.qc-chip small{font-size:17px;font-weight:500}
+.qc-chip.pass{color:var(--ok)} .qc-chip.redo{color:var(--warn)} .qc-chip.pending{color:var(--mute)}
+.vtitle .qc-chip.pass{color:#5fd39b} .vtitle .qc-chip.redo{color:#ffb340} .vtitle .qc-chip.pending{color:#c7c7cc}
+.qc-card{background:var(--card);border-radius:var(--r-l);padding:16px 18px;margin:0 0 16px;display:flex;flex-direction:column;gap:12px}
+.qc-head{display:flex;align-items:center;gap:14px}
+.qc-score{display:flex;flex-direction:column;align-items:center;min-width:76px;font-size:40px;font-weight:600;line-height:1}
+.qc-score small{font-size:17px;font-weight:400;color:var(--mute);margin-top:4px}
+.qc-card.pass .qc-score{color:var(--ok)} .qc-card.redo .qc-score{color:var(--warn)} .qc-card.pending .qc-score{color:var(--ink-2)}
+.qc-text{flex:1;min-width:0}
+.qc-text b{font-size:22px;font-weight:600}
+.qc-text p{margin:2px 0 0;font-size:19px;color:var(--ink-2)}
+.qc-card.redo .qc-text b{color:var(--warn)} .qc-card.pass .qc-text b{color:var(--ok)}
+.qc-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.qc-list li{display:flex;align-items:center;gap:10px;font-size:17px;padding:8px 10px;border-radius:12px;background:var(--bg)}
+.qc-list li b{font-weight:600;min-width:84px}
+.qc-list li span{flex:1;color:var(--ink-2)}
+.qc-list li em{font-style:normal;font-weight:600;color:var(--warn)}
+.qc-list li.pass svg{color:var(--ok)} .qc-list li.fail svg,.qc-list li.error svg{color:var(--warn)} .qc-list li.na svg,.qc-list li.pending svg{color:var(--mute)}
+.spin{animation:spin 1s linear infinite} @keyframes spin{to{transform:rotate(360deg)}}
+.tile .qc-badge{position:absolute;bottom:6px;inset-inline-start:6px;min-width:34px;height:28px;padding:0 8px;border-radius:999px;background:rgba(0,0,0,.6);color:#ffb340;font-size:17px;font-weight:600;display:grid;place-items:center}
+
+/* the viewer is always dark: the check card follows it */
+.viewer .qc-card{background:rgba(255,255,255,.08);color:#f5f5f7}
+.viewer .qc-text p,.viewer .qc-list li span{color:rgba(255,255,255,.78)}
+.viewer .qc-list li{background:rgba(255,255,255,.06)}
+.viewer .qc-list li b{color:#f5f5f7}
+.viewer .qc-card.pass .qc-score,.viewer .qc-card.pass .qc-text b,.viewer .qc-list li.pass svg{color:#5fd39b}
+.viewer .qc-card.redo .qc-score,.viewer .qc-card.redo .qc-text b,.viewer .qc-list li.fail svg,.viewer .qc-list li em{color:#ffb340}
+.viewer .qc-score small{color:rgba(255,255,255,.6)}
+.vtitle{gap:10px}
+.vtitle .qc-chip{margin:0;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.12)}
+.viewer .qc-card.pending .qc-score{color:#d1d1d6}

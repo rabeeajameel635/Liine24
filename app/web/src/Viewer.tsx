@@ -5,6 +5,7 @@ import { X, Info, Heart, ArrowsLeftRight, CloudSlash } from '@phosphor-icons/rea
 import { api, fmtDate, fmtDur, type Asset } from './api.ts';
 import { Status, toast, Details } from './ui.tsx';
 import { statusOf } from './Library.tsx';
+import { useQc, QcCard, QcChip } from './Qc.tsx';
 
 export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: Asset[]; index: number; onIndex: (i: number) => void; onClose: () => void; onUpdate: (a: Asset) => void }) {
   const a = items[index];
@@ -51,6 +52,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
       : <img className={cls} src={x.src} alt={x.label ?? ''} draggable={false} onError={() => setFailed(f => ({ ...f, [x.id]: true }))} />;
 
   const st = statusOf(a);
+  const { qc, busy, rerun } = useQc(a.id);
   const prov = a.provenance;
   const other = cmp != null ? items[cmp] : null;
 
@@ -58,7 +60,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
     <div className="viewer" role="dialog" aria-label="العارض" style={{ background: `rgba(0,0,0,${1 - Math.min(dy / 500, .6)})` }}>
       <div className="vtop">
         <div className="capsule glass"><button className="gbtn icon" onClick={onClose} aria-label="اقفل"><X size={24} /></button></div>
-        <div className="vtitle capsule glass"><b>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</b></div>
+        <div className="vtitle capsule glass"><b>{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</b><QcChip qc={qc} /></div>
         <div className="capsule glass vactions">
           <button className="gbtn icon" aria-pressed={info} onClick={() => setInfo(v => !v)} aria-label="معلومات"><Info size={24} weight={info ? 'fill' : 'regular'} /></button>
           <button className="gbtn icon" aria-pressed={a.favorite} onClick={fav} aria-label="مفضّل"><Heart size={24} weight={a.favorite ? 'fill' : 'regular'} /></button>
@@ -92,6 +94,7 @@ export function Viewer({ items, index, onIndex, onClose, onUpdate }: { items: As
       <section className={'sheet glass-strong' + (info ? ' open' : '')} aria-hidden={!info}
         onPointerDown={onDown} onPointerUp={onUp}>
         <button className="grab" onClick={() => setInfo(false)} aria-label="اقفل المعلومات" />
+        <QcCard qc={qc} busy={busy} rerun={rerun} />
         <h2 className="sheet-title">{a.label ?? (a.kind === 'video' ? 'فيديو' : 'صورة')}</h2>
         <p className="sheet-line">{fmtDate(a.created_at)}</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}><Status kind={a.approved ? 'ok' : 'wait'} />{a.locked && <span className="pill">مرجع مقفول</span>}{!!a.face_baseline && <span className="pill">خط أساس الوش</span>}{!!a.no_generation && <span className="pill">ممنوع كمرجع توليد</span>}</div>

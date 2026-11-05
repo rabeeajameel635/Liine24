@@ -5,6 +5,7 @@ import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMer
 import { api, type Asset } from './api.ts';
 import { toast, PageHead, Card, Row } from './ui.tsx';
 import { useRefs, useResolution, PromptBox, RefsList } from './Refs.tsx';
+import { useQc, QcCard, QC_LABEL } from './Qc.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
@@ -14,7 +15,7 @@ type Tool = { name: string; via: string; mode: 'mcp' | 'bridge'; url: string };
 type Song = { id: string; title: string; bpm: number; bpm_approved: number; beat_offset: number; bar: number; duration: number; sections: { name: string; start: number }[]; peaks: number[] | null;
   poster: string | null; audio: string | null; segment_seconds: number; segments: Seg[]; tools: Record<string, Tool>; bpm_candidates: { bpm: number; conf: number; offset?: number; tracked?: boolean }[]; plan_note: string | null; master_missing?: boolean;
   tempo_local?: { t: number; bpm: number }[]; grid_measured?: boolean };
-type Shot = { id: string; code: string; title: string; start_s: number; end_s: number; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind: string | null; note: string | null; source: string; segment_id: string; conflicts: number[]; questions: string[]; blocked: string | null; answers: string[] };
+type Shot = { id: string; code: string; prompt: string | null; title: string; start_s: number; end_s: number; status: 'approved' | 'candidate' | 'redo' | 'pending'; kind: string | null; note: string | null; source: string; segment_id: string; conflicts: number[]; questions: string[]; blocked: string | null; answers: string[] };
 type Conflict = { id: string; n: number; title: string; proposal: string; shots: string[]; status: string; decision: string | null };
 // dots: green = ready or confirmed, orange = waiting, grey = idea
 const G = 'var(--ok)', O = 'var(--warn)', N = '#8E8E93';
@@ -233,7 +234,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [plan, setPlan] = useState<'primary' | 'backup'>('primary');
   const [picker, setPicker] = useState<'refs' | 'video' | null>(null);
   const [kit, setKit] = useState<{ kit: string; zip: string | null; files: number; audio: boolean; open: string } | null>(null);
-  const [err, setErr] = useState<{ what: string; fix?: string } | null>(null);
+  const [err, setErr] = useState<{ what: string; fix?: string; confirm?: string } | null>(null);
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
   const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes'>(null);
@@ -279,9 +280,9 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
     a.currentTime = s.start_s; a.play(); setPlaying(true);
     const stop = () => { if (a.currentTime >= s.end_s) { a.pause(); setPlaying(false); a.removeEventListener('timeupdate', stop); } }; a.addEventListener('timeupdate', stop);
   };
-  const prepare = async () => {
+  const prepare = async (confirm_no_donia = false) => {
     setErr(null); setKit(null);
-    const r = await post(`/api/segments/${seg.id}/prepare`, { prompt, which: plan });
+    const r = await post(`/api/segments/${seg.id}/prepare`, { prompt, which: plan, confirm_no_donia });
     if (r.ok) { setKit(r.data); setS(x => ({ ...x, status: x.status === 'idea' || x.status === 'ready' ? 'generating' : x.status })); reload(); mark(); } else setErr(r.data);
   };
   const setPlan_ = (body: { tool?: string; prompt_partial?: string }) => plan === 'primary' ? save(body) : save({ backup: { ...backup, ...body } });
@@ -295,7 +296,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات' };
   const primary = video && s.status !== 'done' && s.status !== 'editing'
     ? <button className="gbtn primary big" onClick={() => save({ status: 'done' }, true)}><CheckCircle size={24} weight="fill" /> تمّت</button>
-    : <button className="gbtn primary big" onClick={prepare}>جهّز للتوليد</button>;
+    : <button className="gbtn primary big" onClick={() => prepare()}>جهّز للتوليد</button>;
 
   return (
     <div className="seg-sheet-wrap" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
@@ -322,10 +323,10 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             {shots.length > 0 && <Row icon={FilmSlate} title="اللقطات" line={`${arNum(shots.length)} لقطات${redo ? ` · ${arNum(redo)} محتاجة شغل` : ''}`} onClick={() => setPanel('shots')} />}
             <Row icon={At} img={firstPic} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
-            <Row icon={FilmStrip} img={video?.thumb} title="الفيديو" line={video ? 'وصل' : 'مستني التوليد'} onClick={() => setPanel('video')} />
+            {video ? <VideoRow id={video.id} thumb={video.thumb} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
           </div>
 
-          {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}</div></div>}
+          {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}{err.confirm === 'no_donia' && <button className="gbtn soft" onClick={() => prepare(true)}>جهّز برضه</button>}</div></div>}
           {kit && (
             <Card title="الكيت جاهز" line={`${arNum(kit.files)} صور والبرومبت${kit.audio ? ' والصوت' : ''}`}
               action={kit.zip ? <a className="gbtn secondary" href={kit.zip}><DownloadSimple size={22} /> نزّل</a> : undefined}>
@@ -350,6 +351,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               <div key={x.id} className="shot-row">
                 <div className="shot-top"><b className="ltr">{x.code}</b><span className="shot-st" style={{ color: SHOT[x.status].c }}><i style={{ background: SHOT[x.status].c }} />{SHOT[x.status].t}</span></div>
                 <p className="shot-title">{x.title}</p>
+                <ShotPrompt shot={x} tool={toolKey} refs={allRefs} />
                 {cf.map(c => <p key={c.id} className="shot-conf"><Warning size={20} weight="fill" /> {c.title}</p>)}
                 {x.blocked && <p className="shot-conf"><Warning size={20} weight="fill" /> {x.blocked}</p>}
                 {(x.answers.length > 0 || x.note || x.questions.length > 0) && <details className="details"><summary>تفاصيل</summary><div className="details-body">
@@ -412,6 +414,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             <div className="video-slot" onDragOver={e => e.preventDefault()} onDrop={async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (!f) return; const r = await api.upload([f]); const id = r.imported?.[0]?.id; if (id) { const d = await api.assets('all'); setAssets(() => Object.fromEntries(d.items.map(a => [a.id, a]))); save({ video_asset_id: id }, true); } }}>
               {video?.src ? <video src={video.src} poster={video.thumb ?? undefined} controls playsInline /> : <button className="vs-empty" onClick={() => setPicker('video')}><FilmStrip size={40} /><span>اسحب الفيديو هنا</span></button>}
             </div>
+            {video && <VideoQc id={video.id} />}
             {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
           </>}
 
@@ -495,3 +498,21 @@ export function MoreMenu({ items }: { items: MenuItem[] }) {
     </div>
   );
 }
+
+/** A shot's own prompt (@ handles work here too). Saved as you type. */
+function ShotPrompt({ shot, tool, refs }: { shot: Shot; tool: string; refs: ReturnType<typeof useRefs> }) {
+  const [v, setV] = useState(shot.prompt ?? '');
+  const [open, setOpen] = useState(!!shot.prompt);
+  const res = useResolution(v, tool);
+  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const change = (x: string) => { setV(x); if (t.current) clearTimeout(t.current); t.current = setTimeout(() => fetch(`/api/shots/${shot.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: x }) }), 500); };
+  if (!open) return <button className="gbtn soft shot-add" onClick={() => setOpen(true)}>اكتب برومبت للقطة</button>;
+  return <PromptBox value={v} onChange={change} placeholder="برومبت اللقطة · اكتب @ للمراجع" refs={refs} res={res} />;
+}
+
+/** The video row shows its check: score and verdict (the check recommends; «تمّت» stays yours). */
+function VideoRow({ id, thumb, open }: { id: string; thumb: string | null; open: () => void }) {
+  const { qc } = useQc(id);
+  return <Row icon={FilmStrip} img={thumb} title="الفيديو" line={qc ? `${qc.score != null ? qc.score.toLocaleString('ar-EG') + ' · ' : ''}${QC_LABEL[qc.status]}` : 'وصل · بيتفحص'} onClick={open} />;
+}
+function VideoQc({ id }: { id: string }) { const { qc, busy, rerun } = useQc(id); return <QcCard qc={qc} busy={busy} rerun={rerun} />; }

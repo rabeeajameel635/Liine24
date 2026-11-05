@@ -12,6 +12,7 @@ import { songRoutes, seedIatw, TOOLS } from './songs.ts';
 import { connectionRoutes } from './connections.ts';
 import { inspirationRoutes } from './inspiration.ts';
 import { refRoutes } from './refs.ts';
+import { qcRoutes } from './qc.ts';
 import { timelineRoutes, seedTimelineV44 } from './timeline.ts';
 import { initSecrets } from './secrets.ts';
 
@@ -37,6 +38,7 @@ initSecrets(dataDir);
 await connectionRoutes(app, db, dataDir, PORT);
 await inspirationRoutes(app, db, dataDir, root);
 await refRoutes(app, db, TOOLS);
+await qcRoutes(app, db, dataDir);
 await seedIatw(db, join(root, '..'));
 await timelineRoutes(app, db);
 await seedTimelineV44(db, join(root, '..', 'projects', 'i-am-the-world', 'timeline_v44.json'));

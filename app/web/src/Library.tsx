@@ -28,7 +28,8 @@ export function Library({ album, title, albums, people, go, onPick, refreshAlbum
   const scroller = useRef<HTMLDivElement>(null);
   const first = useRef(true);
 
-  const load = useCallback(() => api.assets(album, q).then(d => setItems(d.items)), [album, q]);
+  const [qcs, setQcs] = useState<Record<string, { score: number | null; status: string }>>({});
+  const load = useCallback(() => { fetch('/api/qc').then(r => r.json()).then(d => setQcs(Object.fromEntries(d.items.map((x: { asset_id: string; score: number | null; status: string }) => [x.asset_id, x])))).catch(() => {}); return api.assets(album, q).then(d => setItems(d.items)); }, [album, q]);
   useEffect(() => { const t = setTimeout(load, q ? 180 : 0); return () => clearTimeout(t); }, [load, q]);
   useEffect(() => { first.current = true; setSel(new Set()); setSelecting(false); }, [album]);
   // newest at the bottom: land at the bottom like Photos
@@ -110,7 +111,7 @@ export function Library({ album, title, albums, people, go, onPick, refreshAlbum
             <FragmentGroup key={g.key} title={g.title} count={g.items.length}>
               {g.items.map(a => {
                 const i = flat.indexOf(a);
-                return <Tile key={a.id} a={a} selecting={selecting} selected={sel.has(a.id)}
+                return <Tile key={a.id} a={a} qc={qcs[a.id]} selecting={selecting} selected={sel.has(a.id)}
                   onDown={() => onTileDown(a)} onUp={onTileUp} onClick={() => onTileClick(a, i)} />;
               })}
             </FragmentGroup>
@@ -144,7 +145,7 @@ function FragmentGroup({ title, count, children }: { title: string; count: numbe
   return <>{title && <div className="group-h glass">{title}<small>{count}</small></div>}{children}</>;
 }
 
-function Tile({ a, selecting, selected, onDown, onUp, onClick }: { a: Asset; selecting: boolean; selected: boolean; onDown: () => void; onUp: () => void; onClick: () => void }) {
+function Tile({ a, qc, selecting, selected, onDown, onUp, onClick }: { a: Asset; qc?: { score: number | null; status: string }; selecting: boolean; selected: boolean; onDown: () => void; onUp: () => void; onClick: () => void }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const vid = useRef<HTMLVideoElement>(null);
@@ -160,6 +161,7 @@ function Tile({ a, selecting, selected, onDown, onUp, onClick }: { a: Asset; sel
       {failed && <span className="off"><CloudSlash size={26} /></span>}
       {st !== 'wait' && <span className="st"><Status kind={st} iconOnly size={20} /></span>}
       {a.favorite && <span className="fav"><Heart size={16} weight="fill" /></span>}
+      {qc?.status === 'redo' && qc.score != null && <span className="qc-badge" title="محتاج إعادة">{qc.score.toLocaleString('ar-EG')}</span>}
       {a.kind === 'video' && <span className="dur">{fmtDur(a.duration)}</span>}
       {selecting && <span className="check">{selected && <CheckCircle size={22} weight="fill" />}</span>}
     </button>

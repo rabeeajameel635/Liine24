@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { DB } from './db.ts';
 import { importFile } from './media.ts';
 import { attachFromInbox } from './songs.ts';
+import { queueQc } from './qc.ts';
 
 type Row = Record<string, unknown>;
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4v': 'video/mp4' };
@@ -132,7 +133,7 @@ function startWatcher(db: DB, dataDir: string, log: { error: (m: unknown) => voi
         pending.delete(name);
         const f = join(inbox, name);
         if (!existsSync(f)) return;
-        try { const r = await importFile(db, dataDir, f, { name, source: 'watch', projectId: 'iatw' }); attachFromInbox(db, r.id, name); await rename(f, join(done, basename(f))); }
+        try { const r = await importFile(db, dataDir, f, { name, source: 'watch', projectId: 'iatw' }); attachFromInbox(db, r.id, name); queueQc(db, dataDir, r.id); await rename(f, join(done, basename(f))); }
         catch (e) { log.error(e); }
       }, 1500)); // wait for the copy to finish
     });

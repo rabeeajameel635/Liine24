@@ -237,3 +237,11 @@ export async function refRoutes(app: FastifyInstance, db: DB, tools: Record<stri
     return { handles: rows };
   });
 }
+
+/** Is Donia in this segment? A word list over its description, lyric and shots (titles, answers, notes). Returns the word that matched. */
+const DONIA_WORDS = ['دنيا', 'donia', 'وهي', 'هي ', 'سيلويت', 'ضهرها', 'وشها', 'عيونها', 'العيون', 'دموع', 'تحضن', 'إيدها', 'ايدها', 'شعرها', 'الكعكة', 'الروب', 'الهود', 'قاعدة', 'تقوم', 'بتمشي', 'بتعيط', 'لبسها', 'silhouette', ' her '];
+export function doniaHint(texts: (string | null | undefined)[]): string | null {
+  const all = ' ' + texts.filter(Boolean).join(' \n ').toLowerCase() + ' ';
+  for (const w of DONIA_WORDS) if (all.includes(w)) return w.trim();
+  return null;
+}
