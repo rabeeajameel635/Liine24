@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, CaretLeft, ArrowLeft } from '@phosphor-icons/react';
 import { toast } from './ui.tsx';
 import { api, type Asset } from './api.ts';
-import { useInspiration, type Inspo } from './Inspiration.tsx';
+import type { Inspo } from './Inspiration.tsx';
 import { useCover, InspoSheet, shortWork, type Fit } from './Inspo.tsx';
 import { Pic } from './Lens.tsx';
 
@@ -30,7 +30,8 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
   const [sheet, setSheet] = useState<Fit | null>(null);
   const pick = useRef<HTMLInputElement>(null);
   const cover = useCover();
-  const { d: feed } = useInspiration(undefined, 6);
+  const [areas, setAreas] = useState<{ id: string; name: string; items: Inspo[] }[]>([]);
+  useEffect(() => { fetch('/api/inspiration/discover').then(r => r.json()).then(d => setAreas(d.areas ?? [])).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/songs').then(r => r.json()).then(d => setSongs(d.songs)); api.assets('all').then(d => setAssets(d.items)).catch(() => {}); }, []);
 
   // a real picture where a feed picture can't be reached: an approved look, else any approved picture
@@ -46,8 +47,8 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
     if (r?.id) { toast('جاهزة'); open(r.id); } else toast(r?.what ?? 'ما قدرتش أحلل الملف');
   };
 
-  const more = (feed?.items ?? []).filter(i => i.id !== cover?.id).slice(0, 5);
   const song = songs?.[0];
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) : '';
 
   return (
     <div className="work" onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={e => { if (e.currentTarget === e.target) setOver(false); }}
@@ -73,17 +74,23 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
           <button className="gbtn primary icon" onClick={() => open(song.id, song.resume ?? undefined)} aria-label="كمّل" title="كمّل"><ArrowLeft size={26} weight="bold" /></button>
         </section>}
 
-        {/* إلهام تاني: five more works to thumb through; a tap opens the work large, with «شوف» and «خده مرجع» */}
-        {more.length > 0 && <section className="today-sec">
-          <a className="sec-h" href="#/inspiration"><h2>إلهام تاني</h2><CaretLeft size={22} /></a>
-          <div className="fstrip" role="list">
-            {more.map(it => (
-              <button key={it.id} className="strip-cell" role="listitem" title={[it.work, it.director, it.source_name].filter(Boolean).join(' · ')} onClick={() => setSheet({ ...it, why: it.line })}>
-                <span className="strip-pic"><Pic src={it.thumb} stand={stand} /></span>
-              </button>
-            ))}
-          </div>
-        </section>}
+        {/* الاكتشافات: a living magazine under the cover. One strip per area (clips, shorts, music, tools); each card: picture, short title,
+            source and date, and «يفيدنا في …». Fresh only (30 days), never without a picture. A tap opens the work large, with «شوف» and «خده مرجع». */}
+        {areas.map(a => (
+          <section key={a.id} className="today-sec">
+            <a className="sec-h" href="#/inspiration"><h2>{a.name}</h2><CaretLeft size={22} /></a>
+            <div className="fstrip" role="list">
+              {a.items.filter(it => it.id !== cover?.id).map(it => (
+                <button key={it.id} className="strip-cell disc" role="listitem" title={[it.work, it.director, it.source_name].filter(Boolean).join(' · ')} onClick={() => setSheet({ ...it, why: it.use ? `يفيدنا في ${it.use}` : it.line })}>
+                  <span className="strip-pic"><Pic src={it.thumb} stand={stand} /></span>
+                  <span className="disc-title ltr">{shortWork(it.work)}</span>
+                  <span className="disc-meta"><span className="ltr">{it.source_name}</span>{it.published ? ` · ${when(it.published)}` : ''}</span>
+                  {it.use && <span className="disc-use">يفيدنا في {it.use}</span>}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
 
         <div className={'new-song' + (over ? ' over' : '')}>
           <button className="gbtn soft" onClick={() => pick.current?.click()} disabled={busy}><Plus size={22} />أغنية جديدة</button>

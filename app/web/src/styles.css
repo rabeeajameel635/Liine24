@@ -1199,3 +1199,13 @@ img.temp{opacity:.5;filter:blur(2px)}
   .seg-sheet-wrap:has(.inspo-sheet){align-items:flex-end}
 }
 .today .next-text h2{white-space:normal;font-size:24px;line-height:1.25}
+/* discoveries under the cover: a card is a picture, a short title, the source and date, and «يفيدنا في …» */
+.strip-cell.disc{width:280px;gap:6px}
+.disc-title{font-size:19px;font-weight:600;color:var(--ink);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-inline:2px}
+.disc-meta{font-size:17px;color:var(--mute);padding-inline:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.disc-use{font-size:17px;color:var(--ink-2);line-height:1.35;padding-inline:2px;white-space:normal}
+@media (max-width:820px){
+  /* the cover fills what the phone leaves free, so «كمّل من حيث وقفت» is reachable without scrolling */
+  .cover{height:calc(100vh - 318px);min-height:300px;max-height:60vh}
+  .strip-cell.disc{width:240px}
+}

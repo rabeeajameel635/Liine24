@@ -5,7 +5,7 @@ import { PageHead, Details, toast } from './ui.tsx';
 import { arNum } from './Songs.tsx';
 
 export type Inspo = { id: string; source: string; source_name: string; link: string; work: string; artist: string | null; director: string | null; thumb: string | null;
-  watch: string | null; line: string; category: string; category_ar: string; score: number; published: string | null; taken: boolean };
+  watch: string | null; line: string; category: string; category_ar: string; score: number; published: string | null; taken: boolean; use?: string | null; area?: string | null; area_ar?: string | null };
 type Source = { id: string; name: string; mode: string; last_ok: string | null; last_try: string | null; error: string | null; down: boolean; items: number };
 type Feed = { items: Inspo[]; sources: Source[]; pending: number; categories: Record<string, string> };
 
