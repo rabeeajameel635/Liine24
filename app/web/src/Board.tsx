@@ -1,12 +1,13 @@
 // لوحة المقاطع: cards like the library, a strip view on the waveform, status filters, and the segment sheet.
 // No save button: every change is saved as it happens, with versions and undo (⌘Z).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil, At } from '@phosphor-icons/react';
+import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil, At, GridFour, Stack } from '@phosphor-icons/react';
 import { api, type Asset } from './api.ts';
 import { toast, PageHead, Card, Row } from './ui.tsx';
 import { useRefs, useResolution, PromptBox, RefsList } from './Refs.tsx';
 import { useQc, QcCard, QC_LABEL } from './Qc.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
+import { useTakes, useStoryboard, StoryboardPanel, TakesPanel } from './Takes.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
   tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
@@ -237,9 +238,11 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [err, setErr] = useState<{ what: string; fix?: string; confirm?: string } | null>(null);
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
-  const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes'>(null);
+  const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes' | 'board' | 'takes'>(null);
   const [inspo, setInspo] = useState<{ id: string; label: string; thumb: string | null; link: string; watch: string | null; source: string; line: string | null }[]>([]);
   useEffect(() => { if (panel === 'refs') fetch(`/api/segments/${seg.id}/inspiration`).then(r => r.json()).then(d => setInspo(d.items)); }, [panel, seg.id]);
+  const { takes, load: loadTakes } = useTakes(seg.id);
+  const frames = useStoryboard(seg.id);
   const audio = useRef<HTMLAudioElement>(null);
   const { saved, mark } = useSaved();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,7 +296,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const video = s.video_asset_id ? assets[s.video_asset_id] : null;
 
   const redo = shots.filter(x => x.status === 'redo' || x.blocked).length;
-  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات' };
+  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات', board: 'ستوري بورد', takes: 'النسخ' };
   const primary = video && s.status !== 'done' && s.status !== 'editing'
     ? <button className="gbtn primary big" onClick={() => save({ status: 'done' }, true)}><CheckCircle size={24} weight="fill" /> تمّت</button>
     : <button className="gbtn primary big" onClick={() => prepare()}>جهّز للتوليد</button>;
@@ -324,6 +327,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             <Row icon={At} img={firstPic} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
             {video ? <VideoRow id={video.id} thumb={video.thumb} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
+            <Row icon={GridFour} img={frames?.find(f => f.thumb)?.thumb ?? null} title="الكادرات" line={frames ? (frames.length ? `ستوري بورد · ${arNum(frames.length)} كادرات` : 'لسه مفيش مراجع') : ' '} onClick={() => setPanel('board')} />
+            <Row icon={Stack} title="النسخ" line={takes ? (takes.length ? `${arNum(takes.length)} نسخ · ${arNum(takes.filter(t => t.status === 'approved').length)} معتمدة` : 'لسه مفيش نسخ') : ' '} onClick={() => setPanel('takes')} />
           </div>
 
           {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}{err.confirm === 'no_donia' && <button className="gbtn soft" onClick={() => prepare(true)}>جهّز برضه</button>}</div></div>}
@@ -411,12 +416,16 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </>}
 
           {panel === 'video' && <>
-            <div className="video-slot" onDragOver={e => e.preventDefault()} onDrop={async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (!f) return; const r = await api.upload([f]); const id = r.imported?.[0]?.id; if (id) { const d = await api.assets('all'); setAssets(() => Object.fromEntries(d.items.map(a => [a.id, a]))); save({ video_asset_id: id }, true); } }}>
+            <div className="video-slot" onDragOver={e => e.preventDefault()} onDrop={async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (!f) return; const r = await api.upload([f]); const id = r.imported?.[0]?.id; if (id) { const d = await api.assets('all'); setAssets(() => Object.fromEntries(d.items.map(a => [a.id, a]))); save({ video_asset_id: id, take_source: 'drop' } as Partial<Seg>, true); setTimeout(loadTakes, 600); } }}>
               {video?.src ? <video src={video.src} poster={video.thumb ?? undefined} controls playsInline /> : <button className="vs-empty" onClick={() => setPicker('video')}><FilmStrip size={40} /><span>اسحب الفيديو هنا</span></button>}
             </div>
             {video && <VideoQc id={video.id} />}
             {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
           </>}
+
+          {panel === 'board' && <StoryboardPanel frames={frames} fallback={firstPic ?? null} />}
+
+          {panel === 'takes' && <TakesPanel takes={takes} reload={loadTakes} use={t => { save({ video_asset_id: t.asset_id }, true); setTimeout(loadTakes, 600); }} />}
 
           {panel === 'notes' && <>
             <div className="status-row">
@@ -425,7 +434,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               ))}
             </div>
             <textarea className="notes" value={s.notes} onChange={e => save({ notes: e.target.value })} rows={4} placeholder="ملاحظة" />
-            <div className="section-h"><h2>النسخ</h2><span>{saved ? 'اتحفظ' : ''}</span></div>
+            <div className="section-h"><h2>التعديلات</h2><span>{saved ? 'اتحفظ' : ''}</span></div>
             <div className="versions">
               {versions.length ? versions.slice(0, 8).map(v => <button key={v.id} className="chip-f" onClick={() => undo(v.id)}><ArrowCounterClockwise size={20} />{new Date(v.at + 'Z').toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</button>) : <span className="mute">لسه مفيش تعديلات</span>}
             </div>

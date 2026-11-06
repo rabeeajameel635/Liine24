@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sun, SquaresFour, Images, Sparkle, CheckCircle, Heart, LockSimple, Clock, VideoCamera, UserCircle, Folder,
-  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft, House, Lightbulb, At
+  MusicNotes, User, PlugsConnected, FileText, MagnifyingGlass, Moon, Circle, CaretLeft, House, Lightbulb, At, FrameCorners
 } from '@phosphor-icons/react';
 import type { Icon as PIcon } from '@phosphor-icons/react';
 import { api, fmtDate, type Album, type Asset } from './api.ts';
@@ -15,8 +15,9 @@ import { Connections } from './Connections.tsx';
 import { InspirationPage } from './Inspiration.tsx';
 import { ConstantsPage } from './Constants.tsx';
 import { SetupPage } from './Setup.tsx';
+import { GalleryPage } from './Takes.tsx';
 
-type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration' | 'constants' | 'setup'; album: string; sub?: string };
+type Route = { view: 'home' | 'today' | 'studio' | 'library' | 'assistant' | 'song' | 'characters' | 'connections' | 'skills' | 'board' | 'montage' | 'inspiration' | 'constants' | 'setup' | 'gallery'; album: string; sub?: string };
 const parse = (): Route => { const [, v = 'home', a = 'all', sub] = location.hash.split('/'); const view = (v === 'today' ? 'home' : v || 'home') as Route['view']; return { view, album: decodeURIComponent(a), sub: sub ? decodeURIComponent(sub) : undefined }; };
 const ALBUM_ICON: Record<string, PIcon> = { all: Images, approved: CheckCircle, favorites: Heart, locked: LockSimple, waiting: Clock, videos: VideoCamera };
 type Theme = 'auto' | 'light' | 'dark';
@@ -52,7 +53,7 @@ export function App() {
     <button className="si" aria-current={active ? 'page' : undefined} onClick={onClick}><I size={24} weight={active ? 'fill' : 'regular'} /><span>{label}</span></button>
   );
   const onHome = route.view === 'home' || route.view === 'board' || route.view === 'montage';
-  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration', 'constants', 'setup'].includes(route.view);
+  const onStudio = ['studio', 'characters', 'connections', 'skills', 'song', 'inspiration', 'constants', 'setup', 'gallery'].includes(route.view);
 
   return (
     <div className={'shell' + (isLib && picked ? '' : ' no-ins')}>
@@ -78,6 +79,7 @@ export function App() {
       {route.view === 'inspiration' && <InspirationPage />}
       {route.view === 'constants' && <ConstantsPage />}
       {route.view === 'setup' && <SetupPage />}
+      {route.view === 'gallery' && <GalleryPage />}
       {(route.view === 'skills' || route.view === 'assistant') && <Soon view={route.view} />}
 
       {isLib && picked && <Inspector a={picked} />}
@@ -123,12 +125,13 @@ function Inspector({ a }: { a: Asset }) {
 function Redirect({ to }: { to: string }) { useEffect(() => { location.replace(to); }, [to]); return null; }
 
 function Studio({ go }: { go: (v: Route['view']) => void }) {
-  const [d, setD] = useState<{ poster: string | null; title: string; donia: string | null; waiting: number; inspo: string | null; inspoN: number } | null>(null);
+  const [d, setD] = useState<{ poster: string | null; title: string; donia: string | null; waiting: number; inspo: string | null; inspoN: number; gallery: string | null; galleryN: number } | null>(null);
   useEffect(() => {
-    Promise.all([fetch('/api/songs').then(r => r.json()), fetch('/api/characters/donia').then(r => r.json()).catch(() => null), fetch('/api/connections').then(r => r.json()).catch(() => null), fetch('/api/inspiration').then(r => r.json()).catch(() => null)]).then(([s, c, k, ins]) => {
+    Promise.all([fetch('/api/songs').then(r => r.json()), fetch('/api/characters/donia').then(r => r.json()).catch(() => null), fetch('/api/connections').then(r => r.json()).catch(() => null), fetch('/api/inspiration').then(r => r.json()).catch(() => null), fetch('/api/gallery').then(r => r.json()).catch(() => null)]).then(([s, c, k, ins, gal]) => {
       const song = s.songs?.[0]; const hair = c?.refs?.find((r: { label?: string }) => r.label?.includes('المشبك'));
       setD({ poster: song?.poster ?? null, title: song?.title ?? '', donia: hair?.thumb ?? c?.refs?.[0]?.thumb ?? null, waiting: (k?.services ?? []).filter((x: { kind: string; status: string }) => x.kind === 'mcp' && x.status !== 'connected').length,
-        inspo: ins?.items?.find((x: { thumb: string | null }) => x.thumb?.startsWith('/'))?.thumb ?? null, inspoN: ins?.items?.length ?? 0 });
+        inspo: ins?.items?.find((x: { thumb: string | null }) => x.thumb?.startsWith('/'))?.thumb ?? null, inspoN: ins?.items?.length ?? 0,
+        gallery: gal?.items?.find((x: { thumb: string | null }) => x.thumb)?.thumb ?? null, galleryN: gal?.items?.length ?? 0 });
     });
   }, []);
   return (
@@ -140,6 +143,7 @@ function Studio({ go }: { go: (v: Route['view']) => void }) {
       </div>
       <Row icon={At} title="الثوابت" line="@دنيا · @الممر · @اللوفر" onClick={() => go('constants')} />
       <Row icon={Lightbulb} img={d?.inspo} title="الإلهام" line={d ? `${arNum(d.inspoN)} عمل من المصادر` : ' '} onClick={() => go('inspiration')} />
+      <Row icon={FrameCorners} img={d?.gallery} title="المعرض" line={d ? (d.galleryN ? `${arNum(d.galleryN)} نسخ معتمدة` : 'لسه فاضي') : ' '} onClick={() => go('gallery')} />
       <Row icon={PlugsConnected} title="الاتصالات" line={d ? (d.waiting ? `${arNum(d.waiting)} مستنية الدخول` : 'كلها متوصلة') : ' '} onClick={() => go('connections')} />
       <Row icon={FileText} title="السكيلز" line="جاية قريب" onClick={() => go('skills')} />
     </div></div></div>
@@ -161,6 +165,7 @@ function Palette({ onClose, go, setTheme, albums }: { onClose: () => void; go: (
     { id: 'chars', label: 'الشخصيات', icon: User, run: () => go('characters') },
     { id: 'inspo', label: 'الإلهام', icon: Lightbulb, run: () => go('inspiration') },
     { id: 'const', label: 'الثوابت', icon: At, run: () => go('constants') },
+    { id: 'gallery', label: 'المعرض', icon: FrameCorners, run: () => go('gallery') },
     { id: 'setup', label: 'أول تشغيل', icon: Sparkle, run: () => go('setup') },
     { id: 'assist', label: 'المساعد', icon: Sparkle, run: () => go('assistant') },
     { id: 'light', label: 'المظهر: فاتح', icon: Sun, run: () => setTheme('light') },
