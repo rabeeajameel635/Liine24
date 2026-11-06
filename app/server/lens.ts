@@ -8,9 +8,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DB } from './db.ts';
 
-export const STUDY_KEYS = ['angle', 'masses', 'light', 'depth', 'rhythm'] as const;
-export type StudyKey = typeof STUDY_KEYS[number];
-export type Study = Partial<Record<StudyKey, string | null>> & { learn: string; keep: string };
+// 6 Nov (Rabee): the study is two lines only: what we learn, and what stays as decided. Each at most 14 words.
+export type Study = { learn: string; keep: string };
+const STUDY_MAX = 14;
 export const EVIDENCE = { text: 'من نص المقال بس', image: 'من الصورة والنص', video: 'من الفيديو والنص' } as const;
 
 export function migrateLens(db: DB) {
@@ -18,7 +18,7 @@ export function migrateLens(db: DB) {
     segment_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
     lens INTEGER NOT NULL DEFAULT 1,          -- the segment's chosen reference (one per segment)
-    fields TEXT NOT NULL DEFAULT '{}',        -- {angle, masses, light, depth, rhythm, learn, keep}: Arabic, one line each, null = no evidence yet
+    fields TEXT NOT NULL DEFAULT '{}',        -- {learn, keep}: Arabic, one line each
     evidence TEXT NOT NULL DEFAULT 'text',    -- text | image | video: what the study was written from
     author TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -36,6 +36,8 @@ export const validStudyLine = (s: unknown, max = 14) => {
 };
 
 type Row = Record<string, unknown>;
+/** Older rows carried five more lines; only the two kept lines are read. */
+const trimStudy = (f: Record<string, unknown>): Study => ({ learn: String(f.learn ?? ''), keep: String(f.keep ?? '') });
 const prov = (s: unknown) => { try { return JSON.parse(String(s || '{}')) as Record<string, unknown>; } catch { return {}; } };
 
 /** The segment's lens, shaped for the sheet and the gallery: the reference (link, picture, credits, rights) and the study. */
@@ -49,7 +51,7 @@ export function lensOf(db: DB, segmentId: string) {
     link: (p.link as string | undefined) ?? (r.source_ref as string | null), watch: (p.watch as string | null) ?? null,
     director: (p.director as string | null) ?? null, source: (p.source as string | null) ?? null,
     license: (p.license as string | null) ?? null, rights: (p.rights as string | undefined) ?? 'internal', no_generation: !!r.no_generation,
-    study: JSON.parse(String(r.fields || '{}')) as Study, evidence: String(r.evidence), evidence_ar: EVIDENCE[r.evidence as keyof typeof EVIDENCE] ?? String(r.evidence),
+    study: trimStudy(JSON.parse(String(r.fields || '{}'))), evidence: String(r.evidence), evidence_ar: EVIDENCE[r.evidence as keyof typeof EVIDENCE] ?? String(r.evidence),
     author: r.author, updated_at: r.updated_at
   };
 }
@@ -92,7 +94,7 @@ export async function seedStudies(db: DB, dir: string) {
     if (have && have.updated_at >= sf.updated_at) continue;
     db.prepare(`INSERT INTO study (segment_id, asset_id, lens, fields, evidence, author, updated_at) VALUES (?, ?, 1, ?, ?, ?, ?)
       ON CONFLICT (segment_id, asset_id) DO UPDATE SET lens = 1, fields = excluded.fields, evidence = excluded.evidence, author = excluded.author, updated_at = excluded.updated_at`)
-      .run(seg.segment_id, asset.id, JSON.stringify(sf.study), ['text', 'image', 'video'].includes(sf.evidence) ? sf.evidence : 'text', String(sf.author ?? '').slice(0, 80), sf.updated_at);
+      .run(seg.segment_id, asset.id, JSON.stringify(trimStudy(sf.study as unknown as Record<string, unknown>)), ['text', 'image', 'video'].includes(sf.evidence) ? sf.evidence : 'text', String(sf.author ?? '').slice(0, 80), sf.updated_at);
     db.prepare('UPDATE study SET lens = 0 WHERE segment_id = ? AND asset_id <> ?').run(seg.segment_id, asset.id);
     db.prepare('INSERT OR IGNORE INTO inspo_link (segment_id, asset_id) VALUES (?, ?)').run(seg.segment_id, asset.id);
   }
@@ -117,11 +119,9 @@ export async function lensRoutes(app: FastifyInstance, db: DB, studiesDir?: stri
     if (a.kind !== 'link' && !prov(a.provenance).link) return reply.code(409).send({ what: 'الزاوية بتاخد مرجع من الإلهام بس' });
     if (!a.no_generation) return reply.code(409).send({ what: 'المرجع لازم يبقى «ممنوع كمرجع توليد»' });
     const st = b.study ?? {};
-    for (const k of STUDY_KEYS) if (!validStudyLine(st[k])) return reply.code(400).send({ what: `سطر «${k}» خارج القاعدة`, fix: 'عربي، من غير أرقام ولا إنجليزي، لحد ١٤ كلمة.' });
-    if (!validStudyLine(st.learn, 14) || !st.learn || !validStudyLine(st.keep, 20) || !st.keep) return reply.code(400).send({ what: 'سطرَي «نتعلم» و«بيفضل» لازمين', fix: 'عربي، «نتعلم» لحد ١٤ كلمة و«بيفضل» لحد ٢٠.' });
+    if (!st.learn || !validStudyLine(st.learn, STUDY_MAX) || !st.keep || !validStudyLine(st.keep, STUDY_MAX)) return reply.code(400).send({ what: 'سطرَي «نتعلم» و«بيفضل» لازمين', fix: 'عربي، من غير أرقام ولا إنجليزي، كل واحد لحد ١٤ كلمة.' });
     const evidence = ['text', 'image', 'video'].includes(String(b.evidence)) ? String(b.evidence) : 'text';
     const fields: Study = { learn: String(st.learn).trim(), keep: String(st.keep).trim() };
-    for (const k of STUDY_KEYS) fields[k] = st[k] ? String(st[k]).trim() : null;
     db.prepare(`INSERT INTO study (segment_id, asset_id, lens, fields, evidence, author) VALUES (?, ?, 1, ?, ?, ?)
       ON CONFLICT (segment_id, asset_id) DO UPDATE SET lens = 1, fields = excluded.fields, evidence = excluded.evidence, author = excluded.author, updated_at = datetime('now')`)
       .run(id, String(a.id), JSON.stringify(fields), evidence, String(b.author ?? '').slice(0, 80));

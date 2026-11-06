@@ -9,6 +9,7 @@ import { useQc, QcCard, qcText } from './Qc.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
 import { useTakes, useStoryboard, StoryboardPanel, TakesPanel, FrameStrip, TakeStrip, tcode } from './Takes.tsx';
 import { useLens, LensPair, LensPanel } from './Lens.tsx';
+import { useFits, FitStrip } from './Inspo.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
   tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
@@ -249,6 +250,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const { takes, load: loadTakes } = useTakes(seg.id);
   const frames = useStoryboard(seg.id);
   const { lens } = useLens(seg.id);
+  const fits = useFits(seg.id);
   const audio = useRef<HTMLAudioElement>(null);
   const { saved, mark } = useSaved();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -300,7 +302,6 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const dropAt = (to: number) => { if (dragI == null || dragI === to) { setDragI(null); setOverI(null); return; } const r = [...s.refs]; const [x] = r.splice(dragI, 1); r.splice(to, 0, x); setDragI(null); setOverI(null); save({ refs: r }, true); };
   const peaks = song.peaks ? song.peaks.slice(Math.floor(s.start_s / song.duration * song.peaks.length), Math.ceil(s.end_s / song.duration * song.peaks.length)) : null;
   const video = s.video_asset_id ? assets[s.video_asset_id] : null;
-  const lyric1 = (s.lyric ?? '').split(' / ')[0].trim();
   const heroTake = takes?.length ? (takes.find(t => t.current) ?? takes[takes.length - 1]) : null;
   const heroVideo = video?.src ?? heroTake?.src ?? null;
   const heroPoster = video?.thumb ?? heroTake?.thumb ?? frames?.find(f => f.thumb && f.kind !== 'inspo')?.thumb ?? firstPic ?? null;
@@ -317,7 +318,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
         <div className="grab" />
         {!panel ? <>
           <header className="ss-head">
-            <div className="ph-text"><h1>{secShort(section?.name ?? s.group_label)}</h1>{lyric1 && <p className="ltr lyric">{lyric1}</p>}</div>
+            <div className="ph-text"><h1>{secShort(section?.name ?? s.group_label)}</h1></div>
             <button className="gbtn icon soft" onClick={() => setPanel('notes')} aria-label="الحالة والملاحظات"><NotePencil size={24} /></button>
             <button className="gbtn icon soft" onClick={close} aria-label="اقفل"><X size={24} /></button>
           </header>
@@ -328,6 +329,12 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               : heroPoster ? <img src={heroPoster} alt="" className="kb" /> : null}
             <figcaption className="hero-cap glass"><i className="dot" style={{ background: STATUS[s.status].c }} /><b>{STATUS[s.status].t}</b></figcaption>
           </figure>
+
+          {/* شوف إزاي اتعملت: the three works that serve this segment, one line each on why; tap opens the work large */}
+          {fits && fits.length > 0 && <section className="ss-sec fit-sec">
+            <div className="sec-h static"><h2>شوف إزاي اتعملت</h2></div>
+            <FitStrip fits={fits} segId={seg.id} stand={heroPoster} />
+          </section>}
 
           <div className="ss-wave">
             <button className="gbtn icon play" onClick={play} aria-label="شغّل المقطع" disabled={!song.audio}>{playing ? <Pause size={26} weight="fill" /> : <Play size={26} weight="fill" />}</button>
