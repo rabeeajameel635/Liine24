@@ -304,7 +304,7 @@
    "warn": null,
    "no_generation": false,
    "face_baseline": false,
-   "character_id": "donia",
+   "character_id": null,
    "created_at": "2026-10-31T15:52:27Z",
    "provenance": {
     "tool": "Higgsfield",
@@ -330,7 +330,7 @@
    "warn": null,
    "no_generation": false,
    "face_baseline": false,
-   "character_id": "donia",
+   "character_id": null,
    "created_at": "2026-10-31T15:54:32Z",
    "provenance": {
     "tool": "Higgsfield",
@@ -356,7 +356,7 @@
    "warn": null,
    "no_generation": false,
    "face_baseline": false,
-   "character_id": "donia",
+   "character_id": null,
    "created_at": "2026-10-31T17:36:06Z",
    "provenance": {
     "tool": "Higgsfield",

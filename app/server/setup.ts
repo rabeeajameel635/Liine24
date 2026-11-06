@@ -95,6 +95,8 @@ export async function faceCheckDonia(db: DB, dataDir: string) {
 
 export async function setupRoutes(app: FastifyInstance, db: DB, dataDir: string, root: string, port: number, analyzeSong: (id: string) => Promise<void>) {
   await seedConnections(db, root);
+  // 6 Nov: the three H2 paintings belong to the corridor folder only, not to Donia's references
+  db.prepare(`UPDATE asset SET character_id = NULL WHERE folder LIKE 'H2%' AND character_id = 'donia'`).run();
   // GHORFA_TEST_RESOLVE=<file of {id: url}>: dev only, to rehearse a first run without the Mac's Higgsfield login
   const resolver: Resolver = process.env.GHORFA_TEST_RESOLVE
     ? async ids => { const m = JSON.parse(await readFile(process.env.GHORFA_TEST_RESOLVE!, 'utf8')) as Record<string, string>; return new Map([...ids].filter(i => m[i]).map(i => [i, m[i]])); }
