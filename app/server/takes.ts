@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { DB } from './db.ts';
 import { resolvePrompt } from './refs.ts';
+import { lensOf } from './lens.ts';
 
 type Row = Record<string, unknown>;
 export type TakeSource = 'inbox' | 'kit' | 'picker' | 'drop' | 'legacy';
@@ -157,6 +158,7 @@ export async function takeRoutes(app: FastifyInstance, db: DB, tools: Record<str
       const cs = cues(String(r.song_id));
       const cue = cs.find(c => c.s <= at + 0.3 && c.e > at) ?? cs.find(c => c.s >= at && c.s < end) ?? null;
       return { ...shapeTake(db, r), start_s: r.start_s, end_s: r.end_s, seg_label: r.seg_label, group_label: r.group_label, seg_idx: r.seg_idx, song_id: r.song_id, song_title: r.song_title,
+        lens: lensOf(db, String(r.segment_id)), // the same reference and study the sheet shows: «قارن» reads it from here
         at, line: cue?.t ?? null, scene: shot?.title ? shot.title.split('،')[0].replace(/\([^)]*\)/g, ' ').replace(/["«][^"»]*["»]/g, ' ').replace(/\s+/g, ' ').trim() || null : null };
     }).filter(t => t.status === 'approved' && !t.test);
     return { items };

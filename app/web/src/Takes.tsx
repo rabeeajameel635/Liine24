@@ -2,10 +2,12 @@
 // Nothing here generates anything or approves on its own: a take is approved only by its «اعتمد» button.
 // Look: the picture leads. One large frame, a quiet strip under it, glass for the few controls that sit on pictures.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, Play, Pause, Columns } from '@phosphor-icons/react';
+import { createPortal } from 'react-dom';
+import { CheckCircle, XCircle, Play, Pause, Columns, X } from '@phosphor-icons/react';
 import { PageHead, Details, toast } from './ui.tsx';
 import { qcText, type Qc } from './Qc.tsx';
 import { arNum } from './Songs.tsx';
+import { LensPanel, type Lens } from './Lens.tsx';
 
 export type Take = { id: string; n: number; segment_id: string; asset_id: string; source: string; shot_code: string | null; created_at: string; test: boolean;
   status: 'waiting' | 'approved' | 'rejected'; decided_at: string | null; current: boolean; thumb: string | null; src: string | null; duration: number | null; qc: Qc | null };
@@ -175,12 +177,13 @@ export function TakesPanel({ takes, reload, use, start = 0, bar = 0, initial }: 
   );
 }
 
-type GalleryItem = Take & { start_s: number; end_s: number; seg_label: string | null; group_label: string | null; seg_idx: number; song_id: string; song_title: string; at: number; line: string | null; scene: string | null };
+type GalleryItem = Take & { start_s: number; end_s: number; seg_label: string | null; group_label: string | null; seg_idx: number; song_id: string; song_title: string; at: number; line: string | null; scene: string | null; lens: Lens | null };
 
 /** One shot of the reel: a wide frame that plays quietly while the pointer rests on it (or while it sits in view on a phone). */
 function ReelShot({ t, i }: { t: GalleryItem; i: number }) {
   const v = useRef<HTMLVideoElement>(null), box = useRef<HTMLElement>(null);
   const [on, setOn] = useState(false);
+  const [cmp, setCmp] = useState(false); // «قارن»: the same reference and study the sheet shows
   useEffect(() => { const x = v.current; if (!x) return; if (on) x.play().catch(() => {}); else x.pause(); }, [on]);
   useEffect(() => {
     if (!box.current || matchMedia('(hover:hover)').matches) return;
@@ -196,6 +199,15 @@ function ReelShot({ t, i }: { t: GalleryItem; i: number }) {
         {t.thumb && <img src={t.thumb} alt="" loading="lazy" />}
         {t.src && <video ref={v} src={t.src} muted loop playsInline preload="none" />}
       </div>
+      {t.lens && <button className="gbtn glass reel-cmp" onClick={() => setCmp(true)}>قارن</button>}
+      {/* a portal: the shot's own rise animation would otherwise trap the fixed overlay inside it */}
+      {cmp && t.lens && createPortal(<div className="seg-sheet-wrap" onMouseDown={e => { if (e.target === e.currentTarget) setCmp(false); }}>
+        <section className="seg-sheet lens-sheet" role="dialog" aria-label="قارن">
+          <div className="grab" />
+          <header className="ss-head"><div className="ph-text"><h2>قارن</h2></div><button className="gbtn icon soft" onClick={() => setCmp(false)} aria-label="اقفل"><X size={24} /></button></header>
+          <LensPanel ours={{ thumb: t.thumb, src: t.src }} lens={t.lens} />
+        </section>
+      </div>, document.body)}
       <footer className="reel-cap">
         <h2 className={t.line ? 'ltr lyric' : undefined}>{title}</h2>
         <p><span className="ltr tcode">{tcode(t.at ?? t.start_s)}</span></p>

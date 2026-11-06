@@ -8,6 +8,7 @@ import { useRefs, useResolution, PromptBox, RefsList } from './Refs.tsx';
 import { useQc, QcCard, qcText } from './Qc.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
 import { useTakes, useStoryboard, StoryboardPanel, TakesPanel, FrameStrip, TakeStrip, tcode } from './Takes.tsx';
+import { useLens, LensPair, LensPanel } from './Lens.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
   tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
@@ -238,7 +239,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [err, setErr] = useState<{ what: string; fix?: string; confirm?: string } | null>(null);
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
-  const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes' | 'board' | 'takes'>(null);
+  const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes' | 'board' | 'takes' | 'lens'>(null);
   const [pick, setPick] = useState<{ frame?: number; take?: string | null }>({}); // which frame / take a strip opened
   const [pos, setPos] = useState<number | null>(null); // playhead on the song strip, 0–1 while the segment plays
   const sheetEl = useRef<HTMLElement>(null);
@@ -247,6 +248,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   useEffect(() => { if (panel === 'refs') fetch(`/api/segments/${seg.id}/inspiration`).then(r => r.json()).then(d => setInspo(d.items)); }, [panel, seg.id]);
   const { takes, load: loadTakes } = useTakes(seg.id);
   const frames = useStoryboard(seg.id);
+  const { lens } = useLens(seg.id);
   const audio = useRef<HTMLAudioElement>(null);
   const { saved, mark } = useSaved();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,7 +306,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const heroPoster = video?.thumb ?? heroTake?.thumb ?? frames?.find(f => f.thumb && f.kind !== 'inspo')?.thumb ?? firstPic ?? null;
 
   const redo = shots.filter(x => x.status === 'redo' || x.blocked).length;
-  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات', board: 'الكادرات', takes: 'النسخ' };
+  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات', board: 'الكادرات', takes: 'النسخ', lens: 'الزاوية' };
   const primary = video && s.status !== 'done' && s.status !== 'editing'
     ? <button className="gbtn primary big" onClick={() => save({ status: 'done' }, true)}><CheckCircle size={24} weight="fill" /> تمّت</button>
     : <button className="gbtn primary big" onClick={() => prepare()}>جهّز للتوليد</button>;
@@ -355,6 +357,12 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             <button className="sec-h" data-panel="takes" onClick={() => { setPick({}); setPanel('takes'); }}><h2>النسخ</h2><span>{takes?.length ? `${arNum(takes.filter(t => t.status === 'approved').length)} معتمدة` : ''}</span><CaretLeft size={22} /></button>
             {takes && (takes.length ? <TakeStrip takes={takes} pick={t => { setPick({ take: t.id }); setPanel('takes'); }} /> : <p className="panel-line">الفيديو يوصل على الاستقبال</p>)}
           </section>
+
+          {/* الزاوية: one reference beside our frame, read-only; set on the Mac by scripts/study.ts */}
+          {lens && <section className="ss-sec">
+            <button className="sec-h" data-panel="lens" onClick={() => setPanel('lens')}><h2>الزاوية</h2><CaretLeft size={22} /></button>
+            <div role="button" tabIndex={0} className="lens-open" onClick={() => setPanel('lens')} onKeyDown={e => { if (e.key === 'Enter') setPanel('lens'); }}><LensPair compact ours={{ thumb: heroPoster }} lens={lens} /></div>
+          </section>}
 
           <div className="ss-rows ss-group">
             {shots.length > 0 && <Row icon={FilmSlate} title="اللقطات" line={`${arNum(shots.length)} لقطات${redo ? ` · ${arNum(redo)} محتاجة شغل` : ''}`} onClick={() => setPanel('shots')} />}
@@ -454,6 +462,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             {video && <VideoQc id={video.id} />}
             {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
           </>}
+
+          {panel === 'lens' && lens && <LensPanel ours={{ thumb: heroPoster, src: heroVideo }} lens={lens} />}
 
           {panel === 'board' && <StoryboardPanel frames={frames} fallback={firstPic ?? null} start={pick.frame ?? 0} />}
 

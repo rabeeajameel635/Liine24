@@ -216,7 +216,7 @@ export async function inspirationRoutes(app: FastifyInstance, db: DB, dataDir: s
     if (!it) return reply.code(404).send({ what: 'مش لاقيه' });
     if (it.asset_id && db.prepare('SELECT 1 FROM asset WHERE id = ?').get(it.asset_id)) return { asset_id: it.asset_id, already: true };
     const name = SOURCES.find(s => s.id === it.source)?.name ?? it.source;
-    const provenance = { tool: 'الإلهام', source: name, link: it.link, watch: it.watch_url, director: it.director, artist: it.artist, line: it.line, category: CATEGORIES[it.category as Cat] ?? null, license: `ملك أصحابه · المصدر ${name}` };
+    const provenance = { tool: 'الإلهام', source: name, link: it.link, watch: it.watch_url, director: it.director, artist: it.artist, line: it.line, category: CATEGORIES[it.category as Cat] ?? null, license: `ملك أصحابه · المصدر ${name}`, rights: 'internal' }; // internal review only: never in the public showcase
     let id: string;
     if (it.thumb_path && existsSync(it.thumb_path)) {
       id = (await importFile(db, dataDir, it.thumb_path, { name: `${it.id}.jpg`, label: it.work, source: 'drop', projectId: 'iatw', provenance, tags: `إلهام ${it.work} ${it.director ?? ''} ${it.line ?? ''}` })).id;

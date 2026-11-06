@@ -17,6 +17,7 @@ import { qcRoutes } from './qc.ts';
 import { timelineRoutes, seedTimelineV44 } from './timeline.ts';
 import { initSecrets } from './secrets.ts';
 import { takeRoutes, migrateTakes } from './takes.ts';
+import { lensRoutes } from './lens.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.GHORFA_DATA ?? join(homedir(), 'Library', 'Application Support', 'Ghorfa');
@@ -47,6 +48,7 @@ await seedIatw(db, join(root, '..'));
 await timelineRoutes(app, db);
 await seedTimelineV44(db, join(root, '..', 'projects', 'i-am-the-world', 'timeline_v44.json'));
 await takeRoutes(app, db, TOOLS);
+await lensRoutes(app, db);
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 
