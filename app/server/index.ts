@@ -48,7 +48,7 @@ await seedIatw(db, join(root, '..'));
 await timelineRoutes(app, db);
 await seedTimelineV44(db, join(root, '..', 'projects', 'i-am-the-world', 'timeline_v44.json'));
 await takeRoutes(app, db, TOOLS);
-await lensRoutes(app, db);
+await lensRoutes(app, db, join(root, '..', 'projects', 'i-am-the-world', 'studies'));
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 
