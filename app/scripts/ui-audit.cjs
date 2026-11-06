@@ -1,10 +1,11 @@
 // UI rule audit (4 Nov): on every screen at 390 and 1440 px, ≤ 25 visible words before scrolling, no text under 17px, no button under 56px.
 // Usage (server on 4317 or PORT, Playwright installed): node scripts/ui-audit.cjs <out-dir> <segment-id> [screen…]
+// frames / takes: the segment sheet's «الكادرات» and «النسخ» panels (opened from their section titles).
 // Rule audit per screen: visible words (no scroll) ≤ 25, every visible text ≥ 17px, every button ≥ 56px tall.
 const { chromium } = require('playwright');
 const [O, segId, ...only] = process.argv.slice(2);
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 4317);
-const routes = [['gallery', 'gallery'], ['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['inspiration', 'inspiration'], ['constants', 'constants'], ['setup', 'setup'], ['search', '#search']];
+const routes = [['gallery', 'gallery'], ['home', ''], ['song', 'board/iatw-v44'], ['sheet', `board/iatw-v44/${segId}`], ['frames', `board/iatw-v44/${segId}#board`], ['takes', `board/iatw-v44/${segId}#takes`], ['library', 'library/all'], ['viewer', 'library/all#v'], ['character', 'characters'], ['connections', 'connections'], ['studio', 'studio'], ['assistant', 'assistant'], ['montage', 'montage/iatw-v44'], ['inspiration', 'inspiration'], ['constants', 'constants'], ['setup', 'setup'], ['search', '#search']];
 (async () => {
   const b = await chromium.launch(); const rows = [];
   for (const [w, h] of [[390, 844], [1440, 900]]) {
@@ -16,6 +17,7 @@ const routes = [['gallery', 'gallery'], ['home', ''], ['song', 'board/iatw-v44']
       if (only.length && !only.includes(n)) continue;
       if (n === 'viewer') { await p.goto(BASE + '/#/library/all'); await p.waitForTimeout(1800); await p.click('.tile >> nth=0'); }
       else if (n === 'search') { await p.goto(BASE + '/#/home'); await p.waitForTimeout(1500); await p.click(w < 821 ? '.tab-search' : '.side-search'); }
+      else if (n === 'frames' || n === 'takes') { await p.goto('about:blank'); await p.goto(BASE + '/#/' + u.split('#')[0]); await p.waitForSelector('[data-panel]', { timeout: 8000 }); await p.click(`[data-panel="${u.split('#')[1]}"]`); }
       else { await p.goto(BASE + '/#/' + u); }
       await p.waitForTimeout(1800);
       const r = await p.evaluate(() => {

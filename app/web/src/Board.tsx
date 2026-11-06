@@ -1,13 +1,13 @@
 // لوحة المقاطع: cards like the library, a strip view on the waveform, status filters, and the segment sheet.
 // No save button: every change is saved as it happens, with versions and undo (⌘Z).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil, At, GridFour, Stack } from '@phosphor-icons/react';
+import { Play, Pause, Plus, Minus, X, ArrowRight, ArrowLeft, Scissors, ArrowsMerge, SquaresFour, Waveform, Copy, DownloadSimple, ArrowSquareOut, CheckCircle, ArrowCounterClockwise, FilmStrip, Warning, CaretRight, CaretDown, FilmSlate, DotsThree, Images as ImagesIcon, TextAa, NotePencil, At, CaretLeft } from '@phosphor-icons/react';
 import { api, type Asset } from './api.ts';
 import { toast, PageHead, Card, Row } from './ui.tsx';
 import { useRefs, useResolution, PromptBox, RefsList } from './Refs.tsx';
-import { useQc, QcCard, QC_LABEL } from './Qc.tsx';
+import { useQc, QcCard, qcText } from './Qc.tsx';
 import { ProgressRing, arNum } from './Songs.tsx';
-import { useTakes, useStoryboard, StoryboardPanel, TakesPanel } from './Takes.tsx';
+import { useTakes, useStoryboard, StoryboardPanel, TakesPanel, FrameStrip, TakeStrip, tcode } from './Takes.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
   tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
@@ -239,6 +239,10 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
   const [panel, setPanel] = useState<null | 'shots' | 'refs' | 'prompt' | 'video' | 'notes' | 'board' | 'takes'>(null);
+  const [pick, setPick] = useState<{ frame?: number; take?: string | null }>({}); // which frame / take a strip opened
+  const [pos, setPos] = useState<number | null>(null); // playhead on the song strip, 0–1 while the segment plays
+  const sheetEl = useRef<HTMLElement>(null);
+  useEffect(() => { sheetEl.current?.scrollTo({ top: 0 }); }, [panel]); // a panel opens at its top, not where the strip was tapped
   const [inspo, setInspo] = useState<{ id: string; label: string; thumb: string | null; link: string; watch: string | null; source: string; line: string | null }[]>([]);
   useEffect(() => { if (panel === 'refs') fetch(`/api/segments/${seg.id}/inspiration`).then(r => r.json()).then(d => setInspo(d.items)); }, [panel, seg.id]);
   const { takes, load: loadTakes } = useTakes(seg.id);
@@ -281,7 +285,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
     const a = audio.current; if (!a || !song.audio) { toast('ملف الأغنية مش موجود'); return; }
     if (playing) { a.pause(); setPlaying(false); return; }
     a.currentTime = s.start_s; a.play(); setPlaying(true);
-    const stop = () => { if (a.currentTime >= s.end_s) { a.pause(); setPlaying(false); a.removeEventListener('timeupdate', stop); } }; a.addEventListener('timeupdate', stop);
+    const stop = () => { setPos(Math.min(1, Math.max(0, (a.currentTime - s.start_s) / (s.end_s - s.start_s)))); if (a.currentTime >= s.end_s || a.paused) { a.pause(); setPlaying(false); setPos(null); a.removeEventListener('timeupdate', stop); } }; a.addEventListener('timeupdate', stop);
   };
   const prepare = async (confirm_no_donia = false) => {
     setErr(null); setKit(null);
@@ -294,41 +298,69 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const dropAt = (to: number) => { if (dragI == null || dragI === to) { setDragI(null); setOverI(null); return; } const r = [...s.refs]; const [x] = r.splice(dragI, 1); r.splice(to, 0, x); setDragI(null); setOverI(null); save({ refs: r }, true); };
   const peaks = song.peaks ? song.peaks.slice(Math.floor(s.start_s / song.duration * song.peaks.length), Math.ceil(s.end_s / song.duration * song.peaks.length)) : null;
   const video = s.video_asset_id ? assets[s.video_asset_id] : null;
+  const lyric1 = (s.lyric ?? '').split(' / ')[0].trim();
+  const heroTake = takes?.length ? (takes.find(t => t.current) ?? takes[takes.length - 1]) : null;
+  const heroVideo = video?.src ?? heroTake?.src ?? null;
+  const heroPoster = video?.thumb ?? heroTake?.thumb ?? frames?.find(f => f.thumb && f.kind !== 'inspo')?.thumb ?? firstPic ?? null;
 
   const redo = shots.filter(x => x.status === 'redo' || x.blocked).length;
-  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات', board: 'ستوري بورد', takes: 'النسخ' };
+  const PANEL: Record<NonNullable<typeof panel>, string> = { shots: 'اللقطات', refs: 'المراجع', prompt: 'البرومبت', video: 'الفيديو', notes: 'الحالة والملاحظات', board: 'الكادرات', takes: 'النسخ' };
   const primary = video && s.status !== 'done' && s.status !== 'editing'
     ? <button className="gbtn primary big" onClick={() => save({ status: 'done' }, true)}><CheckCircle size={24} weight="fill" /> تمّت</button>
     : <button className="gbtn primary big" onClick={() => prepare()}>جهّز للتوليد</button>;
 
   return (
     <div className="seg-sheet-wrap" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-      <section className="seg-sheet" role="dialog" aria-label={`مقطع ${s.label ?? s.idx}`}>
+      <section ref={sheetEl} className="seg-sheet" role="dialog" aria-label={`مقطع ${s.label ?? s.idx}`}>
         <div className="grab" />
         {!panel ? <>
           <header className="ss-head">
-            <div className="ph-text"><h1 className="ltr">{s.label ?? `مقطع ${arNum(s.idx)}`}</h1><p>{secShort(section?.name ?? s.group_label)} · {arNum(bars)} بار · {STATUS[s.status].t}</p></div>
+            <div className="ph-text"><h1>{secShort(section?.name ?? s.group_label)}</h1>{lyric1 && <p className="ltr lyric">{lyric1}</p>}</div>
             <button className="gbtn icon soft" onClick={() => setPanel('notes')} aria-label="الحالة والملاحظات"><NotePencil size={24} /></button>
             <button className="gbtn icon soft" onClick={close} aria-label="اقفل"><X size={24} /></button>
           </header>
 
+          {/* the frame leads: the segment's video, else its newest take, else the first storyboard frame */}
+          <figure className="ss-hero" onClick={() => setPanel(heroTake ? 'takes' : 'board')}>
+            {heroVideo ? <video key={heroVideo} src={heroVideo} poster={heroPoster ?? undefined} muted loop playsInline autoPlay preload="metadata" />
+              : heroPoster ? <img src={heroPoster} alt="" className="kb" /> : null}
+            <figcaption className="hero-cap glass"><i className="dot" style={{ background: STATUS[s.status].c }} /><b>{STATUS[s.status].t}</b></figcaption>
+          </figure>
+
           <div className="ss-wave">
             <button className="gbtn icon play" onClick={play} aria-label="شغّل المقطع" disabled={!song.audio}>{playing ? <Pause size={26} weight="fill" /> : <Play size={26} weight="fill" />}</button>
-            <div className="mini-wave">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
-            <div className="bars-ctl">
-              <button className="gbtn icon soft" onClick={() => edge(-1)} aria-label="بار أقل"><Minus size={22} /></button>
-              <button className="gbtn icon soft" onClick={() => edge(1)} aria-label="بار أكتر"><Plus size={22} /></button>
+            <div className="bar-ruler">
+              <div className="mini-wave">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
+              <div className="bar-ticks" aria-hidden="true">{Array.from({ length: Math.max(0, bars - 1) }, (_, i) => <i key={i} style={{ insetInlineEnd: `${(i + 1) / bars * 100}%` }} />)}</div>
+              {pos != null && <i className="playhead" style={{ insetInlineEnd: `${pos * 100}%` }} />}
+              <div className="bar-meta">
+                <span className="tcode">{tcode(s.start_s)}</span>
+                <span className="bars-ctl">
+                  <button className="gbtn icon soft" onClick={() => edge(-1)} aria-label="بار أقل"><Minus size={20} /></button>
+                  <b>{arNum(bars)} بار</b>
+                  <button className="gbtn icon soft" onClick={() => edge(1)} aria-label="بار أكتر"><Plus size={20} /></button>
+                </span>
+                <span className="tcode">{tcode(s.end_s)}</span>
+              </div>
             </div>
             {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
           </div>
 
-          <div className="ss-rows">
+          <section className="ss-sec">
+            <button className="sec-h" data-panel="board" onClick={() => { setPick({}); setPanel('board'); }}><h2>الكادرات</h2><CaretLeft size={22} /></button>
+            {frames && (frames.length ? <FrameStrip frames={frames} fallback={firstPic ?? null} caps={false} pick={i => { setPick({ frame: i }); setPanel('board'); }} /> : <p className="panel-line">ضيف مراجع للمقطع</p>)}
+          </section>
+
+          <section className="ss-sec">
+            <button className="sec-h" data-panel="takes" onClick={() => { setPick({}); setPanel('takes'); }}><h2>النسخ</h2><span>{takes?.length ? `${arNum(takes.filter(t => t.status === 'approved').length)} معتمدة` : ''}</span><CaretLeft size={22} /></button>
+            {takes && (takes.length ? <TakeStrip takes={takes} pick={t => { setPick({ take: t.id }); setPanel('takes'); }} /> : <p className="panel-line">الفيديو يوصل على الاستقبال</p>)}
+          </section>
+
+          <div className="ss-rows ss-group">
             {shots.length > 0 && <Row icon={FilmSlate} title="اللقطات" line={`${arNum(shots.length)} لقطات${redo ? ` · ${arNum(redo)} محتاجة شغل` : ''}`} onClick={() => setPanel('shots')} />}
-            <Row icon={At} img={firstPic} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
+            <Row icon={At} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
-            {video ? <VideoRow id={video.id} thumb={video.thumb} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
-            <Row icon={GridFour} img={frames?.find(f => f.thumb)?.thumb ?? null} title="الكادرات" line={frames ? (frames.length ? `ستوري بورد · ${arNum(frames.length)} كادرات` : 'لسه مفيش مراجع') : ' '} onClick={() => setPanel('board')} />
-            <Row icon={Stack} title="النسخ" line={takes ? (takes.length ? `${arNum(takes.length)} نسخ · ${arNum(takes.filter(t => t.status === 'approved').length)} معتمدة` : 'لسه مفيش نسخ') : ' '} onClick={() => setPanel('takes')} />
+            {video ? <VideoRow id={video.id} thumb={null} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
           </div>
 
           {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}{err.confirm === 'no_donia' && <button className="gbtn soft" onClick={() => prepare(true)}>جهّز برضه</button>}</div></div>}
@@ -423,9 +455,9 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
           </>}
 
-          {panel === 'board' && <StoryboardPanel frames={frames} fallback={firstPic ?? null} />}
+          {panel === 'board' && <StoryboardPanel frames={frames} fallback={firstPic ?? null} start={pick.frame ?? 0} />}
 
-          {panel === 'takes' && <TakesPanel takes={takes} reload={loadTakes} use={t => { save({ video_asset_id: t.asset_id }, true); setTimeout(loadTakes, 600); }} />}
+          {panel === 'takes' && <TakesPanel takes={takes} reload={loadTakes} start={s.start_s} bar={song.bar} initial={pick.take} use={t => { save({ video_asset_id: t.asset_id }, true); setTimeout(loadTakes, 600); }} />}
 
           {panel === 'notes' && <>
             <div className="status-row">
@@ -522,6 +554,6 @@ function ShotPrompt({ shot, tool, refs }: { shot: Shot; tool: string; refs: Retu
 /** The video row shows its check: score and verdict (the check recommends; «تمّت» stays yours). */
 function VideoRow({ id, thumb, open }: { id: string; thumb: string | null; open: () => void }) {
   const { qc } = useQc(id);
-  return <Row icon={FilmStrip} img={thumb} title="الفيديو" line={qc ? `${qc.score != null ? qc.score.toLocaleString('ar-EG') + ' · ' : ''}${QC_LABEL[qc.status]}` : 'وصل · بيتفحص'} onClick={open} />;
+  return <Row icon={FilmStrip} img={thumb} title="الفيديو" line={qc ? qcText(qc) : 'وصل · بيتفحص'} onClick={open} />;
 }
 function VideoQc({ id }: { id: string }) { const { qc, busy, rerun, today } = useQc(id); return <QcCard qc={qc} busy={busy} rerun={rerun} today={today} />; }

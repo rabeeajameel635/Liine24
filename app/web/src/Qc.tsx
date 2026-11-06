@@ -15,9 +15,13 @@ export function useQc(assetId: string) {
   return { qc, busy, rerun, today };
 }
 
+/** One short reading of the check. While the face check hasn't run (it waits for the Mac), the other checks' score would read
+ *  like a full mark, so it says «من غير الوش» instead of a number. */
+export const qcText = (qc: Qc | null) => !qc ? 'بيتفحص' : qc.status === 'pending' ? 'من غير الوش' : `${QC_LABEL[qc.status]}${qc.score != null ? ' · ' + ar(qc.score) : ''}`;
+
 export function QcChip({ qc }: { qc: Qc | null }) {
   if (!qc) return null;
-  return <span className={'qc-chip ' + qc.status} title={QC_LABEL[qc.status]}>{qc.score != null ? ar(qc.score) : '—'}</span>;
+  return <span className={'qc-chip ' + qc.status} title={QC_LABEL[qc.status]}>{qc.status === 'pending' ? 'من غير الوش' : qc.score != null ? ar(qc.score) : '—'}</span>;
 }
 
 const ICON = { pass: CheckCircle, fail: Warning, na: MinusCircle, pending: Clock, error: Warning } as const;
@@ -26,7 +30,7 @@ export function QcCard({ qc, busy, rerun, today }: { qc: Qc | null; busy: boolea
   return (
     <section className={'qc-card ' + (qc?.status ?? 'none')}>
       <div className="qc-head">
-        <div className="qc-score">{qc?.score != null ? ar(qc.score) : '—'}<small>{qc?.status === 'pending' ? 'من غير الوش' : 'من ١٠٠'}</small></div>
+        <div className="qc-score">{qc?.score != null && qc.status !== 'pending' ? ar(qc.score) : '—'}<small>{qc?.status === 'pending' ? 'من غير الوش' : 'من ١٠٠'}</small></div>
         <div className="qc-text">
           <b>{qc ? QC_LABEL[qc.status] : 'لسه ما اتفحصش'}</b>
           <p>{qc ? qc.reason : 'الفحص بيرشّح بس، وإنت اللي بتعتمد'}</p>

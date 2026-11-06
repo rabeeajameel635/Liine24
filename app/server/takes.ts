@@ -146,8 +146,19 @@ export async function takeRoutes(app: FastifyInstance, db: DB, tools: Record<str
     const rows = db.prepare(`SELECT t.*, s.start_s, s.end_s, s.label AS seg_label, s.group_label, s.idx AS seg_idx, s.song_id, g.title AS song_title
       FROM take t JOIN segment s ON s.id = t.segment_id JOIN song g ON g.id = s.song_id JOIN asset a ON a.id = t.asset_id
       WHERE t.test = 0 AND a.test = 0 ORDER BY s.start_s, t.n`).all() as Row[];
-    const items = rows.map(r => ({ ...shapeTake(db, r), start_s: r.start_s, end_s: r.end_s, seg_label: r.seg_label, group_label: r.group_label, seg_idx: r.seg_idx, song_id: r.song_id, song_title: r.song_title }))
-      .filter(t => t.status === 'approved' && !t.test);
+    // for the presentation: the moment on the song (the shot's start when the take names a shot), the sung line at that moment,
+    // and the scene's name (the shot title up to its first comma). Read-only.
+    const cuesOf = new Map<string, { s: number; e: number; t: string }[]>();
+    const cues = (songId: string) => { if (!cuesOf.has(songId)) { const s = db.prepare('SELECT srt FROM song WHERE id = ?').get(songId) as { srt?: string } | undefined; cuesOf.set(songId, JSON.parse(String(s?.srt || '[]'))); } return cuesOf.get(songId)!; };
+    const items = rows.map(r => {
+      const shot = (r.shot_code ? db.prepare('SELECT title, start_s FROM shot WHERE segment_id = ? AND upper(code) = upper(?)').get(String(r.segment_id), String(r.shot_code))
+        : db.prepare('SELECT title, start_s FROM shot WHERE segment_id = ? ORDER BY start_s, idx LIMIT 1').get(String(r.segment_id))) as { title: string; start_s: number } | undefined;
+      const at = r.shot_code && shot ? Number(shot.start_s) : Number(r.start_s), end = Number(r.end_s);
+      const cs = cues(String(r.song_id));
+      const cue = cs.find(c => c.s <= at + 0.3 && c.e > at) ?? cs.find(c => c.s >= at && c.s < end) ?? null;
+      return { ...shapeTake(db, r), start_s: r.start_s, end_s: r.end_s, seg_label: r.seg_label, group_label: r.group_label, seg_idx: r.seg_idx, song_id: r.song_id, song_title: r.song_title,
+        at, line: cue?.t ?? null, scene: shot?.title ? shot.title.split('،')[0].replace(/\([^)]*\)/g, ' ').replace(/["«][^"»]*["»]/g, ' ').replace(/\s+/g, ' ').trim() || null : null };
+    }).filter(t => t.status === 'approved' && !t.test);
     return { items };
   });
 }
