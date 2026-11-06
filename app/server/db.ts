@@ -193,7 +193,8 @@ const COLUMNS: [string, string][] = [
   ['song', 'audio_asset_id TEXT'], ['song', 'srt TEXT'], ['song', 'duration REAL'], ['song', 'beat_offset REAL'],
   ['song', 'beats_per_bar INTEGER NOT NULL DEFAULT 4'], ['song', 'segment_seconds REAL NOT NULL DEFAULT 15'],
   ['asset', 'warn TEXT'], ['asset', 'no_generation INTEGER NOT NULL DEFAULT 0'], ['asset', 'face_baseline INTEGER NOT NULL DEFAULT 0'],
-  ['song', 'poster_asset_id TEXT'], ['song', 'plan_note TEXT'], ['song', 'master_asset_id TEXT'], ['segment', 'draft INTEGER NOT NULL DEFAULT 0'], ['song', 'bpm_candidates TEXT'], ['song', 'downbeats TEXT'], ['song', 'tempo_local TEXT'], ['song', 'created_at TEXT']
+  ['song', 'poster_asset_id TEXT'], ['song', 'plan_note TEXT'], ['song', 'master_asset_id TEXT'], ['segment', 'draft INTEGER NOT NULL DEFAULT 0'], ['song', 'bpm_candidates TEXT'], ['song', 'downbeats TEXT'], ['song', 'tempo_local TEXT'], ['song', 'created_at TEXT'],
+  ['asset', 'test INTEGER NOT NULL DEFAULT 0'] // 1 = a local test file (scripts/make-test-take.ts): never in the gallery or production counts
 ];
 
 export function openDb(path: string): DB {

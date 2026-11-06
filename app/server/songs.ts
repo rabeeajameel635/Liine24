@@ -12,6 +12,7 @@ import { importFile } from './media.ts';
 import { decode, peaks, tempo, beatOffset, parseSrt, sectionsFromCues, makeGrid, trackBeats, type Cue } from './audio.ts';
 import { resolvePrompt, doniaHint } from './refs.ts';
 import { queueQc } from './qc.ts';
+import { ensureTake } from './takes.ts';
 
 const run = promisify(execFile);
 type Row = Record<string, unknown>;
@@ -144,7 +145,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
   // re-cut: only while nothing has started, so no work is lost
   app.post('/api/songs/:id/split', async (req, reply) => {
     const { id } = req.params as { id: string }; const { seconds } = req.body as { seconds: number };
-    if (segs(id).some(g => g.status !== 'idea' || JSON.parse(String(g.refs)).length || g.prompt_partial)) return reply.code(409).send({ what: 'فيه مقاطع اتشغل عليها', fix: 'عدّل الحدود من عرض الشريط، أو ادمج وقسّم مقطع مقطع.' });
+    if (segs(id).some(g => g.status !== 'idea' || JSON.parse(String(g.refs)).length || g.prompt_partial || db.prepare('SELECT 1 FROM take WHERE segment_id = ?').get(String(g.id)))) return reply.code(409).send({ what: 'فيه مقاطع اتشغل عليها', fix: 'عدّل الحدود من عرض الشريط، أو ادمج وقسّم مقطع مقطع.' });
     cut(song(id)!, Number(seconds) || 15); return { ok: true };
   });
 
@@ -154,6 +155,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     if (!cur) return reply.code(404).send({ what: 'المقطع مش موجود' });
     if (b.status === 'done' && !(b.video_asset_id ?? cur.video_asset_id)) return reply.code(409).send({ what: 'مفيش فيديو في المقطع', fix: 'حط الفيديو في الخانة الأول.' });
     if (b.status && !STATUSES.includes(String(b.status))) return reply.code(400).send({ what: 'حالة مش معروفة' });
+    if (b.video_asset_id && db.prepare('SELECT 1 FROM asset WHERE id = ? AND test = 1').get(String(b.video_asset_id))) return reply.code(409).send({ what: 'دي نسخة تجربة', fix: 'التجربة مش للإنتاج. استخدم نسخة حقيقية.' });
     // keep one version per burst of typing: snapshot only if the last version is older than 20 s
     const last = db.prepare(`SELECT at FROM segment_version WHERE segment_id = ? ORDER BY id DESC LIMIT 1`).get(id) as { at: string } | undefined;
     if (!last || Date.now() - Date.parse(last.at + 'Z') > 20000 || b.status || b.refs || b.video_asset_id) snapshot(id);
@@ -163,6 +165,8 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     db.prepare(`UPDATE segment SET ${set.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...args, id);
     if ('prompt_partial' in b || 'refs' in b || 'direction' in b) db.prepare('UPDATE segment SET draft = 0 WHERE id = ?').run(id);
     if (b.status === 'done') db.prepare(`INSERT OR IGNORE INTO approval (id, subject_type, subject_id, stage) VALUES (?, 'segment', ?, 'done')`).run(randomUUID(), id);
+    // every video put in the segment is also a take; the earlier takes stay
+    if (b.video_asset_id && b.video_asset_id !== cur.video_asset_id) ensureTake(db, id, String(b.video_asset_id), b.take_source === 'drop' ? 'drop' : 'picker');
     if (b.video_asset_id && b.video_asset_id !== cur.video_asset_id) queueQc(db, dataDir, String(b.video_asset_id), m => app.log.warn(m)); // a video put in the segment is checked against its bars
     return shapeSeg(db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row);
   });
@@ -208,7 +212,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     const { id } = req.params as { id: string };
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const list = segs(String(g.song_id)); const i = list.findIndex(x => x.id === id);
     const n = list[i + 1]; if (!n) return reply.code(409).send({ what: 'ده آخر مقطع' });
-    if (n.status !== 'idea' || n.video_asset_id) return reply.code(409).send({ what: 'المقطع اللي بعده اتشغل عليه', fix: 'ادمج من المقطع اللي بعده لو حابب.' });
+    if (n.status !== 'idea' || n.video_asset_id || db.prepare('SELECT 1 FROM take WHERE segment_id = ?').get(String(n.id))) return reply.code(409).send({ what: 'المقطع اللي بعده اتشغل عليه', fix: 'ادمج من المقطع اللي بعده لو حابب.' });
     snapshot(id); db.prepare('UPDATE segment SET end_s = ?, lyric = ? WHERE id = ?').run(Number(n.end_s), [g.lyric, n.lyric].filter(Boolean).join(' / '), id);
     db.prepare('DELETE FROM segment WHERE id = ?').run(String(n.id)); reindex(String(g.song_id)); return { ok: true };
   });
@@ -293,7 +297,7 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
 export function attachFromInbox(db: DB, assetId: string, fileName: string) {
   const m = fileName.match(/_([0-9a-f]{6})(?:[._\-\s]|$)/i); if (!m) return;
   const g = db.prepare('SELECT id, status FROM segment WHERE kit_code = ?').get(m[1].toLowerCase()) as { id: string; status: string } | undefined;
-  if (g) db.prepare(`UPDATE segment SET video_asset_id = ?, updated_at = datetime('now') WHERE id = ?`).run(assetId, g.id);
+  if (g) { db.prepare(`UPDATE segment SET video_asset_id = ?, updated_at = datetime('now') WHERE id = ?`).run(assetId, g.id); ensureTake(db, g.id, assetId, 'kit'); }
 }
 
 /** First song: I Am The World, imported from the director's map (v7 shots, v7.1 long-take groups) in studio/data.js. */

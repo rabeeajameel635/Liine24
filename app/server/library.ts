@@ -11,6 +11,7 @@ import type { DB } from './db.ts';
 import { importFile } from './media.ts';
 import { attachFromInbox } from './songs.ts';
 import { queueQc } from './qc.ts';
+import { linkInboxTake } from './takes.ts';
 
 type Row = Record<string, unknown>;
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4v': 'video/mp4' };
@@ -25,7 +26,9 @@ export const ALBUMS = [
   { id: 'inspiration', title: 'الإلهام', icon: 'lightbulb' }
 ] as const;
 
-function where(album: string): string {
+// test files (scripts/make-test-take.ts) live only as «تجربة» takes in the segment sheet
+function where(album: string): string { return `(${whereAlbum(album)}) AND a.test = 0`; }
+function whereAlbum(album: string): string {
   const approved = `EXISTS (SELECT 1 FROM approval ap WHERE ap.subject_type='asset' AND ap.subject_id=a.id)`;
   switch (album) {
     case 'approved': return approved;
@@ -133,7 +136,7 @@ function startWatcher(db: DB, dataDir: string, log: { error: (m: unknown) => voi
         pending.delete(name);
         const f = join(inbox, name);
         if (!existsSync(f)) return;
-        try { const r = await importFile(db, dataDir, f, { name, source: 'watch', projectId: 'iatw' }); attachFromInbox(db, r.id, name); queueQc(db, dataDir, r.id); await rename(f, join(done, basename(f))); }
+        try { const r = await importFile(db, dataDir, f, { name, source: 'watch', projectId: 'iatw' }); attachFromInbox(db, r.id, name); linkInboxTake(db, r.id, name, { duplicate: r.duplicate }); queueQc(db, dataDir, r.id); await rename(f, join(done, basename(f))); }
         catch (e) { log.error(e); }
       }, 1500)); // wait for the copy to finish
     });

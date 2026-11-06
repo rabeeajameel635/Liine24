@@ -24,7 +24,8 @@ export function migrateTimeline(db: DB) {
 /** Replace the song's segments by ones built from the timeline. Refuses when any segment already has work in it. */
 export function applyTimeline(db: DB, songId: string, tl: Timeline, opts: { beatOffset?: number } = {}): { segments: number; shots: number } {
   const song = db.prepare('SELECT * FROM song WHERE id = ?').get(songId) as Record<string, unknown>;
-  const worked = db.prepare(`SELECT count(*) AS n FROM segment WHERE song_id = ? AND (status <> 'idea' OR refs <> '[]' OR prompt_partial <> '' OR video_asset_id IS NOT NULL)`).get(songId) as { n: number };
+  const worked = db.prepare(`SELECT count(*) AS n FROM segment WHERE song_id = ? AND (status <> 'idea' OR refs <> '[]' OR prompt_partial <> '' OR video_asset_id IS NOT NULL
+    OR id IN (SELECT segment_id FROM take WHERE test = 0))`).get(songId) as { n: number };
   if (worked.n) throw new Error('فيه مقاطع اتشغل عليها');
   const bpm = Number(song.bpm), off = opts.beatOffset ?? Number(song.beat_offset ?? 0);
   const grid = makeGrid({ ...song, beat_offset: off }), bars = (a: number, b: number) => grid.index(b) - grid.index(a);

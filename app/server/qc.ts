@@ -131,7 +131,8 @@ export async function runQc(db: DB, dataDir: string, assetId: string, force = fa
   const [ww, wh] = dims.trim().split(',').map(Number);
   checks.push(checkResolution(kind, ww, wh, Number(a.width), Number(a.height)));
   // rhythm: the segment this video is attached to, measured on its bars
-  const seg = db.prepare(`SELECT s.start_s, s.end_s, g.downbeats, g.bpm FROM segment s JOIN song g ON g.id = s.song_id WHERE s.video_asset_id = ?`).get(assetId) as { start_s: number; end_s: number; downbeats: string | null; bpm: number } | undefined;
+  const seg = db.prepare(`SELECT s.start_s, s.end_s, g.downbeats, g.bpm FROM segment s JOIN song g ON g.id = s.song_id
+    WHERE s.video_asset_id = ? OR s.id = (SELECT t.segment_id FROM take t WHERE t.asset_id = ? ORDER BY t.created_at LIMIT 1) LIMIT 1`).get(assetId, assetId) as { start_s: number; end_s: number; downbeats: string | null; bpm: number } | undefined;
   let target: { seconds: number; bars: number } | null = null;
   if (seg) { const db_ = JSON.parse(seg.downbeats || '[]') as number[]; const inBars = db_.filter(t => t >= seg.start_s - 0.05 && t < seg.end_s - 0.05).length; target = { seconds: seg.end_s - seg.start_s, bars: inBars || Math.round((seg.end_s - seg.start_s) / (240 / seg.bpm)) }; }
   checks.push(checkRhythm(kind === 'video' ? Number(a.duration) : null, target));
@@ -151,7 +152,9 @@ export async function runQc(db: DB, dataDir: string, assetId: string, force = fa
     const sha = String(a.sha256 ?? '');
     const cached = !force && sha ? db.prepare('SELECT result FROM qc_vision WHERE sha256 = ? ORDER BY created_at DESC LIMIT 1').get(sha) as { result: string } | undefined : undefined;
     if (cached) vision_cached = true;
-    try {
+    // a local test file (test = 1) is never sent to the paid look: it carries no character, only the «تجربة» card
+    if (Number(a.test)) checks.push({ key: 'clip', label: 'الثوابت', state: 'na', score: null, line: 'تجربة · من غير فحص بصري' });
+    else try {
       const l = cached ? JSON.parse(cached.result) as Look : await look(frames, { clip: ref('الشعر والمشبك «سِرّ»'), loafers: ref('الجزمة') });
       if (!cached && sha) db.prepare(`INSERT INTO qc_vision (sha256, result, forced) VALUES (?, ?, ?)`).run(sha, JSON.stringify(l), force ? 1 : 0);
       checks.push(...lookChecks(l));

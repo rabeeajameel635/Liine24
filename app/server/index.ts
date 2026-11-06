@@ -16,10 +16,12 @@ import { refRoutes } from './refs.ts';
 import { qcRoutes } from './qc.ts';
 import { timelineRoutes, seedTimelineV44 } from './timeline.ts';
 import { initSecrets } from './secrets.ts';
+import { takeRoutes, migrateTakes } from './takes.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.GHORFA_DATA ?? join(homedir(), 'Library', 'Application Support', 'Ghorfa');
 const db = openDb(join(dataDir, 'ghorfa.sqlite'));
+migrateTakes(db); // before the watcher and the timeline link look at takes
 const PORT = Number(process.env.PORT ?? 4317);
 const HOST = process.env.HOST ?? '127.0.0.1'; // LAN access for the phone PWA comes later, opt-in
 
@@ -44,6 +46,7 @@ await setupRoutes(app, db, dataDir, root, PORT, id => analyzeSong(id));
 await seedIatw(db, join(root, '..'));
 await timelineRoutes(app, db);
 await seedTimelineV44(db, join(root, '..', 'projects', 'i-am-the-world', 'timeline_v44.json'));
+await takeRoutes(app, db, TOOLS);
 
 app.get('/api/health', async () => ({ ok: true, version: '0.1.0' }));
 
@@ -51,7 +54,7 @@ app.get('/api/bootstrap', async () => {
   const brands = db.prepare('SELECT id, name, line FROM brand ORDER BY name').all();
   const projects = db.prepare(`SELECT p.id, p.title, p.brand_id, b.name AS brand, b.line FROM project p JOIN brand b ON b.id = p.brand_id ORDER BY p.created_at`).all();
   const count = (t: string) => (db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n;
-  return { brands, projects, counts: { assets: count('asset'), characters: count('character'), songs: count('song'), jobs: count('job') } };
+  return { brands, projects, counts: { assets: (db.prepare('SELECT count(*) AS n FROM asset WHERE test = 0').get() as { n: number }).n, characters: count('character'), songs: count('song'), jobs: count('job') } };
 });
 
 const dist = join(root, 'web', 'dist');
