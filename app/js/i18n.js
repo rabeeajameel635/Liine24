@@ -68,7 +68,7 @@ const AR = {
   'Nothing is ever deleted. Voided documents stay visible with their reversal.': 'لا شيء يُحذف أبداً. المستند الملغى يبقى ظاهراً مع قيده العكسي.', 'All': 'الكل', 'Number, party, reference': 'الرقم، الطرف، المرجع',
   // import / backup / settings
   'Bring data in from Excel, CSV, or any AI assistant. Everything is checked before it is saved, and invoices arrive as drafts.': 'أدخل البيانات من إكسل أو CSV أو أي مساعد ذكاء اصطناعي. كل شيء يُفحص قبل الحفظ، والفواتير تصل كمسودات.',
-  '1 · From Excel or CSV': '١ · من إكسل أو CSV', '2 · From an AI assistant (Claude, ChatGPT, Gemini)': '٢ · من مساعد ذكاء اصطناعي (Claude، ChatGPT، Gemini)',
+  '1 · From Excel or CSV': '1 · من إكسل أو CSV', '2 · From an AI assistant (Claude, ChatGPT, Gemini)': '2 · من مساعد ذكاء اصطناعي (Claude، ChatGPT، Gemini)',
   'What': 'ماذا', 'File': 'الملف', 'Download template': 'تحميل نموذج', 'Copy prompt': 'نسخ البرومبت', 'Check and import': 'افحص واستورد', 'Import now': 'استورد الآن',
   'Paste the JSON answer here': 'الصق جواب JSON هنا',
   'Copy this prompt, add your Excel sheet, photo or message under it, and paste the JSON answer below.': 'انسخ البرومبت، وحط تحته الإكسل أو الصورة أو الرسالة، والصق جواب JSON تحت.',
@@ -87,6 +87,12 @@ const AR = {
   'moves: code → name → price → qty → bonus → discount → next line.': 'بتنقلك: الرقم ← الاسم ← السعر ← الكمية ← البونص ← الخصم ← السطر التالي.',
   'on an empty line finishes.': 'على سطر فاضي بتنهي الإدخال.', 'Enter on an empty line brings you here.': 'Enter على سطر فاضي بتجيبك لهون.',
   'Print copies · Invoices': 'عدد النسخ · الفواتير', 'Print copies · Vouchers': 'عدد النسخ · السندات', 'Name': 'الاسم', '#': '#',
+  'Leave this document?': 'الخروج من المستند؟', 'You started entering this document. Choose what to do with it.': 'بلّشت بهذا المستند. اختار شو بدك تعمل فيه.',
+  'Print & post': 'طباعة وترحيل', 'Cancel & delete draft': 'إلغاء وحذف المسودة', 'Discard': 'إلغاء وحذف', 'Continue editing': 'كمّل الشغل',
+  'Posted + saved': 'مرحّل + محفوظ', 'Saved (drafts)': 'محفوظ (مسودات)', 'Posted': 'مرحّل', 'Voided': 'ملغى', 'Cancelled drafts': 'مسودات ملغاة', 'All types': 'كل الأنواع',
+  'Saved': 'محفوظ', 'DRAFT': 'مسودة', 'cancelled': 'مسودة ملغاة', 'Notes': 'ملاحظات', 'to leave.': 'للخروج.', 'Duplicate as new draft': 'نسخ كمسودة جديدة',
+  'Sales invoices': 'فواتير المبيعات', 'Receipt vouchers': 'سندات القبض', 'Purchase invoices': 'فواتير المشتريات',
+  'Draft cancelled': 'أُلغيت المسودة', 'Discarded': 'تم الإلغاء', 'Draft created': 'تم إنشاء مسودة',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',
@@ -95,6 +101,8 @@ const AR = {
 // sentences built from data: [regex, replacement]
 const PATTERNS = [
   [/^Posted (.+)$/, 'تم ترحيل $1'],
+  [/^New (.+)$/, (m, x) => 'جديد: ' + (AR[x.charAt(0).toUpperCase() + x.slice(1)] || x)],
+  [/^(Sales invoice|Sales return|Receipt voucher|Credit note|Debit note|Purchase invoice|Purchase return|Payment voucher|Opening balance|Opening stock)s$/, (m, x) => AR[x] ? 'كل ' + AR[x] : m],
   [/^Print copy (\d+)$/, 'طباعة نسخة $1'],
   [/^Copy (\d+)$/, 'نسخة $1'],
   [/^(\d+) items\. Codes are permanent\. Items are never deleted, only deactivated\.$/, '$1 صنف. الأكواد ثابتة. الأصناف لا تُحذف، تُعطّل فقط.'],
@@ -107,7 +115,7 @@ const PATTERNS = [
   [/^Nothing matches "(.*)"$/, 'لا شيء يطابق "$1"'],
   [/^No item with code (.+)$/, 'لا يوجد صنف بالرقم $1'],
   [/^Last backup: (.+)$/, 'آخر نسخة: $1'],
-  [/^(\d+) records imported(.*)$/, '$1 سجل تم استيراده$2'],
+  [/^(\d+) records imported( · opening stock posted)?$/, (m, n, os) => `${n} سجل تم استيراده${os ? ' · وترحّلت بضاعة أول المدة' : ''}`],
   [/^Draft created(.*)$/, 'تم إنشاء مسودة$1'],
   [/^(\d+) lines added(.*)$/, 'أُضيف $1 سطر$2'],
 ];
@@ -123,7 +131,7 @@ function tr(s) {
 export function translate(root = document.body) {
   if (getLang() !== 'ar') return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement && !n.parentElement.closest('script,style,textarea,.doc-print,[data-notr]') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+    acceptNode: (n) => (n.parentElement && !n.parentElement.closest('script,style,textarea,.doc-print,[data-notr],[dir=auto]') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
   });
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);

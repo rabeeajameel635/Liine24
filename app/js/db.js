@@ -102,6 +102,16 @@ export async function saveDraft(doc, user) {
   return rec;
 }
 
+// A draft that is abandoned is marked cancelled, never erased. It never received a number.
+export async function cancelDraft(docId, user) {
+  const tx = db.transaction(['docs', 'audit'], 'readwrite');
+  const doc = await req(tx.objectStore('docs').get(docId));
+  if (!doc || doc.status !== 'draft') { tx.abort(); throw new Error('Only drafts can be cancelled'); }
+  tx.objectStore('docs').put({ ...doc, status: 'cancelled', cancelledAt: now(), cancelledBy: user });
+  tx.objectStore('audit').add({ at: now(), user, action: 'cancel draft', ref: doc.type, detail: doc.id });
+  await done(tx);
+}
+
 // Posting is one atomic transaction: number, ledger, stock and audit together or nothing.
 export async function post(docId, user, settings, { allowBackdate = false, backdateReason = '' } = {}) {
   const items = Object.fromEntries((await all('items')).map((i) => [i.id, i]));

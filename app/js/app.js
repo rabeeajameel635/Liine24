@@ -40,10 +40,14 @@ async function reload() {
 
 // ---------- router ----------
 const routes = {};
+// The open editor registers itself here so leaving it can be guarded.
+let guardEditor = null, currentHash = location.hash, bypass = false;
 async function render() {
+  guardEditor = null;
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
-  $$('#nav a').forEach((a) => a.classList.toggle('on', hash.startsWith(a.dataset.k)));
+  const best = $$('#nav a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
+  $$('#nav a').forEach((a) => a.classList.toggle('on', a === best));
   const fn = routes[name] || routes.dashboard;
   await reload();
   $('#main').innerHTML = '';
@@ -51,8 +55,39 @@ async function render() {
   translate($('#app'));
   window.scrollTo(0, 0);
 }
-window.addEventListener('hashchange', render);
-const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
+window.addEventListener('hashchange', async () => {
+  if (bypass) { bypass = false; currentHash = location.hash; return; }
+  if (guardEditor && guardEditor.isDirty()) {
+    const target = location.hash;
+    bypass = true; location.hash = currentHash;          // stay put until the user decides
+    const ok = await guardEditor.leave();
+    if (ok) { guardEditor = null; currentHash = target; location.hash = target; }
+    return;
+  }
+  currentHash = location.hash; render();
+});
+window.addEventListener('beforeunload', (e) => { if (guardEditor && guardEditor.isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+const go = (h) => { guardEditor = null; if (location.hash === h) render(); else location.hash = h; };
+
+// "You started this document. What now?"  → 'stay' | 'discard' | 'save' | 'post'
+function leaveDialog(hasSavedDraft) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `<h2 style="margin-top:0">Leave this document?</h2>
+      <p class="muted">You started entering this document. Choose what to do with it.</p>
+      <div class="actions" style="flex-direction:column;align-items:stretch">
+        <button class="btn ink" data-v="post">Print &amp; post</button>
+        <button class="btn tonal" data-v="save">Save draft</button>
+        <button class="btn danger" data-v="discard">${hasSavedDraft ? 'Cancel & delete draft' : 'Discard'}</button>
+        <button class="btn" data-v="stay">Continue editing</button>
+      </div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end('stay'); });
+    $$('[data-v]', dlg).forEach((b) => (b.onclick = () => end(b.dataset.v)));
+    setTimeout(() => $('[data-v=post]', dlg).focus(), 30);
+  });
+}
 
 // ---------- ledger helpers ----------
 async function ledger() { return db.all('ledger'); }
@@ -76,7 +111,7 @@ routes.dashboard = async () => {
   const gaps = sequenceGaps(S.docs.filter((d) => d.number));
   const healthy = tb.balanced && !gaps.length;
   $('#main').innerHTML = `
-    <h1>${esc(S.settings.companyName)}</h1><p class="sub">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    <h1>${esc(S.settings.companyName)}</h1><p class="sub">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
     <div class="cards">
       ${kpi("Today's sales", money(salesOf((d) => d.date === today())))}
       ${kpi('This month', money(salesOf((d) => (d.date || '').startsWith(month))))}
@@ -106,7 +141,7 @@ function docTable(docs) {
     ${docs.map((d) => `<tr style="cursor:pointer" onclick="location.hash='#/doc/${d.id}'">
       <td><b>${esc(docLabel(d))}</b>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</td><td>${DOC_TYPES[d.type].name}</td><td>${esc(d.date)}</td>
       <td dir="auto">${esc(docPartyName(d))}</td><td>${esc(d.reference || '')}</td>
-      <td class="n">${d.status === 'draft' ? money(draftTotalC(d)) : money(d.totalC)}</td><td><span class="pill ${d.status}">${d.status}</span></td></tr>`).join('')}
+      <td class="n">${d.status === 'draft' || d.status === 'cancelled' ? money(draftTotalC(d)) : money(d.totalC)}</td><td><span class="pill ${d.status}">${d.status}</span></td></tr>`).join('')}
   </tbody></table></div>`;
 }
 function draftTotalC(d) {
@@ -126,22 +161,32 @@ routes.doc = async (id) => {
   if (!d) throw new Error('Document not found');
   if (d.status === 'draft') editor(d); else viewDoc(d);
 };
+const STATUS_TABS = [
+  ['open', 'Posted + saved', (d) => d.status === 'posted' || d.status === 'draft'],
+  ['draft', 'Saved (drafts)', (d) => d.status === 'draft'],
+  ['posted', 'Posted', (d) => d.status === 'posted'],
+  ['voided', 'Voided', (d) => d.status === 'voided'],
+  ['cancelled', 'Cancelled drafts', (d) => d.status === 'cancelled'],
+  ['all', 'All', () => true],
+];
 routes.docs = async () => {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const type = q.get('type') || '', status = q.get('status') || '';
-  const list = S.docs.filter((d) => (!type || d.type === type) && (!status || d.status === status))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.number || '').localeCompare(a.number || ''));
-  $('#main').innerHTML = `<h1>All documents</h1><p class="sub">Nothing is ever deleted. Voided documents stay visible with their reversal.</p>
-    <div class="row" style="margin-bottom:16px">
-      <label class="f">Type<select id="ft"><option value="">All</option>${Object.entries(DOC_TYPES).map(([k, v]) => `<option value="${k}" ${k === type ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
-      <label class="f">Status<select id="fs"><option value="">All</option>${['draft', 'posted', 'voided'].map((s) => `<option ${s === status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
-      <label class="f grow">Search<input id="fq" placeholder="Number, party, reference"></label>
-    </div><div id="dl">${docTable(list)}</div>`;
-  const apply = () => { location.hash = `#/docs?type=${$('#ft').value}&status=${$('#fs').value}`; };
-  $('#ft').onchange = apply; $('#fs').onchange = apply;
+  const type = q.get('type') || '', tab = q.get('tab') || 'open';
+  const ofType = S.docs.filter((d) => !type || d.type === type);
+  const pred = (STATUS_TABS.find((x) => x[0] === tab) || STATUS_TABS[0])[2];
+  const list = ofType.filter(pred).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0) || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  const link = (t, tb) => `#/docs?type=${t}&tab=${tb}`;
+  $('#main').innerHTML = `<h1>${type ? DOC_TYPES[type].name + 's' : 'All documents'}</h1>
+    <p class="sub">Nothing is ever deleted. Voided documents stay visible with their reversal.</p>
+    <div class="chips">${STATUS_TABS.map(([k, label, f]) => `<a class="chip ${k === tab ? 'on' : ''}" href="${link(type, k)}"><span>${label}</span> <b>${ofType.filter(f).length}</b></a>`).join('')}</div>
+    <div class="chips" style="margin-top:8px"><a class="chip small ${!type ? 'on' : ''}" href="${link('', tab)}">All types</a>${['SI', 'SR', 'RV', 'CN', 'DN', 'PI', 'PR', 'PV'].map((k) => `<a class="chip small ${k === type ? 'on' : ''}" href="${link(k, tab)}">${DOC_TYPES[k].name}</a>`).join('')}</div>
+    <div class="row" style="margin:18px 0"><label class="f grow">Search<input id="fq" placeholder="Number, party, reference"></label>
+      ${type && type !== 'OB' && type !== 'OS' ? `<a class="btn primary" href="#/new/${type}">New ${DOC_TYPES[type].name.toLowerCase()}</a>` : ''}</div>
+    <div id="dl">${docTable(list)}</div>`;
   $('#fq').oninput = (e) => {
     const s = e.target.value.toLowerCase();
     $('#dl').innerHTML = docTable(list.filter((d) => [d.number, docPartyName(d), d.reference].join(' ').toLowerCase().includes(s)));
+    translate($('#dl'));
   };
 };
 
@@ -153,8 +198,11 @@ function editor(doc) {
   const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && (p.active !== false || !t.lines));
   const itemsList = S.items.filter((i) => i.active !== false);
   $('#main').innerHTML = `
-    <h1>${t.name} <span class="pill draft">${doc.id ? 'Draft' : 'New'}</span></h1>
-    <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
+    <div class="docbar"><div><div class="dtitle">${t.name} <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
+      <div class="dparty" id="barParty" dir="auto">—</div></div>
+      <div class="dtotal"><span class="muted">Total ₪</span><b id="barTotal">0.00</b></div>
+      <button class="btn small" id="toNotes" tabindex="-1">Notes</button></div>
+    <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document. <kbd>Esc</kbd> to leave.</p>
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row">
@@ -165,11 +213,11 @@ function editor(doc) {
     </div>
     <div id="partyInfo" class="muted" style="margin:12px 0 0"></div>
     ${t.lines ? linesUI(doc) : voucherUI(doc)}
-    <label class="f" style="margin-top:20px">Notes<input id="notes" dir="auto" value="${esc(doc.notes || '')}"></label>
+    <label class="f" style="margin-top:20px">Notes<textarea id="notes" dir="auto" rows="3" style="min-height:96px">${esc(doc.notes || '')}</textarea></label>
     <div class="finish" id="finish" tabindex="0">
       <span class="grow hint">${t.lines ? '<span>Enter on an empty line brings you here.</span>' : ''} <kbd>Enter</kbd> <span>Save draft</span> · <kbd>P</kbd> <span>Print &amp; post</span></span>
       <button class="btn" id="save">Save draft <kbd>Enter</kbd></button>
-      <button class="btn primary" id="postprint">Print &amp; post <kbd>P</kbd></button>
+      <button class="btn ink" id="postprint">Print &amp; post <kbd>P</kbd></button>
       <button class="btn" id="post">Post</button>
       <button class="btn" id="printdraft">Print draft</button>
       ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
@@ -231,13 +279,32 @@ function editor(doc) {
     toast(`Posted ${posted.number}`);
     if (andPrint) await printDoc(posted, '', copiesFor(posted.type));
     go('#/doc/' + posted.id);
+    return true;
   };
   // one posting at a time: a double key press or double click can never post twice
   let busy = false;
   const once = (fn) => async () => { if (busy) return; busy = true; try { await guard(fn); } finally { busy = false; } };
-  const printAndPost = once(async () => { if (confirm(T('Print and post this document?'))) await doPost(true); });
+  const postAndPrintNow = once(() => doPost(true));
+  const printAndPost = () => { if (!busy && confirm(T('Print and post this document?'))) return postAndPrintNow(); };
   $('#save').onclick = saveDraftNow;
   $('#post').onclick = once(() => doPost(false));
+
+  // unsaved-changes guard: Esc, a menu click or closing the tab all ask first
+  const alive = () => document.body.contains(finish);
+  const snapshot = () => (alive() ? JSON.stringify(readDoc()) : null);
+  let clean = null;
+  setTimeout(() => { if (alive()) clean = snapshot(); }, 120);
+  const isDirty = () => alive() && clean !== null && snapshot() !== clean;
+  const leave = async () => {
+    const v = await leaveDialog(!!doc.id);
+    if (v === 'stay') return false;
+    if (v === 'save') { const r = await guard(() => save(false)); if (!r) return false; toast('Draft saved'); return true; }
+    if (v === 'post') { await postAndPrintNow(); return false; }
+    if (v === 'discard') { if (doc.id) await guard(() => db.cancelDraft(doc.id, S.user)); toast(doc.id ? 'Draft cancelled' : 'Discarded'); return true; }
+    return false;
+  };
+  guardEditor = { isDirty, leave };
+  const back = () => { const h = `#/docs?type=${doc.type}`; if (isDirty()) leave().then((ok) => ok && go(h)); else go(h); };
   $('#postprint').onclick = printAndPost;
   $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); });
 
@@ -253,7 +320,9 @@ function editor(doc) {
   editor.keyHandler && document.removeEventListener('keydown', editor.keyHandler);
   editor.keyHandler = (e) => {
     if (!document.body.contains(finish)) return document.removeEventListener('keydown', editor.keyHandler);
-    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]');
+    if (document.querySelector('dialog[open]')) return;
+    if (e.key === 'Escape') { e.preventDefault(); back(); return; }
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); printAndPost(); }
   };
   document.addEventListener('keydown', editor.keyHandler);
@@ -276,6 +345,7 @@ function editor(doc) {
   if ($('#party')) {
     const info = async () => {
       const p = findParty($('#party').value);
+      $('#barParty').textContent = p ? partyLabel(p) : '—';
       if (!p) { $('#partyInfo').textContent = ''; return; }
       const bal = await partyBalanceC(p.id);
       $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · ${REGIONS[p.region]}` : ''}`;
@@ -287,7 +357,7 @@ function editor(doc) {
   else {
     const m = () => { const c = $('#method').value === 'cheque'; $$('.cheque').forEach((x) => (x.style.display = c ? '' : 'none')); if (c && $('#cashAccount').value === '1100') $('#cashAccount').value = '1120'; };
     $('#method').onchange = m; m();
-    const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; };
+    const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; $('#barTotal').textContent = fmt(a || 0); };
     $('#amount').oninput = w; w();
     const vf = ['#amount', '#method', '#cashAccount', '#chequeNo', '#chequeBank', '#dueDate'].map((q) => $(q)).filter((x) => x && x.type !== 'hidden');
     vf.forEach((el) => el.addEventListener('keydown', (e) => {
@@ -297,6 +367,7 @@ function editor(doc) {
     }));
   }
   $('#smart') && ($('#smart').onclick = () => smartEntry(doc, readDoc));
+  $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }
 function uniqueMatch(list, low, report) {
@@ -325,7 +396,7 @@ function linesUI(doc) {
     const it = itemById(l.itemId);
     return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
       <td class="ln"></td>
-      <td class="code"><input data-k="code" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
+      <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
       <td class="item"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name">
         <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"></div></td>
       <td class="num"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
@@ -365,6 +436,7 @@ function wireLines(doc, arm) {
       <div class="grand"><span>Total ₪</span><span>${money(tot.totalC)}</span></div>
       <div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div>`;
     translate($('#totals'));
+    $('#barTotal').textContent = money(tot.totalC);
   };
   const setItem = (tr, it) => {
     tr.dataset.item = it ? it.id : '';
@@ -502,7 +574,8 @@ async function viewDoc(d) {
         ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${ACCOUNTS[d.cashAccount]?.name || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
     ${d.notes ? `<p dir="auto">${esc(d.notes)}</p>` : ''}
     <div class="actions">
-      <button class="btn primary" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'}</button>
+      <button class="btn ink" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'}</button>
+      ${t.party !== 'none' && d.type !== 'OB' ? '<button class="btn tonal" id="dup">Duplicate as new draft</button>' : ''}
       ${d.status === 'posted' && isAdmin() ? '<button class="btn danger" id="void">Void (reversing entry)</button>' : ''}
       ${d.status === 'posted' && !isAdmin() ? '<span class="muted">Only the admin can void.</span>' : ''}
     </div>
@@ -513,6 +586,11 @@ async function viewDoc(d) {
     if (prints.length && isAdmin() && !prints.some((x) => x.copyNo > 1) && confirm('Was the original lost (printer jam, damaged)? Press OK to record a reason; it still prints as a Copy.')) reason = prompt('Reason:') || '';
     await printDoc(d, reason); render();
   });
+  $('#dup') && ($('#dup').onclick = () => guard(async () => {
+    const { id, number, series, seqNo, status, postedAt, postedBy, voidedAt, voidedBy, voidReason, backdated, backdateReason, totalC, vatC, netC, qtyTotal, bonusTotal, settingsAtPost, createdAt, createdBy, updatedAt, cancelledAt, cancelledBy, ...rest } = d;
+    const r = await db.saveDraft({ ...rest, date: today(), reference: '', notes: rest.notes ? rest.notes : '' }, S.user);
+    toast('Draft created'); go('#/doc/' + r.id);
+  }));
   $('#void') && ($('#void').onclick = () => guard(async () => {
     const reason = prompt(`Void ${d.number}? A reversing entry will be posted and the number stays used.\n\nReason:`);
     if (!reason) return;

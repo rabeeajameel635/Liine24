@@ -71,6 +71,9 @@ input[readonly] { color: var(--muted); }
 .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
+.btn.ink { background: #1f1f1f; color: #fff; }
+.btn.ink:hover { background: #000; }
+.btn.ink kbd { background: rgba(255,255,255,.2); }
 .btn.tonal { background: var(--accent-soft); color: var(--accent-ink); }
 .btn.danger { background: var(--bad-soft); color: var(--bad); }
 .btn.small { padding: 0 16px; min-height: 40px; font-size: .9em; }
@@ -182,3 +185,21 @@ dialog::backdrop { background: rgba(32,33,36,.32); }
   .actions input, label.f { min-width: 0; max-width: 100%; }
   .totals { min-width: 0; width: 100%; }
 }
+
+/* document header bar: who and how much, always visible while entering */
+.docbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 20px; margin: -32px -36px 18px; padding: 22px 36px; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-radius: var(--r-lg) var(--r-lg) 0 0; border-bottom: 1px solid var(--line); }
+.docbar > div:first-child { flex: 1; min-width: 0; }
+.docbar .dtitle { font-size: .95em; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.docbar .dparty { font-size: 1.6em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.docbar .dtotal { text-align: end; display: flex; flex-direction: column; }
+.docbar .dtotal b { font-size: 1.9em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sub kbd { font: inherit; background: var(--surface); border-radius: 8px; padding: 1px 8px; font-weight: 600; }
+/* status tabs and type chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--text); font-size: .92em; }
+.chip b { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip.small { min-height: 36px; padding: 0 14px; font-size: .85em; }
+.chip.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.chip.on b { color: var(--accent-ink); }
+.pill.cancelled { background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
+@media (max-width: 860px) { .docbar { margin: -22px -18px 14px; padding: 16px 18px; } .docbar .dparty { font-size: 1.2em; } }

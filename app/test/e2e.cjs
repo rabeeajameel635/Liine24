@@ -151,6 +151,38 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   const inRV = (await page.locator('#dlParties option').evaluateAll((o) => o.map((x) => x.value))).some((v) => v.startsWith('C-0100'));
   console.log('  in invoice list:', inSI, '| in receipt list:', inRV);
 
+  step('leaving a started document asks first');
+  await page.goto(URL + '#/new/SR'); await page.waitForSelector('#party'); await page.waitForTimeout(200);
+  await page.keyboard.type('1002'); await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  console.log('  Esc opens dialog:', await page.locator('dialog[open]').count() === 1, '| options:', await page.locator('dialog [data-v]').allTextContents());
+  await page.click('dialog [data-v=save]'); await page.waitForTimeout(600);
+  console.log('  saved and left to:', await page.evaluate(() => location.hash));
+  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(200);
+  await page.keyboard.type('1002'); await page.keyboard.press('Enter');
+  await page.click('#nav a[href="#/items"]'); await page.waitForTimeout(300);
+  console.log('  menu click opens dialog:', await page.locator('dialog[open]').count() === 1, '| still on:', await page.evaluate(() => location.hash));
+  await page.click('dialog [data-v=discard]'); await page.waitForTimeout(600);
+  console.log('  discarded, now on:', await page.evaluate(() => location.hash));
+  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(200);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  console.log('  untouched doc leaves without asking:', await page.locator('dialog[open]').count() === 0, await page.evaluate(() => location.hash));
+  const draftId = await page.evaluate(async () => (await (await import('./js/db.js')).all('docs')).find((d) => d.status === 'draft' && d.type === 'SR').id);
+  await page.goto(URL + '#/doc/' + draftId); await page.waitForSelector('#party'); await page.waitForTimeout(200);
+  await page.fill('#ref', 'changed'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  await page.click('dialog [data-v=discard]'); await page.waitForTimeout(600);
+  console.log('  saved draft cancelled (kept, not erased):', await page.evaluate(async (id) => (await (await import('./js/db.js')).get('docs', id)).status, draftId));
+
+  step('documents list with status tabs');
+  await page.goto(URL + '#/docs?type=SI'); await page.waitForSelector('.chips');
+  console.log('  tabs:', (await page.locator('.chips').first().locator('.chip').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()));
+  await page.goto(URL + '#/docs?type=SI&tab=all'); await page.waitForTimeout(300);
+  console.log('  statuses shown:', await page.locator('#dl .pill').allTextContents());
+  await page.locator('#dl tbody tr', { hasText: 'SI-26-000002' }).click(); await page.waitForSelector('#dup');
+  await page.click('#dup'); await page.waitForTimeout(600);
+  console.log('  duplicate opens draft with lines:', await page.locator('#lines tbody tr').count(), '| bar:', (await page.textContent('#barParty')), (await page.textContent('#barTotal')));
+  await page.goto(URL + '#/dashboard'); await page.waitForTimeout(200);
+
   step('Arabic, right to left');
   await page.click('#langBtn'); await page.waitForTimeout(600);
   console.log('  dir:', await page.evaluate(() => document.documentElement.dir), '| button:', await page.textContent('#langBtn'));
@@ -166,6 +198,13 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
     if (['dashboard', 'new/SI', 'settings'].includes(r)) await page.screenshot({ path: `${OUT}/6-ar-${r.replace('/', '-')}.png`, fullPage: true });
   }
   console.log('  untranslated:', [...leftovers].slice(0, 60));
+  const indic = await page.evaluate(async () => {
+    const pages = ['dashboard', 'docs?type=SI&tab=all', 'statement', 'tb', 'stock'];
+    const bad = [];
+    for (const r of pages) { location.hash = '#/' + r; await new Promise((ok) => setTimeout(ok, 350)); const m = document.body.innerText.match(/[\u0660-\u0669\u06F0-\u06F9]/g); if (m) bad.push(r + ':' + m.join('')); }
+    return bad;
+  });
+  console.log('  Arabic-Indic digits anywhere:', indic.length ? indic : 'none');
 
   step('phone width');
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(URL + '#/new/SI'); await page.waitForTimeout(400);
