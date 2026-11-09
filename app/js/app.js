@@ -49,6 +49,7 @@ document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevente
 const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
   guardEditor = null; pageKeys = null;
+  $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
@@ -225,7 +226,8 @@ function editor(doc) {
     ${t.lines ? linesUI(doc) : voucherUI(doc)}
     <label class="f" style="margin-top:20px">Notes<textarea id="notes" dir="auto" rows="3" style="min-height:96px">${esc(doc.notes || '')}</textarea></label>
     <div class="finish" id="finish" tabindex="0">
-      <span class="grow hint"><kbd>F2</kbd> <span>Lookup</span> · <kbd>F4</kbd> <span>Save</span> · <kbd>F9</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
+      <span class="grow hint"><kbd>F2</kbd> <kbd>@</kbd> <span>Lookup</span> · <kbd>F4</kbd> <kbd>#</kbd> <span>Save</span> · <kbd>F9</kbd> <kbd>€</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
+      <span class="symkeys"><kbd>@</kbd> <span>Lookup</span> · <kbd>#</kbd> <span>Save</span> · <kbd>€</kbd> <span>Print &amp; post</span></span>
       <button class="btn" id="save">Save draft <kbd>F4</kbd></button>
       <button class="btn ink" id="postprint">Print &amp; post <kbd>F9</kbd></button>
       <button class="btn" id="post">Post</button>
@@ -392,12 +394,24 @@ function editor(doc) {
     }));
   }
   $('#smart') && ($('#smart').onclick = () => smartEntry(doc, readDoc));
+  // Symbol keys for phone keyboards (no F-keys there): @ lookup · # save · € print & post.
+  // They act only in single-line fields of the document; notes and other text areas keep them as text.
+  const SYMBOL_KEYS = { '@': 'F2', '#': 'F4', '€': 'F9' };
+  // assigned (not added) so each screen owns exactly one handler; render() clears them
+  $('#main').onbeforeinput = (e) => {
+    const k = SYMBOL_KEYS[e.data];
+    if (!k || !e.inputType?.startsWith('insert') || e.target.tagName !== 'INPUT' || e.target.closest('dialog')) return;
+    e.preventDefault();
+    const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+    if (k === 'F2' && (e.target.id === 'party' || e.target.dataset.k === 'code' || e.target.dataset.k === 'name')) e.target.dispatchEvent(ev);
+    else pageKeys && pageKeys(ev);
+  };
   // touch: the ⌕ buttons do what F2 does
-  $('#main').addEventListener('click', (e) => {
+  $('#main').onclick = (e) => {
     const b = e.target.closest('.lkbtn'); if (!b) return;
     const el = b.dataset.lk === 'party' ? $('#party') : $('[data-k=name]', b.closest('tr'));
     el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
-  });
+  };
   $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }

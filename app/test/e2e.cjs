@@ -132,12 +132,31 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await key('Escape'); await page.waitForTimeout(300);
   if (await page.locator('dialog[open] [data-v=discard]').count()) { await page.click('dialog [data-v=discard]'); await page.waitForTimeout(400); }
 
+  step('phone symbol keys: @ lookup, # save, € print & post; notes keep them as text');
+  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(400);
+  await page.focus('#party'); await page.keyboard.type('@');
+  const opened = await page.waitForSelector('dialog.lookup[open]', { timeout: 5000 }).then(() => true).catch(() => false);
+  await page.waitForTimeout(500);
+  console.log('  @ opens exactly one list:', opened && (await page.locator('dialog[open]').count()) === 1, '| @ not typed:', (await page.inputValue('#party')) === '');
+  await page.keyboard.type('C-0100'); await key('Enter');
+  await page.waitForSelector('dialog.lookup[open]', { state: 'detached', timeout: 5000 }).catch(() => {});
+  console.log('  picked:', await page.inputValue('#party'));
+  await page.focus('#notes');
+  await page.keyboard.type('order #12 @ shop');
+  console.log('  notes keep symbols:', await page.inputValue('#notes'));
+  await page.locator('#lines tbody tr [data-k=code]').first().fill('1001'); await page.locator('#lines tbody tr [data-k=code]').first().dispatchEvent('input');
+  await page.locator('#lines tbody tr [data-k=qty]').first().fill('3');
+  await page.focus('#ref'); await page.keyboard.type('#'); await page.waitForTimeout(1200);
+  console.log('  # saved:', (await page.textContent('.docbar .pill')).trim());
+  await page.focus('#ref'); await page.keyboard.type('€'); await page.waitForTimeout(1500);
+  console.log('  € posted:', (await page.textContent('h1')).replace(/\s+/g, ' '));
+
   step('statement');
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');
   console.log('  closing:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
-  const counts = await page.evaluate(async () => { const d = (await (await import('./js/db.js')).all('docs')).filter((x) => x.status !== 'draft'); return { SI: d.filter((x) => x.type === 'SI').length, RV: d.filter((x) => x.type === 'RV').length }; });
-  console.log('  posted once each:', counts.SI === 1 && counts.RV === 1, counts);
+  const nums = await page.evaluate(async () => (await (await import('./js/db.js')).all('docs')).filter((x) => x.number).map((x) => x.number));
+  console.log('  no document posted twice (numbers unique):', new Set(nums).size === nums.length, nums.filter((n) => /^(SI|RV)/.test(n)));
 
   step('void the invoice');
   await page.goto(URL + '#/docs?type=SI'); await page.click('#dl tbody tr');

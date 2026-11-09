@@ -227,7 +227,7 @@ dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); marg
 .lkbtn { flex: none; width: 44px; height: calc(var(--h) - 6px); border: none; border-radius: 14px; background: var(--accent-soft); color: var(--accent-ink); font-size: 1.15em; cursor: pointer; }
 
 /* ---------- phone ---------- */
-#mbar, #tabs { display: none; }
+#mbar, #tabs, .symkeys { display: none; }
 @media (max-width: 860px) {
   body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   #mbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 20; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: rgba(248,250,253,.94); backdrop-filter: blur(10px); }
@@ -276,6 +276,8 @@ dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); marg
   /* finish bar sticks above the tabs */
   .finish { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 6; padding: 10px; gap: 8px; box-shadow: 0 -6px 24px rgba(0,0,0,.08); }
   .finish .grow, #printdraft, #smart, #post { display: none; }
+  .finish .symkeys { display: block; flex-basis: 100%; text-align: center; color: var(--muted); font-size: .82em; order: -1; }
+  .finish .symkeys kbd { display: inline-block; font: inherit; font-weight: 700; background: #fff; border-radius: 8px; padding: 0 8px; color: var(--accent-ink); }
   .finish .btn { flex: 1; justify-content: center; }
   .finish kbd { display: none; }
 
