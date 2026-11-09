@@ -206,7 +206,7 @@ function editor(doc) {
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row">
-      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<input id="party" data-flow list="dlParties" dir="auto" placeholder="Type code or name" value="${esc(partyLabel(partyById(doc.partyId)))}"></label>` : ''}
+      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}"></label>` : ''}
       <label class="f">Date<input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
       <label class="f">Reference no. (optional)<input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
       ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" data-flow value="${esc(doc.salesman || '')}"></label>` : ''}
@@ -328,11 +328,18 @@ function editor(doc) {
   document.addEventListener('keydown', editor.keyHandler);
 
   const header = $$('[data-flow]');
-  header.forEach((el, i) => el.addEventListener('keydown', (e) => {
+  header.forEach((el, i) => el.addEventListener('keydown', async (e) => {
+    if (e.key === 'F2' && el.id === 'party') {
+      e.preventDefault();
+      const p = await lookupParty(parties, el.value.trim()); el.focus();
+      if (p) { el.value = partyLabel(p); el.dispatchEvent(new Event('change')); }
+      return;
+    }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (el.id === 'party') {
-      const p = findParty(el.value, true);
+      const p = findParty(el.value) || (await lookupParty(parties, el.value.trim()));
+      el.focus();
       if (!p) return;
       el.value = partyLabel(p); el.dispatchEvent(new Event('change'));
     }
@@ -370,6 +377,56 @@ function editor(doc) {
   $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }
+// Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
+// rows: [{ id, code, name, extra: [...] }] ; resolves the picked id or null
+function lookup({ title, headers, rows, filter = '' }) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'lookup';
+    dlg.innerHTML = `<h2 style="margin-top:0">${esc(title)}</h2>
+      <input class="lk-q" placeholder="Search by code or name" dir="auto" value="${esc(filter)}">
+      <div class="lk-list"><table class="t"><thead><tr><th>Code</th><th>Name</th>${headers.map((h) => `<th class="n">${esc(h)}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
+      <p class="hint" style="margin:10px 0 0"><kbd>↑</kbd> <kbd>↓</kbd> <span>move</span> · <kbd>Enter</kbd> <span>pick</span> · <kbd>Esc</kbd> <span>close</span></p>`;
+    document.body.appendChild(dlg);
+    const q = $('.lk-q', dlg), tb = $('tbody', dlg);
+    let shown = [], idx = 0;
+    const draw = () => {
+      const low = q.value.trim().toLowerCase();
+      shown = rows.filter((r) => !low || r.code.toLowerCase().includes(low) || r.name.toLowerCase().includes(low));
+      shown.sort((a, b) => (b.code.toLowerCase().startsWith(low) || b.name.toLowerCase().startsWith(low)) - (a.code.toLowerCase().startsWith(low) || a.name.toLowerCase().startsWith(low)));
+      idx = Math.min(idx, Math.max(0, shown.length - 1));
+      tb.innerHTML = shown.slice(0, 200).map((r, i) => `<tr data-i="${i}" class="${i === idx ? 'sel' : ''}"><td><b dir="ltr">${esc(r.code)}</b></td><td dir="auto">${esc(r.name)}</td>${r.extra.map((x) => `<td class="n">${x}</td>`).join('')}</tr>`).join('')
+        || `<tr><td colspan="${2 + headers.length}" class="muted">Nothing matches</td></tr>`;
+      $('tr.sel', tb)?.scrollIntoView({ block: 'nearest' });
+      translate(dlg);
+    };
+    const end = (v) => { dlg.remove(); resolve(v); };
+    q.addEventListener('input', () => { idx = 0; draw(); });
+    q.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, shown.length - 1); draw(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); draw(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (shown[idx]) end(shown[idx].id); }
+    });
+    tb.addEventListener('click', (e) => { const tr = e.target.closest('tr[data-i]'); if (tr) end(shown[Number(tr.dataset.i)].id); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    dlg.showModal(); draw(); q.focus(); q.select();
+  });
+}
+async function lookupParty(list, filter = '') {
+  const entries = await ledger();
+  const bal = {};
+  for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + e.debitC - e.creditC;
+  const id = await lookup({ title: list[0]?.kind === 'supplier' ? 'Suppliers' : 'Customers', headers: ['Region', 'Balance'], filter,
+    rows: list.map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [REGIONS[p.region] || '', money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })) });
+  return id ? partyById(id) : null;
+}
+async function lookupItem(filter = '', type = 'SI') {
+  const oh = stockOnHand(await db.all('stock'));
+  const id = await lookup({ title: 'Items', headers: ['Price', 'On hand'], filter,
+    rows: S.items.filter((i) => i.active !== false).map((i) => ({ id: i.id, code: i.code, name: i.name, extra: [fmt(Number(defaultPrice(i, type)) || 0, 3), fmt(oh[i.id]?.qty || 0, 0)] })) });
+  return id ? itemById(id) : null;
+}
+
 function uniqueMatch(list, low, report) {
   let m = list.filter((x) => x.name.toLowerCase().startsWith(low));
   if (!m.length) m = list.filter((x) => x.name.toLowerCase().includes(low));
@@ -409,7 +466,7 @@ function linesUI(doc) {
   return `<div class="tablewrap" style="margin-top:24px"><table class="t lines" id="lines"><thead><tr>
     <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th><th></th></tr></thead>
     <tbody>${(doc.lines.length ? doc.lines : [blankLine()]).map(row).join('')}</tbody></table></div>
-    <p class="hint" style="margin:12px 4px">Type the item code, or leave it empty and type the first letters of the name. <kbd>Enter</kbd> moves: code → name → price → qty → bonus → discount → next line. <kbd>Enter</kbd> on an empty line finishes.</p>
+    <p class="hint" style="margin:12px 4px">Type the item code, or leave it empty and type the first letters of the name. <kbd>Enter</kbd> moves: code → name → price → qty → bonus → discount → next line. <kbd>Enter</kbd> on an empty line finishes. <kbd>F2</kbd> opens the item list.</p>
     <div class="row" style="margin-top:8px;align-items:flex-start">
       <div><button class="btn small" id="addline" tabindex="-1">+ Line</button>
       <label class="f" style="margin-top:16px">Invoice discount (₪)<input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" style="width:180px"></label></div>
@@ -449,7 +506,7 @@ function wireLines(doc, arm) {
   const byName = (v) => {
     const low = v.trim().toLowerCase(); if (!low) return null;
     const act = S.items.filter((i) => i.active !== false);
-    return act.find((i) => i.name.toLowerCase() === low) || uniqueMatch(act, low, true);
+    return act.find((i) => i.name.toLowerCase() === low) || uniqueMatch(act, low, false);
   };
   const addRow = () => { tbody.insertAdjacentHTML('beforeend', $('#rowTpl').innerHTML); renumber(); translate(tbody.lastElementChild); return tbody.lastElementChild; };
   const isEmpty = (tr) => !tr.dataset.item && !$('[data-k=code]', tr).value.trim() && !$('[data-k=name]', tr).value.trim();
@@ -467,16 +524,23 @@ function wireLines(doc, arm) {
     recalc();
   });
   tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined) { e.target.closest('tr').remove(); if (!tbody.children.length) addRow(); renumber(); recalc(); } });
-  tbody.addEventListener('keydown', (e) => {
+  const pick = async (tr, filter) => {
+    const it = await lookupItem(filter, doc.type);
+    if (it) { setItem(tr, it); tr.classList.remove('unknown'); recalc(); const el = $('[data-k=price]', tr); el.focus(); el.select(); }
+    else $('[data-k=code]', tr).focus();
+  };
+  tbody.addEventListener('keydown', async (e) => {
+    const tr0 = e.target.closest('tr'); const k0 = e.target.dataset.k;
+    if (e.key === 'F2' && (k0 === 'code' || k0 === 'name')) { e.preventDefault(); return pick(tr0, tr0.dataset.item ? '' : e.target.value.trim()); }
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     e.preventDefault();
-    const tr = e.target.closest('tr'); const k = e.target.dataset.k;
+    const tr = tr0; const k = k0;
     const focus = (key, row = tr) => { const el = $(`[data-k=${key}]`, row); el.focus(); el.select?.(); };
     if (k === 'code') {
       const v = e.target.value.trim();
       if (tr.dataset.item) return focus('price');
       if (!v) return focus('name');
-      toast(`No item with code ${v}`, true); return;
+      return pick(tr, v);
     }
     if (k === 'name') {
       if (isEmpty(tr)) {
@@ -485,7 +549,7 @@ function wireLines(doc, arm) {
         return arm();
       }
       const it = tr.dataset.item ? itemById(tr.dataset.item) : byName(e.target.value);
-      if (!it) return;
+      if (!it) return pick(tr, e.target.value.trim());
       setItem(tr, it); recalc(); return focus('price');
     }
     const i = ORDER.indexOf(k);
@@ -640,14 +704,19 @@ routes.items = async () => {
   const moves = await db.all('stock');
   const oh = stockOnHand(moves);
   $('#main').innerHTML = `<h1>Items</h1><p class="sub">${S.items.length} items. Codes are permanent. Items are never deleted, only deactivated.</p>
-    <div class="actions">${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}<input id="q" placeholder="Search" class="grow" style="max-width:360px"></div>
+    <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}</div>
+    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : ''} <kbd>Enter</kbd> <span>opens the only match.</span></p>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Brand</th><th>Category</th><th>Unit</th><th class="n">Buy</th><th class="n">Public</th><th class="n">Pharmacist</th><th class="n">On hand</th><th></th></tr></thead><tbody id="tb">
-    ${S.items.map((i) => `<tr data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td><b>${esc(i.code)}</b></td><td dir="auto">${esc(i.name)}${i.active === false ? ` <span class="pill">inactive</span>${i.replacedBy ? ` → ${esc(itemById(i.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(i.brand || '')}</td><td>${esc(i.category || '')}</td><td>${esc(i.unit || '')}</td>
+    ${S.items.map((i) => `<tr data-id="${i.id}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td><b>${esc(i.code)}</b></td><td dir="auto">${esc(i.name)}${i.active === false ? ` <span class="pill">inactive</span>${i.replacedBy ? ` → ${esc(itemById(i.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(i.brand || '')}</td><td>${esc(i.category || '')}</td><td>${esc(i.unit || '')}</td>
       <td class="n">${fmt(i.buyPrice || 0, 3)}</td><td class="n">${fmt(i.pricePublic || 0, 3)}</td><td class="n">${fmt(i.pricePharmacist || 0, 3)}</td><td class="n">${fmt(oh[i.id]?.qty || 0, 0)}</td>
       <td>${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
   $('#add') && ($('#add').onclick = () => itemForm({}));
-  $$('[data-edit]').forEach((b) => (b.onclick = () => guard(async () => itemForm(itemById(b.dataset.edit), await db.hasMovements('items', b.dataset.edit)))));
+  const openItem = (id) => isAdmin() && guard(async () => itemForm(itemById(id), await db.hasMovements('items', id)));
+  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.edit); }));
+  $$('#tb tr').forEach((tr) => { tr.style.cursor = isAdmin() ? 'pointer' : ''; tr.onclick = () => openItem(tr.dataset.id); });
+  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openItem(vis[0].dataset.id); };
+  $('#q').focus();
 };
 function itemForm(it, locked = false) {
   const dlg = document.createElement('dialog');
@@ -685,16 +754,23 @@ async function partiesPage(kind) {
   for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + (kind === 'supplier' ? e.creditC - e.debitC : e.debitC - e.creditC);
   const title = kind === 'customer' ? 'Customers' : 'Suppliers';
   $('#main').innerHTML = `<h1>${title}</h1><p class="sub">${list.length} ${title.toLowerCase()}. Codes are permanent. Only the admin adds them.</p>
-    <div class="actions">${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}<input id="q" placeholder="Search" style="max-width:360px">
-    ${kind === 'customer' ? `<select id="reg"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>` : ''}</div>
+    <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>
+    ${kind === 'customer' ? `<select id="reg"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>` : ''}
+    ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
+    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its statement.'} <kbd>Enter</kbd> <span>opens the only match.</span></p>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Phone</th>${kind === 'customer' ? '<th>Region</th><th>Type</th><th class="n">Credit limit</th>' : ''}<th class="n">Balance</th><th></th></tr></thead><tbody id="tb">
-    ${list.map((p) => `<tr data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
+    ${list.map((p) => `<tr data-id="${p.id}" data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
       ${kind === 'customer' ? `<td>${REGIONS[p.region] || ''}</td><td>${CUSTOMER_TYPES[p.type] || ''}</td><td class="n">${p.creditLimit ? fmt(p.creditLimit) : ''}</td>` : ''}
       <td class="n"><b>${money(bal[p.id] || 0)}</b></td><td style="white-space:nowrap"><a class="btn small" href="#/statement/${p.id}">Statement</a> ${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
   $('#add') && ($('#add').onclick = () => partyForm({ kind }));
-  $$('[data-edit]').forEach((b) => (b.onclick = () => guard(async () => partyForm(partyById(b.dataset.edit), await db.hasMovements('parties', b.dataset.edit)))));
+  const openParty = (id) => (isAdmin() ? guard(async () => partyForm(partyById(id), await db.hasMovements('parties', id))) : go('#/statement/' + id));
+  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openParty(b.dataset.edit); }));
+  $$('#tb tr a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
+  $$('#tb tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openParty(tr.dataset.id); });
+  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openParty(vis[0].dataset.id); };
+  $('#q').focus();
 }
 function partyForm(p, locked = false) {
   const dlg = document.createElement('dialog');

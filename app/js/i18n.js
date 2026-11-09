@@ -85,7 +85,7 @@ const AR = {
   'This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.': 'هذه النسخة 0.1. البيانات محفوظة بهذا المتصفح على هذا الجهاز. المزامنة السحابية وحسابات المستخدمين وصلاحيات السيرفر بالمرحلة 3.',
   'Type the item code, or leave it empty and type the first letters of the name.': 'اكتب رقم الصنف، أو اتركه فاضي واكتب أول حروف من اسمه.',
   'moves: code → name → price → qty → bonus → discount → next line.': 'بتنقلك: الرقم ← الاسم ← السعر ← الكمية ← البونص ← الخصم ← السطر التالي.',
-  'on an empty line finishes.': 'على سطر فاضي بتنهي الإدخال.', 'Enter on an empty line brings you here.': 'Enter على سطر فاضي بتجيبك لهون.',
+  'on an empty line finishes.': 'على سطر فاضي بتنهي الإدخال.', 'on an empty line finishes. F2 opens the item list.': 'على سطر فاضي بتنهي الإدخال. F2 بيفتح قائمة الأصناف.', 'Enter on an empty line brings you here.': 'Enter على سطر فاضي بتجيبك لهون.',
   'Print copies · Invoices': 'عدد النسخ · الفواتير', 'Print copies · Vouchers': 'عدد النسخ · السندات', 'Name': 'الاسم', '#': '#',
   'Leave this document?': 'الخروج من المستند؟', 'You started entering this document. Choose what to do with it.': 'بلّشت بهذا المستند. اختار شو بدك تعمل فيه.',
   'Print & post': 'طباعة وترحيل', 'Cancel & delete draft': 'إلغاء وحذف المسودة', 'Discard': 'إلغاء وحذف', 'Continue editing': 'كمّل الشغل',
@@ -93,6 +93,9 @@ const AR = {
   'Saved': 'محفوظ', 'DRAFT': 'مسودة', 'cancelled': 'مسودة ملغاة', 'Notes': 'ملاحظات', 'to leave.': 'للخروج.', 'Duplicate as new draft': 'نسخ كمسودة جديدة',
   'Sales invoices': 'فواتير المبيعات', 'Receipt vouchers': 'سندات القبض', 'Purchase invoices': 'فواتير المشتريات',
   'Draft cancelled': 'أُلغيت المسودة', 'Discarded': 'تم الإلغاء', 'Draft created': 'تم إنشاء مسودة',
+  'Search by code or name': 'ابحث بالرقم أو الاسم', 'Code, name, or Enter / F2 for the list': 'الرقم أو الاسم، أو Enter / F2 للقائمة',
+  'move': 'تنقّل', 'pick': 'اختيار', 'close': 'إغلاق', 'Nothing matches': 'لا يوجد نتائج', 'Click a row to edit it.': 'اضغط على أي سطر لتعديله.',
+  'Click a row for its statement.': 'اضغط على أي سطر لكشف حسابه.', 'opens the only match.': 'بيفتح النتيجة إذا كانت وحدة.', 'opens the item list.': 'بيفتح قائمة الأصناف.',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',

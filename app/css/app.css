@@ -203,3 +203,13 @@ dialog::backdrop { background: rgba(32,33,36,.32); }
 .chip.on b { color: var(--accent-ink); }
 .pill.cancelled { background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
 @media (max-width: 860px) { .docbar { margin: -22px -18px 14px; padding: 16px 18px; } .docbar .dparty { font-size: 1.2em; } }
+
+/* search bar on master lists, and the F2 lookup */
+.searchbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 4px 0 18px; }
+.searchbar #q { flex: 1; min-width: 240px; font-size: 1.05em; min-height: 56px; padding-inline-start: 20px; border-radius: 999px; }
+dialog.lookup { max-width: 860px; }
+dialog.lookup .lk-q { width: 100%; font-size: 1.05em; min-height: 56px; border-radius: 999px; padding-inline-start: 20px; margin-bottom: 14px; }
+dialog.lookup .lk-list { max-height: 56vh; overflow-y: auto; background: var(--surface); border-radius: var(--r); padding: 4px 8px; }
+dialog.lookup tbody tr { cursor: pointer; }
+dialog.lookup tr.sel td { background: var(--accent-soft) !important; color: var(--accent-ink); }
+.hint kbd { margin: 0 2px; }
