@@ -17,6 +17,8 @@ const itemById = (id) => S.items.find((i) => i.id === id);
 const partyById = (id) => S.parties.find((p) => p.id === id);
 const partyLabel = (p) => (p ? `${p.code} — ${p.name}` : '');
 const docLabel = (d) => d.number || 'DRAFT';
+const docPartyName = (d) => d.partyName || partyById(d.partyId)?.name || '';
+const lineItem = (l) => { const it = itemById(l.itemId) || {}; return { code: l.itemCode || it.code || '', name: l.itemName || it.name || '' }; };
 
 function toast(msg, err = false) {
   const t = $('#toast');
@@ -24,7 +26,7 @@ function toast(msg, err = false) {
   clearTimeout(toast.h); toast.h = setTimeout(() => (t.className = ''), err ? 6000 : 2800);
 }
 async function guard(fn) {
-  try { return await fn(); } catch (e) { console.error(e); toast(e.message || String(e), true); }
+  try { return await fn(); } catch (e) { console.warn(e); toast(e.message || String(e), true); }
 }
 async function reload() {
   [S.settings, S.items, S.parties, S.docs] = await Promise.all([db.getSettings(), db.all('items'), db.all('parties'), db.all('docs')]);
@@ -101,7 +103,7 @@ function docTable(docs) {
   return `<div class="tablewrap"><table class="t"><thead><tr><th>Number</th><th>Type</th><th>Date</th><th>Party</th><th>Ref.</th><th class="n">Total</th><th>Status</th></tr></thead><tbody>
     ${docs.map((d) => `<tr style="cursor:pointer" onclick="location.hash='#/doc/${d.id}'">
       <td><b>${esc(docLabel(d))}</b>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</td><td>${DOC_TYPES[d.type].name}</td><td>${esc(d.date)}</td>
-      <td dir="auto">${esc(partyById(d.partyId)?.name || '')}</td><td>${esc(d.reference || '')}</td>
+      <td dir="auto">${esc(docPartyName(d))}</td><td>${esc(d.reference || '')}</td>
       <td class="n">${d.status === 'draft' ? money(draftTotalC(d)) : money(d.totalC)}</td><td><span class="pill ${d.status}">${d.status}</span></td></tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -137,7 +139,7 @@ routes.docs = async () => {
   $('#ft').onchange = apply; $('#fs').onchange = apply;
   $('#fq').oninput = (e) => {
     const s = e.target.value.toLowerCase();
-    $('#dl').innerHTML = docTable(list.filter((d) => [d.number, partyById(d.partyId)?.name, d.reference].join(' ').toLowerCase().includes(s)));
+    $('#dl').innerHTML = docTable(list.filter((d) => [d.number, docPartyName(d), d.reference].join(' ').toLowerCase().includes(s)));
   };
 };
 
@@ -146,7 +148,7 @@ const blankLine = () => ({ itemId: '', qty: '', bonus: '', price: '', disc: '', 
 function editor(doc) {
   const t = DOC_TYPES[doc.type];
   const partyKind = t.party === 'supplier' ? 'supplier' : 'customer';
-  const parties = S.parties.filter((p) => t.party === 'any' || p.kind === partyKind);
+  const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && p.active !== false);
   const itemsList = S.items.filter((i) => i.active !== false);
   $('#main').innerHTML = `
     <h1>${t.name} <span class="pill draft">${doc.id ? 'Draft' : 'New'}</span></h1>
@@ -195,6 +197,8 @@ function editor(doc) {
     if (t.lines) {
       const bad = d.lines.find((l) => !l.itemId);
       if (bad) throw new Error(`Unknown item "${bad.itemText}". Pick it from the list.`);
+      const off = d.lines.map((l) => itemById(l.itemId)).find((i) => i && i.active === false);
+      if (off) throw new Error(`${off.code} is inactive${off.replacedBy ? `, use ${itemById(off.replacedBy)?.code} instead` : ''}.`);
       if (forPost && !d.lines.length) throw new Error('Add at least one line');
     } else if (forPost && !(d.amount > 0)) throw new Error('Amount must be greater than zero');
     if (['OB', 'OS'].includes(d.type) && !isAdmin()) throw new Error('Opening balances are entered by the admin');
@@ -374,7 +378,8 @@ function parseSmart(text) {
 // ---------- view posted / voided ----------
 async function viewDoc(d) {
   const t = DOC_TYPES[d.type];
-  const p = partyById(d.partyId);
+  const p0 = partyById(d.partyId) || {};
+  const p = { ...p0, code: d.partyCode || p0.code, name: d.partyName || p0.name };
   const prints = await db.byIndex('printlog', 'docId', d.id);
   const tot = t.lines ? computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? S.settings.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount }) : null;
   $('#main').innerHTML = `
@@ -382,7 +387,7 @@ async function viewDoc(d) {
     <p class="sub">${esc(d.date)} · ${esc(partyLabel(p))}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
     ${d.status === 'voided' ? `<div class="note bad">Voided by ${esc(d.voidedBy)} on ${esc(d.voidedAt?.slice(0, 10))}: ${esc(d.voidReason)}. A reversing entry was posted; the number stays used.</div>` : ''}
     ${t.lines ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Code</th><th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead><tbody>
-      ${tot.lines.map((l) => { const it = itemById(l.itemId) || {}; return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${fmt(l.price || 0, 3)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${money(l.amountC)}</td></tr>`; }).join('')}
+      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${fmt(l.price || 0, 3)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${money(l.amountC)}</td></tr>`; }).join('')}
       </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${fmt(tot.qtyTotal, 0)}</td><td class="n">${fmt(tot.bonusTotal, 0)}</td><td></td><td></td><td class="n">${money(tot.subtotalC)}</td></tr></tfoot></table></div>
       <div class="row" style="margin-top:14px"><div class="totals card">
         ${tot.discC ? `<div><span>Invoice discount</span><span>−${money(tot.discC)}</span></div>` : ''}
@@ -415,7 +420,8 @@ async function viewDoc(d) {
 async function printDoc(d, reason = '') {
   const { label, copyNo } = await db.logPrint(d.id, S.user, 'print', reason);
   const t = DOC_TYPES[d.type];
-  const p = partyById(d.partyId) || {};
+  const p0 = partyById(d.partyId) || {};
+  const p = d.status === 'draft' ? p0 : { ...p0, code: d.partyCode || p0.code, name: d.partyName || p0.name };
   const s = S.settings;
   const opt = { vatRate: d.settingsAtPost?.vatRate ?? s.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? s.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount };
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
@@ -429,7 +435,7 @@ async function printDoc(d, reason = '') {
     ${t.party !== 'none' ? `<div class="party"><div><b>${p.kind === 'supplier' ? 'Supplier · المورد' : 'Customer · الزبون'}:</b> <span dir="auto">${esc(p.code)} — ${esc(p.name)}</span></div>
       <div><b>Ref.</b> ${esc(d.reference || '—')}</div><div dir="auto">${esc(p.address || '')} ${p.region ? '· ' + REGIONS[p.region] : ''}</div><div>${p.taxNo ? 'Tax no. ' + esc(p.taxNo) : ''} ${d.salesman ? '· Salesman ' + esc(d.salesman) : ''}</div></div>` : ''}
     ${t.lines ? `<table><thead><tr><th>Code</th><th>Item · البيان</th><th class="n">Qty · كمية</th><th class="n">Bonus · بونص</th><th class="n">Price · سعر</th><th class="n">Disc · خصم</th><th class="n">Amount · المجموع</th></tr></thead><tbody>
-      ${tot.lines.map((l) => { const it = itemById(l.itemId) || {}; return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">Batch ${esc(l.batch || '—')} · Exp. ${esc(l.expiry || '—')}</div>` : ''}</td>
+      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">Batch ${esc(l.batch || '—')} · Exp. ${esc(l.expiry || '—')}</div>` : ''}</td>
         <td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${fmt(l.price || 0, 3)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${money(l.amountC)}</td></tr>`; }).join('')}
       </tbody></table>
       <div class="foot"><div><div>Lines ${tot.lines.length} · Total qty ${fmt(tot.qtyTotal, 0)} · Total bonus ${fmt(tot.bonusTotal, 0)}</div>
@@ -453,7 +459,7 @@ routes.items = async () => {
   $('#main').innerHTML = `<h1>Items</h1><p class="sub">${S.items.length} items. Codes are permanent. Items are never deleted, only deactivated.</p>
     <div class="actions">${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}<input id="q" placeholder="Search" class="grow" style="max-width:360px"></div>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Brand</th><th>Category</th><th>Unit</th><th class="n">Buy</th><th class="n">Public</th><th class="n">Pharmacist</th><th class="n">On hand</th><th></th></tr></thead><tbody id="tb">
-    ${S.items.map((i) => `<tr data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td><b>${esc(i.code)}</b></td><td dir="auto">${esc(i.name)}${i.active === false ? ' <span class="pill">inactive</span>' : ''}</td><td>${esc(i.brand || '')}</td><td>${esc(i.category || '')}</td><td>${esc(i.unit || '')}</td>
+    ${S.items.map((i) => `<tr data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td><b>${esc(i.code)}</b></td><td dir="auto">${esc(i.name)}${i.active === false ? ` <span class="pill">inactive</span>${i.replacedBy ? ` → ${esc(itemById(i.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(i.brand || '')}</td><td>${esc(i.category || '')}</td><td>${esc(i.unit || '')}</td>
       <td class="n">${fmt(i.buyPrice || 0, 3)}</td><td class="n">${fmt(i.pricePublic || 0, 3)}</td><td class="n">${fmt(i.pricePharmacist || 0, 3)}</td><td class="n">${fmt(oh[i.id]?.qty || 0, 0)}</td>
       <td>${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
@@ -467,6 +473,8 @@ function itemForm(it) {
     ${f('code', 'Code (permanent)')}${f('name', 'Name')}${f('brand', 'Brand / company')}${f('category', 'Category')}${f('unit', 'Unit')}${f('barcode', 'Barcode')}
     ${f('buyPrice', 'Buy price', 'number')}${f('pricePublic', 'Public price', 'number')}${f('pricePharmacist', 'Pharmacist price', 'number')}
     <label class="f">Active<select name="active"><option value="true">Yes</option><option value="false" ${it.active === false ? 'selected' : ''}>No</option></select></label>
+    ${it.id ? `<label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.items.filter((x) => x.id !== it.id && x.active !== false).map((x) => `<option value="${x.id}" ${it.replacedBy === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></label>` : ''}
+    <p class="muted" style="grid-column:1/-1;margin:0">Wrong spelling? Fix the name here; the code stays and the change is logged. Posted invoices keep the name they were posted with. Wrong item altogether? Set Active to No, add the right item, and pick it under Replaced by.</p>
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
   if (!it.id) $('[name=code]', dlg).value = nextPartyCode('ITM', S.items.map((i) => i.code));
@@ -497,7 +505,7 @@ async function partiesPage(kind) {
     <div class="actions">${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}<input id="q" placeholder="Search" style="max-width:360px">
     ${kind === 'customer' ? `<select id="reg"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>` : ''}</div>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Phone</th>${kind === 'customer' ? '<th>Region</th><th>Type</th><th class="n">Credit limit</th>' : ''}<th class="n">Balance</th><th></th></tr></thead><tbody id="tb">
-    ${list.map((p) => `<tr data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}</td><td>${esc(p.phone || '')}</td>
+    ${list.map((p) => `<tr data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
       ${kind === 'customer' ? `<td>${REGIONS[p.region] || ''}</td><td>${CUSTOMER_TYPES[p.type] || ''}</td><td class="n">${p.creditLimit ? fmt(p.creditLimit) : ''}</td>` : ''}
       <td class="n"><b>${money(bal[p.id] || 0)}</b></td><td style="white-space:nowrap"><a class="btn small" href="#/statement/${p.id}">Statement</a> ${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
@@ -515,6 +523,9 @@ function partyForm(p) {
       <label class="f">Type<select name="type">${Object.entries(CUSTOMER_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${f('creditLimit', 'Credit limit (₪)', 'number')}${f('guarantor', 'Guarantor')}` : ''}
     ${p.id ? '' : f('openingBalance', 'Opening balance (₪)', 'number')}
+    ${p.id ? `<label class="f">Active<select name="active"><option value="true">Yes</option><option value="false" ${p.active === false ? 'selected' : ''}>No</option></select></label>
+      <label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.parties.filter((x) => x.kind === p.kind && x.id !== p.id && x.active !== false).map((x) => `<option value="${x.id}" ${p.replacedBy === x.id ? 'selected' : ''}>${esc(partyLabel(x))}</option>`).join('')}</select></label>
+      <p class="muted" style="grid-column:1/-1;margin:0">Wrong spelling? Fix the name here; the code stays and the change is logged. Posted documents keep the name they were posted with. Wrong ${p.kind} altogether? Set Active to No, add the right one, and pick it under Replaced by. A balance must be settled before deactivating.</p>` : ''}
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
   if (!p.id) $('[name=code]', dlg).value = nextPartyCode(cust ? 'CUS' : 'SUP', S.parties.filter((x) => x.kind === p.kind).map((x) => x.code));
@@ -527,6 +538,11 @@ function partyForm(p) {
     const sim = similarNames(fd.name, S.parties.filter((x) => x.id !== p.id));
     if (sim.length && !confirm(`Similar name exists: ${sim.map((x) => x.code + ' ' + x.name).join(', ')}. Add anyway?`)) return;
     const ob = Number(fd.openingBalance || 0); delete fd.openingBalance;
+    if (fd.active !== undefined) fd.active = fd.active === 'true';
+    if (p.id && fd.active === false && p.active !== false) {
+      const bal = await partyBalanceC(p.id);
+      if (bal !== 0) throw new Error(`Balance is ${money(bal)}. Settle it (receipt, payment or credit/debit note) before deactivating.`);
+    }
     if (fd.creditLimit !== undefined) fd.creditLimit = fd.creditLimit === '' ? '' : Number(fd.creditLimit);
     const rec = await db.saveMaster('parties', { ...p, ...fd }, S.user);
     if (ob) await postOpening(rec, ob);
@@ -601,7 +617,7 @@ routes.sales = async () => {
     const factor = tot.subtotalC ? tot.totalC / tot.subtotalC : 0;
     const p = partyById(d.partyId) || {};
     for (const l of tot.lines) {
-      const it = itemById(l.itemId) || {};
+      const it = { ...lineItem(l), code: itemById(l.itemId)?.code || l.itemCode };
       const key = by === 'item' ? it.code : by === 'region' ? REGIONS[p.region] || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' ' + p.name : d.date;
       const a = (agg[key] ||= { key, name: by === 'item' ? it.name : '', qty: 0, bonus: 0, amountC: 0 });
       a.qty += sign * (Number(l.qty) || 0); a.bonus += sign * (Number(l.bonus) || 0); a.amountC += sign * Math.round(l.amountC * factor);

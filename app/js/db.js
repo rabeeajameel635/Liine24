@@ -68,7 +68,9 @@ export async function saveMaster(store, obj, user) {
   if (before && before.code && obj.code !== before.code) throw new Error('Codes are permanent and cannot be changed');
   const rec = { ...before, ...obj, id: obj.id || uid(), updatedAt: now(), createdAt: before?.createdAt || now() };
   tx.objectStore(store).put(rec);
-  tx.objectStore('audit').add({ at: now(), user, action: before ? 'edit' : 'create', ref: `${store}:${rec.code}`, detail: rec.name });
+  const changes = before ? Object.keys(rec).filter((k) => !['updatedAt'].includes(k) && JSON.stringify(before[k] ?? '') !== JSON.stringify(rec[k] ?? ''))
+    .map((k) => `${k}: ${before[k] ?? ''} → ${rec[k] ?? ''}`).join(' · ') : rec.name;
+  tx.objectStore('audit').add({ at: now(), user, action: before ? 'edit' : 'create', ref: `${store}:${rec.code}`, detail: changes });
   await done(tx);
   return rec;
 }
@@ -87,6 +89,7 @@ export async function saveDraft(doc, user) {
 // Posting is one atomic transaction: number, ledger, stock and audit together or nothing.
 export async function post(docId, user, settings, { allowBackdate = false, backdateReason = '' } = {}) {
   const items = Object.fromEntries((await all('items')).map((i) => [i.id, i]));
+  const parties = Object.fromEntries((await all('parties')).map((p) => [p.id, p]));
   const tx = db.transaction(['docs', 'ledger', 'stock', 'seqs', 'audit'], 'readwrite');
   const docs = tx.objectStore('docs');
   const doc = await req(docs.get(docId));
@@ -102,7 +105,11 @@ export async function post(docId, user, settings, { allowBackdate = false, backd
   const number = formatNumber(series, seq.next);
   const totals = posting.totals;
   const rec = {
-    ...doc, status: 'posted', series, seqNo: seq.next, number, postedAt: now(), postedBy: user,
+    ...doc,
+    // names are frozen at posting: renaming an item or customer later never changes a posted document
+    partyCode: parties[doc.partyId]?.code || '', partyName: parties[doc.partyId]?.name || '',
+    lines: (doc.lines || []).map((l) => ({ ...l, itemCode: items[l.itemId]?.code || '', itemName: items[l.itemId]?.name || '', unit: items[l.itemId]?.unit || '' })),
+    status: 'posted', series, seqNo: seq.next, number, postedAt: now(), postedBy: user,
     backdated: !!backdated, backdateReason: backdated ? backdateReason : '',
     totalC: totals.totalC, vatC: totals.vatC || 0, netC: totals.netC ?? totals.totalC,
     qtyTotal: totals.qtyTotal || 0, bonusTotal: totals.bonusTotal || 0,

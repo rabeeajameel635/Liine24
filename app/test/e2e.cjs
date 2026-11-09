@@ -122,6 +122,26 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.goto(URL + '#/integrity'); await page.waitForTimeout(300);
   console.log('  integrity pills:', await page.locator('.pill').allTextContents());
 
+  step('rename an item after posting: the posted invoice keeps the old name');
+  await page.goto(URL + '#/settings'); await page.click('#toAdmin'); await page.waitForTimeout(200);
+  await page.goto(URL + '#/items'); await page.waitForSelector('[data-edit]');
+  await page.locator('#tb tr', { hasText: 'ITM-C300' }).locator('[data-edit]').click();
+  await page.fill('dialog [name=name]', 'AMOXICILLIN 500MG 21CAP (renamed)');
+  await page.click('dialog button[value=save]'); await page.waitForTimeout(500);
+  await page.goto(URL + '#/docs?type=SI'); await page.locator('#dl tbody tr', { hasText: 'SI-26-000002' }).click();
+  await page.waitForSelector('#printBtn'); await page.click('#printBtn'); await page.waitForTimeout(500);
+  const printed = await page.textContent('#printArea');
+  console.log('  reprint keeps old name:', printed.includes('AMOXICILLIN 500MG 21CAP') && !printed.includes('(renamed)'));
+  const audit = await page.evaluate(async () => (await (await import('./js/db.js')).all('audit')).filter((a) => a.action === 'edit').map((a) => a.detail));
+  console.log('  audit edit detail:', audit.slice(-1)[0]);
+
+  step('a customer with a balance cannot be deactivated');
+  await page.goto(URL + '#/customers'); await page.waitForSelector('[data-edit]');
+  await page.locator('#tb tr', { hasText: 'C-0100' }).locator('[data-edit]').click();
+  await page.selectOption('dialog [name=active]', 'false');
+  await page.click('dialog button[value=save]'); await page.waitForTimeout(500);
+  console.log('  toast:', await toast());
+
   step('mobile width');
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(URL + '#/dashboard'); await page.waitForTimeout(400);
   await page.screenshot({ path: OUT + '/5-mobile.png', fullPage: false });
