@@ -100,6 +100,7 @@ const AR = {
   'Drafts can be edited freely. Posting gives the permanent number and locks the document.': 'المسودة تتعدل بحرية. الترحيل يعطي الرقم الدائم ويقفل المستند.',
   'Change': 'تغيير', 'Remaining': 'المتبقي', 'Last invoice': 'آخر فاتورة', 'Last payment': 'آخر دفعة', 'Last price to this customer': 'آخر سعر لهذا الزبون',
   'Last purchase price': 'آخر سعر شراء', 'Batches in stock': 'الدفعات بالمخزن', 'Last sales': 'آخر المبيعات',
+  'Invoice': 'فاتورة', 'Documents': 'المستندات', 'Menu': 'القائمة',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',
@@ -144,8 +145,8 @@ export function translate(root = document.body) {
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   for (const n of nodes) { const t = tr(n.nodeValue); if (t !== null) n.nodeValue = t; }
-  for (const el of root.querySelectorAll('[placeholder],[title]')) {
-    for (const a of ['placeholder', 'title']) { const v = el.getAttribute(a); if (v) { const t = tr(v); if (t !== null) el.setAttribute(a, t); } }
+  for (const el of root.querySelectorAll('[placeholder],[title],[data-label],[aria-label]')) {
+    for (const a of ['placeholder', 'title', 'data-label', 'aria-label']) { const v = el.getAttribute(a); if (v) { const t = tr(v); if (t !== null) el.setAttribute(a, t); } }
   }
   for (const o of root.querySelectorAll('option')) { const t = tr(o.textContent); if (t !== null) o.textContent = t; }
 }

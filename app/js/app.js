@@ -54,11 +54,15 @@ async function render() {
   const [name, ...args] = hash.split('?')[0].split('/');
   const best = $$('#nav a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
   $$('#nav a').forEach((a) => a.classList.toggle('on', a === best));
+  document.body.classList.remove('menu-open');
+  const tb = $$('#tabs a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
+  $$('#tabs a').forEach((a) => a.classList.toggle('on', a === tb));
+  $('#mTitle').textContent = best ? best.textContent : (S.settings?.companyName || 'Ledger');
   const fn = routes[name] || routes.dashboard;
   await reload();
   $('#main').innerHTML = '';
   await guard(() => fn(...args));
-  translate($('#app'));
+  translate(document.body);
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', async () => {
@@ -165,7 +169,7 @@ routes.new = async (type) => {
 routes.doc = async (id) => {
   const d = await db.get('docs', id);
   if (!d) throw new Error('Document not found');
-  if (d.status === 'draft') editor(d); else viewDoc(d);
+  if (d.status === 'draft') editor(d); else await viewDoc(d);
 };
 const STATUS_TABS = [
   ['open', 'Posted + saved', (d) => d.status === 'posted' || d.status === 'draft'],
@@ -212,7 +216,7 @@ function editor(doc) {
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row">
-      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}"></label>` : ''}
+      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<div class="namewrap"><input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}"><button type="button" class="lkbtn" data-lk="party" tabindex="-1" title="Lookup (F2)">⌕</button></div></label>` : ''}
       <label class="f">Date<input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
       <label class="f">Reference no. (optional)<input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
       ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" data-flow value="${esc(doc.salesman || '')}"></label>` : ''}
@@ -369,7 +373,7 @@ function editor(doc) {
       $('#barParty').textContent = p ? partyLabel(p) : '—';
       if (!p) { $('#partyInfo').textContent = ''; return; }
       const bal = await partyBalanceC(p.id);
-      $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · ${REGIONS[p.region]}` : ''}`;
+      $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · <span>${esc(T(REGIONS[p.region]))}</span>` : ''}`;
       translate($('#partyInfo'));
     };
     $('#party').addEventListener('change', info); info();
@@ -388,6 +392,12 @@ function editor(doc) {
     }));
   }
   $('#smart') && ($('#smart').onclick = () => smartEntry(doc, readDoc));
+  // touch: the ⌕ buttons do what F2 does
+  $('#main').addEventListener('click', (e) => {
+    const b = e.target.closest('.lkbtn'); if (!b) return;
+    const el = b.dataset.lk === 'party' ? $('#party') : $('[data-k=name]', b.closest('tr'));
+    el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
+  });
   $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }
@@ -539,12 +549,12 @@ function linesUI(doc) {
     return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
       <td class="ln"></td>
       <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
-      <td class="item"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name">
+      <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">⌕</button></div>
         <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"></div></td>
-      <td class="num"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
-      <td class="num"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:92px"></td>
-      <td class="num"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:84px"></td>
-      <td class="num"><input data-k="disc" inputmode="decimal" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
+      <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
+      <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:92px"></td>
+      <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:84px"></td>
+      <td class="num" data-label="Disc %"><input data-k="disc" inputmode="decimal" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
       <td class="n amt"></td>
       <td><button class="btn small" data-del tabindex="-1" title="Remove line from draft">×</button></td></tr>`;
   };
@@ -716,7 +726,7 @@ async function viewDoc(d) {
   const prints = await db.byIndex('printlog', 'docId', d.id);
   const tot = t.lines ? computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? S.settings.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount }) : null;
   $('#main').innerHTML = `
-    <h1>${t.name} ${esc(d.number)} <span class="pill ${d.status}">${d.status}</span>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</h1>
+    <h1><span>${t.name}</span> <span dir="ltr">${esc(d.number)}</span> <span class="pill ${d.status}">${d.status}</span>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</h1>
     <p class="sub">${esc(d.date)} · ${esc(partyLabel(p))}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
     ${d.status === 'voided' ? `<div class="note bad">Voided by ${esc(d.voidedBy)} on ${esc(d.voidedAt?.slice(0, 10))}: ${esc(d.voidReason)}. A reversing entry was posted; the number stays used.</div>` : ''}
     ${t.lines ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Code</th><th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead><tbody>
@@ -1213,6 +1223,9 @@ function printHtml(html) {
   const lb = $('#langBtn');
   lb.textContent = getLang() === 'ar' ? 'English' : 'العربية';
   lb.onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); };
+  $('#langBtnM').textContent = lb.textContent; $('#langBtnM').onclick = lb.onclick;
+  $('#menuBtn').onclick = () => document.body.classList.toggle('menu-open');
+  $('#app').addEventListener('click', (e) => { if (document.body.classList.contains('menu-open') && !e.target.closest('#nav')) document.body.classList.remove('menu-open'); });
   await db.open();
   if (!location.hash) location.hash = '#/dashboard';
   await render();

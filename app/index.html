@@ -3,12 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f8fafd">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Ledger</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+  <header id="mbar">
+    <button class="btn small" id="menuBtn" aria-label="Menu">☰</button>
+    <span class="mtitle" id="mTitle">Ledger</span>
+    <button class="btn tonal small" id="langBtnM" data-notr></button>
+  </header>
   <div id="app">
     <aside id="nav">
       <div class="brand"><span class="dot"></span><span id="brandName">Ledger</span></div>
@@ -49,6 +56,13 @@
     </aside>
     <main><div class="sheet" id="main"></div></main>
   </div>
+  <nav id="tabs">
+    <a href="#/dashboard" data-k="dashboard"><i>⌂</i><span>Dashboard</span></a>
+    <a href="#/new/SI" data-k="new/SI"><i>＋</i><span>Invoice</span></a>
+    <a href="#/new/RV" data-k="new/RV"><i>₪</i><span>Receipt</span></a>
+    <a href="#/docs?type=SI" data-k="docs"><i>≡</i><span>Documents</span></a>
+    <a href="#/customers" data-k="customers"><i>☺</i><span>Customers</span></a>
+  </nav>
   <div id="printArea"></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="vendor/xlsx.full.min.js"></script>

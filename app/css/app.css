@@ -220,3 +220,70 @@ dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); marg
 .kv > div { background: var(--surface); border-radius: var(--r-sm); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
 .kv span { color: var(--muted); font-size: .82em; }
 .kv b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- lookup buttons (tap = F2): a flex sibling, never on top of the text ---------- */
+.namewrap { display: flex; gap: 6px; align-items: center; }
+.namewrap > input { flex: 1; min-width: 0; }
+.lkbtn { flex: none; width: 44px; height: calc(var(--h) - 6px); border: none; border-radius: 14px; background: var(--accent-soft); color: var(--accent-ink); font-size: 1.15em; cursor: pointer; }
+
+/* ---------- phone ---------- */
+#mbar, #tabs { display: none; }
+@media (max-width: 860px) {
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  #mbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 20; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: rgba(248,250,253,.94); backdrop-filter: blur(10px); }
+  #mbar .mtitle { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app { display: block; }
+  #nav { position: fixed; inset-block: 0; inset-inline-start: 0; width: min(86vw, 320px); height: 100vh; z-index: 30; background: var(--page); box-shadow: 0 0 40px rgba(0,0,0,.2); transform: translateX(-105%); transition: transform .22s; }
+  [dir=rtl] #nav { transform: translateX(105%); }
+  body.menu-open #nav { transform: none; }
+  #nav nav { flex-direction: column; flex-wrap: nowrap; }
+  .navgroup { display: block; }
+  #nav .langbtn { display: none; }
+  #tabs { display: flex; position: fixed; inset-inline: 0; bottom: 0; z-index: 20; background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
+  #tabs a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 16px; color: var(--muted); font-size: .72em; }
+  #tabs a i { font-style: normal; font-size: 1.5em; line-height: 1; }
+  #tabs a.on { color: var(--accent-ink); background: var(--accent-soft); }
+  main { padding: 10px 10px 24px; }
+  .sheet { padding: 18px 14px; border-radius: var(--r); }
+  h1 { font-size: 1.5em; }
+  .docbar { margin: -18px -14px 12px; padding: 12px 14px; top: calc(58px + env(safe-area-inset-top)); gap: 10px; }
+  .docbar .dtotal b { font-size: 1.4em; }
+  .sub, .hint { display: none; }
+  .row { gap: 12px; }
+  .row > label.f { min-width: 0; flex: 1 1 140px; }
+  label.f.grow { flex-basis: 100%; }
+
+  /* invoice lines become cards */
+  #lines thead { display: none; }
+  #lines, #lines tbody { display: block; }
+  #lines tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-areas: "ln code code code amt amt" "item item item item item item" "price price qty qty bonus bonus" "disc disc disc . del del"; gap: 8px; background: var(--bg); border-radius: var(--r); padding: 12px; margin-bottom: 10px; }
+  #lines td { display: block; padding: 0 !important; background: transparent !important; border-radius: 0 !important; }
+  #lines td.ln { grid-area: ln; align-self: center; }
+  #lines td.code { grid-area: code; }
+  #lines td.code input { width: 100%; }
+  #lines td.item { grid-area: item; min-width: 0; }
+  #lines td.num:nth-of-type(4) { grid-area: price; }
+  #lines td.num:nth-of-type(5) { grid-area: qty; }
+  #lines td.num:nth-of-type(6) { grid-area: bonus; }
+  #lines td.num:nth-of-type(7) { grid-area: disc; }
+  #lines td.amt { grid-area: amt; align-self: center; text-align: end; font-size: 1.05em; }
+  #lines td:last-child { grid-area: del; justify-self: end; align-self: center; }
+  #lines td.num input { width: 100% !important; background: var(--surface); }
+  #lines td.num::before { content: attr(data-label); display: block; font-size: .72em; color: var(--muted); margin: 0 4px 2px; }
+  #lines .subline input { width: auto; flex: 1; }
+  .tablewrap:has(#lines) { padding: 0; background: transparent; }
+
+  /* finish bar sticks above the tabs */
+  .finish { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 6; padding: 10px; gap: 8px; box-shadow: 0 -6px 24px rgba(0,0,0,.08); }
+  .finish .grow, #printdraft, #smart, #post { display: none; }
+  .finish .btn { flex: 1; justify-content: center; }
+  .finish kbd { display: none; }
+
+  dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; padding: 18px 14px; }
+  dialog.lookup .lk-list { max-height: calc(100dvh - 210px); }
+  .totals { margin-inline-start: 0; }
+  .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi .value { font-size: 1.3em; }
+  .actions .btn { flex: 1 1 auto; justify-content: center; }
+  #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
