@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Ledger</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="nav">
+      <div class="brand"><span class="dot"></span><span id="brandName">Ledger</span></div>
+      <nav>
+        <a href="#/dashboard" data-k="dashboard">Dashboard</a>
+        <div class="navgroup">Sales</div>
+        <a href="#/new/SI" data-k="new/SI">New sales invoice</a>
+        <a href="#/new/SR" data-k="new/SR">Sales return</a>
+        <a href="#/new/RV" data-k="new/RV">Receipt voucher</a>
+        <a href="#/new/CN" data-k="new/CN">Credit note</a>
+        <a href="#/new/DN" data-k="new/DN">Debit note</a>
+        <div class="navgroup">Purchases</div>
+        <a href="#/new/PI" data-k="new/PI">Purchase invoice</a>
+        <a href="#/new/PR" data-k="new/PR">Purchase return</a>
+        <a href="#/new/PV" data-k="new/PV">Payment voucher</a>
+        <div class="navgroup">Books</div>
+        <a href="#/docs" data-k="docs">All documents</a>
+        <a href="#/items" data-k="items">Items</a>
+        <a href="#/customers" data-k="customers">Customers</a>
+        <a href="#/suppliers" data-k="suppliers">Suppliers</a>
+        <div class="navgroup">Reports</div>
+        <a href="#/statement" data-k="statement">Account statement</a>
+        <a href="#/sales" data-k="sales">Sales report</a>
+        <a href="#/stock" data-k="stock">Inventory</a>
+        <a href="#/tb" data-k="tb">Trial balance</a>
+        <a href="#/integrity" data-k="integrity">Integrity check</a>
+        <a href="#/audit" data-k="audit">Audit log</a>
+        <div class="navgroup">Data</div>
+        <a href="#/import" data-k="import">Import · Excel · AI</a>
+        <a href="#/backup" data-k="backup">Backup</a>
+        <a href="#/settings" data-k="settings">Settings</a>
+      </nav>
+      <div class="whoami" id="whoami"></div>
+    </aside>
+    <main id="main"></main>
+  </div>
+  <div id="printArea"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
