@@ -213,3 +213,10 @@ dialog.lookup .lk-list { max-height: 56vh; overflow-y: auto; background: var(--s
 dialog.lookup tbody tr { cursor: pointer; }
 dialog.lookup tr.sel td { background: var(--accent-soft) !important; color: var(--accent-ink); }
 .hint kbd { margin: 0 2px; }
+
+/* inquiry card */
+dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); margin: 20px 0 8px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.kv > div { background: var(--surface); border-radius: var(--r-sm); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kv span { color: var(--muted); font-size: .82em; }
+.kv b { font-weight: 600; font-variant-numeric: tabular-nums; }

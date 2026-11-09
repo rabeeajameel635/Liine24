@@ -116,6 +116,22 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  F2 from anywhere opens the list:', await page.locator('dialog.lookup[open]').count() === 1, '| title:', await page.textContent('dialog.lookup h2'));
   await key('Escape'); await page.waitForTimeout(200); await key('Escape'); await page.waitForTimeout(400);
 
+  step('F2 on a chosen record opens its inquiry card; F2 again opens the full list');
+  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(200);
+  await page.keyboard.type('C-0100'); await key('Enter');
+  await page.focus('#party'); await key('F2'); await page.waitForTimeout(400);
+  console.log('  pharmacy card:', (await page.textContent('dialog.card-dlg h2')).trim(), '| fields:', (await page.locator('dialog.card-dlg .kv span').allTextContents()).join(', '));
+  await key('F2'); await page.waitForTimeout(400);
+  console.log('  F2 again → full list rows:', await page.locator('dialog.lookup:not(.card-dlg) tbody tr').count());
+  await key('Escape'); await page.waitForTimeout(200);
+  await page.focus('#lines tbody tr [data-k=code]'); await page.keyboard.type('1001'); await key('F2'); await page.waitForTimeout(400);
+  console.log('  item card:', (await page.textContent('dialog.card-dlg h2')).trim(), '| sections:', await page.locator('dialog.card-dlg h3').allTextContents());
+  console.log('  last price to this customer shown:', (await page.textContent('dialog.card-dlg .kv')).includes('Last price to this customer'));
+  await key('Escape'); await page.waitForTimeout(200);
+  console.log('  back on:', await focused(), '| item kept:', await page.inputValue('#lines tbody tr [data-k=code]'));
+  await key('Escape'); await page.waitForTimeout(300);
+  if (await page.locator('dialog[open] [data-v=discard]').count()) { await page.click('dialog [data-v=discard]'); await page.waitForTimeout(400); }
+
   step('statement');
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');

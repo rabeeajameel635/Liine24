@@ -98,6 +98,8 @@ const AR = {
   'Click a row for its statement.': 'اضغط على أي سطر لكشف حسابه.', 'opens the only match.': 'بيفتح النتيجة إذا كانت وحدة.', 'opens the item list.': 'بيفتح قائمة الأصناف.',
   'Lookup': 'استعلام', 'Save': 'حفظ', 'Exit': 'خروج', 'Back': 'رجوع',
   'Drafts can be edited freely. Posting gives the permanent number and locks the document.': 'المسودة تتعدل بحرية. الترحيل يعطي الرقم الدائم ويقفل المستند.',
+  'Change': 'تغيير', 'Remaining': 'المتبقي', 'Last invoice': 'آخر فاتورة', 'Last payment': 'آخر دفعة', 'Last price to this customer': 'آخر سعر لهذا الزبون',
+  'Last purchase price': 'آخر سعر شراء', 'Batches in stock': 'الدفعات بالمخزن', 'Last sales': 'آخر المبيعات',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',

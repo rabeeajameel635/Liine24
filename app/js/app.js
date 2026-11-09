@@ -343,7 +343,9 @@ function editor(doc) {
   header.forEach((el, i) => el.addEventListener('keydown', async (e) => {
     if (e.key === 'F2' && el.id === 'party') {
       e.preventDefault();
-      const p = await lookupParty(parties, el.value.trim()); el.focus();
+      const chosen = parties.find((x) => partyLabel(x) === el.value.trim() || x.code.toLowerCase() === el.value.trim().toLowerCase());
+      if (chosen && (await partyCard(chosen)) !== 'list') { el.focus(); return; }
+      const p = await lookupParty(parties, chosen ? '' : el.value.trim()); el.focus();
       if (p) { el.value = partyLabel(p); el.dispatchEvent(new Event('change')); }
       return;
     }
@@ -372,7 +374,7 @@ function editor(doc) {
     };
     $('#party').addEventListener('change', info); info();
   }
-  if (t.lines) wireLines(doc, arm);
+  if (t.lines) wireLines(doc, arm, parties);
   else {
     const m = () => { const c = $('#method').value === 'cheque'; $$('.cheque').forEach((x) => (x.style.display = c ? '' : 'none')); if (c && $('#cashAccount').value === '1100') $('#cashAccount').value = '1120'; };
     $('#method').onchange = m; m();
@@ -439,6 +441,77 @@ async function lookupItem(filter = '', type = 'SI') {
   return id ? itemById(id) : null;
 }
 
+// Inquiry card (F2 on a field that already holds a record): the record's definition, read-only.
+// Resolves 'list' when the user presses F2 again (or the button) to change the choice, else null.
+function recordCard({ title, fields, sections = [] }) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'lookup card-dlg';
+    dlg.innerHTML = `<h2 style="margin-top:0" dir="auto">${esc(title)}</h2>
+      <div class="kv">${fields.filter(([, v]) => v !== '' && v != null).map(([k, v]) => `<div><span>${esc(k)}</span><b dir="auto">${v}</b></div>`).join('')}</div>
+      ${sections.map(([h, html]) => `<h3>${esc(h)}</h3>${html}`).join('')}
+      <div class="actions" style="margin-bottom:0"><button class="btn tonal" data-v="list">Change <kbd>F2</kbd></button><button class="btn" data-v="close">Close <kbd>Esc</kbd></button></div>`;
+    document.body.appendChild(dlg); translate(dlg);
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    dlg.addEventListener('keydown', (e) => {
+      if (e.key === 'F2') { e.preventDefault(); end('list'); }
+      else if (e.key === 'Enter') { e.preventDefault(); end(null); }
+    });
+    $$('[data-v]', dlg).forEach((b) => (b.onclick = () => end(b.dataset.v === 'list' ? 'list' : null)));
+    dlg.showModal(); $('[data-v=close]', dlg).focus();
+  });
+}
+const miniTable = (head, rows) => rows.length
+  ? `<div class="lk-list"><table class="t"><thead><tr>${head.map((h, i) => `<th class="${i ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'n' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  : '<p class="muted">None</p>';
+
+async function partyCard(p) {
+  const entries = await db.byIndex('ledger', 'partyId', p.id);
+  const bal = entries.reduce((s, e) => s + (p.kind === 'supplier' ? e.creditC - e.debitC : e.debitC - e.creditC), 0);
+  const docs = S.docs.filter((d) => d.partyId === p.id && d.status === 'posted').sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0));
+  const last = (types) => docs.find((d) => types.includes(d.type));
+  const li = last(['SI', 'PI']), lr = last(['RV', 'PV']);
+  return recordCard({
+    title: `${p.code} — ${p.name}`,
+    fields: [
+      ['Code', esc(p.code)], ['Name', esc(p.name)], ['Region', esc(T(REGIONS[p.region] || ''))], ['Type', esc(T(CUSTOMER_TYPES[p.type] || ''))],
+      ['Phone', esc(p.phone || '')], ['Address', esc(p.address || '')], ['Tax / licensed dealer no.', esc(p.taxNo || '')], ['Guarantor', esc(p.guarantor || '')],
+      ['Balance', `<span dir="ltr">${money(bal)}</span>`],
+      ['Credit limit', p.creditLimit ? fmt(p.creditLimit) : ''], ['Remaining', p.creditLimit ? money(toCents(p.creditLimit) - bal) : ''],
+      ['Last invoice', li ? `${esc(li.number)} · ${esc(li.date)} · ${money(li.totalC)}` : ''],
+      ['Last payment', lr ? `${esc(lr.number)} · ${esc(lr.date)} · ${money(lr.totalC)}` : ''],
+      ['Status', p.active === false ? esc(T('inactive')) : ''],
+    ],
+  });
+}
+
+async function itemCard(it, partyId, type) {
+  const moves = (await db.all('stock')).filter((m) => m.itemId === it.id);
+  const onHand = moves.reduce((s, m) => s + m.qty, 0);
+  const lots = {};
+  for (const m of moves) { const k = `${m.batch || '—'}|${m.expiry || '—'}`; lots[k] = (lots[k] || 0) + m.qty; }
+  const lotRows = Object.entries(lots).filter(([, q]) => q > 0).sort(([a], [b]) => a.split('|')[1].localeCompare(b.split('|')[1]))
+    .map(([k, q]) => { const [b, x] = k.split('|'); return [esc(b), esc(x), fmt(q, 0)]; });
+  const posted = S.docs.filter((d) => d.status === 'posted' && (d.lines || []).some((l) => l.itemId === it.id))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0));
+  const lineOf = (d) => d.lines.find((l) => l.itemId === it.id);
+  const lastSaleHere = partyId ? posted.find((d) => d.type === 'SI' && d.partyId === partyId) : null;
+  const lastBuy = posted.find((d) => d.type === 'PI');
+  const recent = posted.filter((d) => d.type === 'SI').slice(0, 5).map((d) => { const l = lineOf(d); return [esc(d.number), esc(partyById(d.partyId)?.name || ''), fmt(l.qty || 0, 0), fmt(l.bonus || 0, 0), fmt(l.price || 0, 3)]; });
+  return recordCard({
+    title: `${it.code} — ${it.name}`,
+    fields: [
+      ['Code', esc(it.code)], ['Name', esc(it.name)], ['Brand', esc(it.brand || '')], ['Category', esc(it.category || '')], ['Unit', esc(it.unit || '')], ['Barcode', esc(it.barcode || '')],
+      ['Buy price', fmt(it.buyPrice || 0, 3)], ['Public price', fmt(it.pricePublic || 0, 3)], ['Pharmacist price', fmt(it.pricePharmacist || 0, 3)],
+      ['On hand', `<b>${fmt(onHand, 0)}</b>`],
+      ['Last price to this customer', lastSaleHere ? `${fmt(lineOf(lastSaleHere).price || 0, 3)} · ${esc(lastSaleHere.date)}` : ''],
+      ['Last purchase price', lastBuy ? `${fmt(lineOf(lastBuy).price || 0, 3)} · ${esc(lastBuy.date)}` : ''],
+    ],
+    sections: [['Batches in stock', miniTable(['Batch', 'Expiry', 'Qty'], lotRows)], ['Last sales', miniTable(['Number', 'Customer', 'Qty', 'Bonus', 'Price'], recent)]],
+  });
+}
+
 function uniqueMatch(list, low, report) {
   let m = list.filter((x) => x.name.toLowerCase().startsWith(low));
   if (!m.length) m = list.filter((x) => x.name.toLowerCase().includes(low));
@@ -487,7 +560,7 @@ function linesUI(doc) {
     <template id="rowTpl">${row(blankLine())}</template>`;
 }
 
-function wireLines(doc, arm) {
+function wireLines(doc, arm, parties = []) {
   const tbody = $('#lines tbody');
   const ORDER = ['code', 'name', 'price', 'qty', 'bonus', 'disc'];
   const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.ln', tr).textContent = i + 1));
@@ -543,7 +616,15 @@ function wireLines(doc, arm) {
   };
   tbody.addEventListener('keydown', async (e) => {
     const tr0 = e.target.closest('tr'); const k0 = e.target.dataset.k;
-    if (e.key === 'F2' && (k0 === 'code' || k0 === 'name')) { e.preventDefault(); return pick(tr0, tr0.dataset.item ? '' : e.target.value.trim()); }
+    if (e.key === 'F2' && (k0 === 'code' || k0 === 'name')) {
+      e.preventDefault();
+      if (tr0.dataset.item) {
+        const pid = parties.find((x) => partyLabel(x) === ($('#party')?.value || '').trim())?.id;
+        if ((await itemCard(itemById(tr0.dataset.item), pid, doc.type)) !== 'list') { e.target.focus(); return; }
+        return pick(tr0, '');
+      }
+      return pick(tr0, e.target.value.trim());
+    }
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     e.preventDefault();
     const tr = tr0; const k = k0;
