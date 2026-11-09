@@ -96,6 +96,8 @@ const AR = {
   'Search by code or name': 'ابحث بالرقم أو الاسم', 'Code, name, or Enter / F2 for the list': 'الرقم أو الاسم، أو Enter / F2 للقائمة',
   'move': 'تنقّل', 'pick': 'اختيار', 'close': 'إغلاق', 'Nothing matches': 'لا يوجد نتائج', 'Click a row to edit it.': 'اضغط على أي سطر لتعديله.',
   'Click a row for its statement.': 'اضغط على أي سطر لكشف حسابه.', 'opens the only match.': 'بيفتح النتيجة إذا كانت وحدة.', 'opens the item list.': 'بيفتح قائمة الأصناف.',
+  'Lookup': 'استعلام', 'Save': 'حفظ', 'Exit': 'خروج', 'Back': 'رجوع',
+  'Drafts can be edited freely. Posting gives the permanent number and locks the document.': 'المسودة تتعدل بحرية. الترحيل يعطي الرقم الدائم ويقفل المستند.',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',
@@ -107,6 +109,7 @@ const PATTERNS = [
   [/^New (.+)$/, (m, x) => 'جديد: ' + (AR[x.charAt(0).toUpperCase() + x.slice(1)] || x)],
   [/^(Sales invoice|Sales return|Receipt voucher|Credit note|Debit note|Purchase invoice|Purchase return|Payment voucher|Opening balance|Opening stock)s$/, (m, x) => AR[x] ? 'كل ' + AR[x] : m],
   [/^Print copy (\d+)$/, 'طباعة نسخة $1'],
+  [/^Save draft$/, 'حفظ مسودة'],
   [/^Copy (\d+)$/, 'نسخة $1'],
   [/^(\d+) items\. Codes are permanent\. Items are never deleted, only deactivated\.$/, '$1 صنف. الأكواد ثابتة. الأصناف لا تُحذف، تُعطّل فقط.'],
   [/^(\d+) (customers|suppliers)\. Codes are permanent\. Only the admin adds them\.$/, (m, n, k) => `${n} ${k === 'customers' ? 'زبون' : 'مورد'}. الأكواد ثابتة. الإضافة للمدير فقط.`],

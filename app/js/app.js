@@ -42,8 +42,14 @@ async function reload() {
 const routes = {};
 // The open editor registers itself here so leaving it can be guarded.
 let guardEditor = null, currentHash = location.hash, bypass = false;
+// Bisan keys: F2 lookup · F4 save · F9 print (posts, so it asks) · Esc exit back to where you were
+let pageKeys = null, lastPlace = '#/dashboard';
+const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
+document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
+const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
-  guardEditor = null;
+  guardEditor = null; pageKeys = null;
+  if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
   const best = $$('#nav a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
@@ -202,7 +208,7 @@ function editor(doc) {
       <div class="dparty" id="barParty" dir="auto">—</div></div>
       <div class="dtotal"><span class="muted">Total ₪</span><b id="barTotal">0.00</b></div>
       <button class="btn small" id="toNotes" tabindex="-1">Notes</button></div>
-    <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document. <kbd>Esc</kbd> to leave.</p>
+    <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row">
@@ -215,9 +221,9 @@ function editor(doc) {
     ${t.lines ? linesUI(doc) : voucherUI(doc)}
     <label class="f" style="margin-top:20px">Notes<textarea id="notes" dir="auto" rows="3" style="min-height:96px">${esc(doc.notes || '')}</textarea></label>
     <div class="finish" id="finish" tabindex="0">
-      <span class="grow hint">${t.lines ? '<span>Enter on an empty line brings you here.</span>' : ''} <kbd>Enter</kbd> <span>Save draft</span> · <kbd>P</kbd> <span>Print &amp; post</span></span>
-      <button class="btn" id="save">Save draft <kbd>Enter</kbd></button>
-      <button class="btn ink" id="postprint">Print &amp; post <kbd>P</kbd></button>
+      <span class="grow hint"><kbd>F2</kbd> <span>Lookup</span> · <kbd>F4</kbd> <span>Save</span> · <kbd>F9</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
+      <button class="btn" id="save">Save draft <kbd>F4</kbd></button>
+      <button class="btn ink" id="postprint">Print &amp; post <kbd>F9</kbd></button>
       <button class="btn" id="post">Post</button>
       <button class="btn" id="printdraft">Print draft</button>
       ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
@@ -304,7 +310,7 @@ function editor(doc) {
     return false;
   };
   guardEditor = { isDirty, leave };
-  const back = () => { const h = `#/docs?type=${doc.type}`; if (isDirty()) leave().then((ok) => ok && go(h)); else go(h); };
+  const back = () => { if (isDirty()) leave().then((ok) => ok && backToPlace()); else backToPlace(); };
   $('#postprint').onclick = printAndPost;
   $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); });
 
@@ -317,15 +323,21 @@ function editor(doc) {
     if (e.key === 'Enter' || e.code === 'KeyS') { e.preventDefault(); e.stopPropagation(); saveDraftNow(); }
     else if (e.code === 'KeyP') { e.preventDefault(); e.stopPropagation(); printAndPost(); }
   });
-  editor.keyHandler && document.removeEventListener('keydown', editor.keyHandler);
-  editor.keyHandler = (e) => {
-    if (!document.body.contains(finish)) return document.removeEventListener('keydown', editor.keyHandler);
+  pageKeys = (e) => {
     if (document.querySelector('dialog[open]')) return;
     if (e.key === 'Escape') { e.preventDefault(); back(); return; }
+    if (e.key === 'F4') { e.preventDefault(); saveDraftNow(); return; }            // save, no question
+    if (e.key === 'F9') { e.preventDefault(); printAndPost(); return; }           // print = post, asks first
+    if (e.key === 'F2') {                                                          // lookup from anywhere
+      e.preventDefault();
+      const target = ($('#party') && !findParty($('#party').value) && $('#party'))
+        || (t.lines && ($$('#lines tbody tr').find((tr) => !tr.dataset.item) || ($('#addline').click(), $('#lines tbody tr:last-child')))?.querySelector('[data-k=code]'));
+      if (target) { target.focus(); target.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })); }
+      return;
+    }
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); printAndPost(); }
   };
-  document.addEventListener('keydown', editor.keyHandler);
 
   const header = $$('[data-flow]');
   header.forEach((el, i) => el.addEventListener('keydown', async (e) => {
@@ -638,18 +650,25 @@ async function viewDoc(d) {
         ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${ACCOUNTS[d.cashAccount]?.name || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
     ${d.notes ? `<p dir="auto">${esc(d.notes)}</p>` : ''}
     <div class="actions">
-      <button class="btn ink" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'}</button>
+      <button class="btn ink" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'} <kbd>F9</kbd></button>
+      <button class="btn" id="backBtn">Back <kbd>Esc</kbd></button>
       ${t.party !== 'none' && d.type !== 'OB' ? '<button class="btn tonal" id="dup">Duplicate as new draft</button>' : ''}
       ${d.status === 'posted' && isAdmin() ? '<button class="btn danger" id="void">Void (reversing entry)</button>' : ''}
       ${d.status === 'posted' && !isAdmin() ? '<span class="muted">Only the admin can void.</span>' : ''}
     </div>
     <h2>Print history</h2>
     ${prints.length ? `<table class="t"><tbody>${prints.map((x) => `<tr><td>${x.copyNo === 1 ? '<b>Original</b>' : 'Copy ' + x.copyNo}</td><td>${esc(x.user)}</td><td>${esc(x.at.slice(0, 16).replace('T', ' '))}</td><td>${esc(x.reason || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Not printed yet. The first print will be marked Original, once only.</p>'}`;
+  pageKeys = (e) => {
+    if (document.querySelector('dialog[open]')) return;
+    if (e.key === 'Escape') { e.preventDefault(); backToPlace(); }
+    else if (e.key === 'F9') { e.preventDefault(); $('#printBtn').click(); }
+  };
   $('#printBtn').onclick = () => guard(async () => {
     let reason = '';
     if (prints.length && isAdmin() && !prints.some((x) => x.copyNo > 1) && confirm('Was the original lost (printer jam, damaged)? Press OK to record a reason; it still prints as a Copy.')) reason = prompt('Reason:') || '';
     await printDoc(d, reason); render();
   });
+  $('#backBtn').onclick = backToPlace;
   $('#dup') && ($('#dup').onclick = () => guard(async () => {
     const { id, number, series, seqNo, status, postedAt, postedBy, voidedAt, voidedBy, voidReason, backdated, backdateReason, totalC, vatC, netC, qtyTotal, bonusTotal, settingsAtPost, createdAt, createdBy, updatedAt, cancelledAt, cancelledBy, ...rest } = d;
     const r = await db.saveDraft({ ...rest, date: today(), reference: '', notes: rest.notes ? rest.notes : '' }, S.user);
