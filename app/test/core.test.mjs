@@ -111,3 +111,9 @@ test('void of a sale does not distort inventory buckets or average cost', async 
   assert.deepEqual([s.qty, s.in, s.out, s.bonusOut], [1000, 1000, 0, 0]);
   assert.equal(avgCostC(all, 'a'), 1000); // 11.60 incl. VAT -> 10.00 cost per unit
 });
+
+test('numeric codes start at 1001 and skip typed non-numeric codes', async () => {
+  const { nextNumericCode } = await import('../js/core.js');
+  assert.equal(nextNumericCode([]), '1001');
+  assert.equal(nextNumericCode(['1001', '1007', 'ABC', '07100x']), '1008');
+});

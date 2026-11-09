@@ -192,6 +192,12 @@ export function seriesKey(type, date, branch = '') {
 export function formatNumber(series, n) {
   return `${series}-${String(n).padStart(6, '0')}`;
 }
+// items and parties get plain numbers: 1001, 1002, ... (codes typed by the user are kept as they are)
+export function nextNumericCode(existing, start = 1001) {
+  let max = start - 1;
+  for (const c of existing) if (/^\d+$/.test(String(c))) max = Math.max(max, Number(c));
+  return String(max + 1);
+}
 export function nextPartyCode(prefix, existing) {
   let max = 0;
   for (const c of existing) {

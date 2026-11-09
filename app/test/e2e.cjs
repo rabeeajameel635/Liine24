@@ -1,3 +1,4 @@
+// End-to-end run in Chromium. Serve app/ first:  python3 -m http.server 8765  (inside app/)
 const { chromium } = require('playwright');
 const OUT = process.env.SHOTS || require('os').tmpdir() + '/ledger-shots';
 require('fs').mkdirSync(OUT, { recursive: true });
@@ -5,7 +6,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
 
 (async () => {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -14,23 +15,23 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.addInitScript(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
   const toast = async () => (await page.textContent('#toast')).trim();
   const step = (s) => console.log('▶', s);
+  const key = async (k, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); };
+  const focused = () => page.evaluate(() => document.activeElement?.dataset?.k || document.activeElement?.id || document.activeElement?.tagName);
 
-  await page.goto(URL);
-  await page.waitForSelector('h1');
-  step('switch to admin and set company');
+  await page.goto(URL); await page.waitForSelector('h1');
+  step('admin and company');
   await page.goto(URL + '#/settings'); await page.waitForSelector('#toAdmin');
   await page.click('#toAdmin'); await page.waitForSelector('#saveCo');
-  await page.fill('[name=companyName]', 'Demo Medical Warehouse');
-  await page.fill('[name=taxNo]', '562000000');
+  await page.fill('[name=companyName]', 'Demo Medical Warehouse'); await page.fill('[name=taxNo]', '562000000');
   await page.click('#saveCo'); await page.waitForTimeout(300);
 
-  step('import items and customer through the AI JSON path');
+  step('import items and customers (AI JSON path)');
   await page.goto(URL + '#/import'); await page.waitForSelector('#json');
   await page.fill('#json', JSON.stringify({
     items: [
-      { code: 'ITM-A100', name: 'PARACETAMOL 500MG 20T', brand: 'Generic', unit: 'PCS', buyPrice: 12, pricePharmacist: 12.5, openingQty: 1000 },
-      { code: 'ITM-B200', name: 'OMEPRAZOLE 20MG 28CAP', unit: 'PCS', buyPrice: 15, pricePharmacist: 18.25, openingQty: 800 },
-      { code: 'ITM-C300', name: 'AMOXICILLIN 500MG 21CAP', unit: 'PCS', buyPrice: 20, pricePharmacist: 24, openingQty: 2000 },
+      { code: '1001', name: 'PARACETAMOL 500MG 20T', unit: 'PCS', buyPrice: 9, pricePharmacist: 12.5, openingQty: 1000 },
+      { code: '1002', name: 'OMEPRAZOLE 20MG 28CAP', unit: 'PCS', buyPrice: 14, pricePharmacist: 18.25, openingQty: 800 },
+      { code: '1003', name: 'AMOXICILLIN 500MG 21CAP', unit: 'PCS', buyPrice: 17, pricePharmacist: 24, openingQty: 2000 },
     ],
     customers: [
       { code: 'C-0100', name: 'صيدلية الرحمة', region: 'gaza', type: 'pharmacy', creditLimit: 50000, openingBalance: 1000 },
@@ -40,120 +41,136 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.click('#importJson'); await page.click('#doImport'); await page.waitForTimeout(800);
   console.log('  toast:', await toast());
 
-  step('duplicate-name warning for a similar customer');
+  step('similar-name warning');
   await page.goto(URL + '#/customers'); await page.waitForSelector('#add');
-  await page.click('#add'); await page.fill('dialog [name=name]', 'صيدلية الرحمه');
-  dialogAnswers.push(undefined); // confirm -> accept
+  await page.click('#add'); console.log('  next customer code:', await page.inputValue('dialog [name=code]'));
+  await page.fill('dialog [name=name]', 'صيدلية الرحمه'); dialogAnswers.push(undefined);
   await page.click('dialog button[value=save]'); await page.waitForTimeout(600);
   console.log('  customers now:', await page.locator('#tb tr').count());
 
-  step('sales invoice with bonus, discount and batch');
-  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party');
-  await page.fill('#party', 'C-0100 — صيدلية الرحمة'); await page.dispatchEvent('#party', 'change');
-  const row = (i) => page.locator('#lines tbody tr').nth(i);
-  await row(0).locator('[data-k=item]').fill('ITM-A100 — PARACETAMOL 500MG 20T'); await row(0).locator('[data-k=item]').dispatchEvent('change');
-  await row(0).locator('[data-k=qty]').fill('100'); await row(0).locator('[data-k=bonus]').fill('60');
-  await row(0).locator('[data-k=batch]').fill('850'); await row(0).locator('[data-k=expiry]').fill('2026-08');
-  await page.click('#addline');
-  await row(1).locator('[data-k=item]').fill('ITM-B200'); await row(1).locator('[data-k=item]').dispatchEvent('change');
-  await row(1).locator('[data-k=qty]').fill('200'); await row(1).locator('[data-k=disc]').fill('50');
-  await row(1).locator('[data-k=qty]').dispatchEvent('input');
+  step('sales invoice with the keyboard only');
+  await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(150);
+  console.log('  starts on:', await focused());
+  await page.keyboard.type('C-0100'); await key('Enter');
+  console.log('  party resolved:', await page.inputValue('#party'), '| now on:', await focused());
+  await key('Enter', 3); console.log('  after date, ref, salesman:', await focused());
+  await page.keyboard.type('1001');
+  console.log('  name filled by code:', await page.inputValue('#lines tbody tr:nth-child(1) [data-k=name]'));
+  await key('Enter'); console.log('  code → ', await focused(), '(price prefilled:', await page.inputValue('#lines tbody tr:nth-child(1) [data-k=price]') + ')');
+  await key('Enter'); await page.keyboard.type('100'); await key('Enter'); await page.keyboard.type('50'); await key('Enter'); await key('Enter');
+  console.log('  line 2 on:', await focused(), '| line numbers:', await page.locator('#lines td.ln').allTextContents());
+  await key('Enter'); console.log('  empty code → ', await focused());
+  await page.keyboard.type('omep'); await key('Enter');
+  console.log('  name search picked:', await page.inputValue('#lines tbody tr:nth-child(2) [data-k=code]'), '| on:', await focused());
+  await key('Enter'); await page.keyboard.type('200'); await key('Enter'); await key('Enter'); await page.keyboard.type('50'); await key('Enter');
+  await key('Enter'); await key('Enter');
+  console.log('  empty line → ', await focused(), '| rows:', await page.locator('#lines tbody tr').count());
+  await page.locator('#lines tbody tr:nth-child(1) [data-k=batch]').fill('850');
+  await page.locator('#lines tbody tr:nth-child(1) [data-k=expiry]').fill('2026-08');
   console.log('  totals:', (await page.textContent('#totals')).replace(/\s+/g, ' '));
+  console.log('  lines table fits (no sideways scroll):', await page.evaluate(() => { const w = document.querySelector('#lines').closest('.tablewrap'); return w.scrollWidth <= w.clientWidth + 1; }));
   await page.screenshot({ path: OUT + '/1-invoice-entry.png', fullPage: true });
-  await page.click('#postprint'); await page.waitForTimeout(900);
-  console.log('  after post:', await page.textContent('h1'), '| printed:', await page.evaluate(() => window.__printed));
-  await page.evaluate(() => document.body.classList.add('printing'));
-  await page.emulateMedia({ media: 'print' });
-  await page.screenshot({ path: OUT + '/2-print-original.png', fullPage: true });
+  await page.locator('#finish').focus();
+  await page.keyboard.press('p'); await page.waitForTimeout(1200);
+  console.log('  after P:', (await page.textContent('h1')).replace(/\s+/g, ' '), '| print calls:', await page.evaluate(() => window.__printed));
+  console.log('  printed pages:', await page.locator('#printArea .doc-print .stamp').allTextContents());
+  await page.evaluate(() => document.body.classList.add('printing')); await page.emulateMedia({ media: 'print' });
+  await page.screenshot({ path: OUT + '/2-print.png', fullPage: true });
   await page.emulateMedia({ media: 'screen' }); await page.evaluate(() => document.body.classList.remove('printing'));
-  const stamp1 = await page.textContent('#printArea .stamp');
-  await page.click('#printBtn'); await page.waitForTimeout(600);
-  const stamp2 = await page.textContent('#printArea .stamp');
-  console.log('  stamps:', stamp1, '→', stamp2);
+  await page.click('#printBtn'); await page.waitForTimeout(500);
+  console.log('  reprint:', await page.locator('#printArea .doc-print .stamp').allTextContents());
 
-  step('receipt voucher by cheque');
-  await page.goto(URL + '#/new/RV'); await page.waitForSelector('#party');
-  await page.fill('#party', 'C-0100 — صيدلية الرحمة'); await page.dispatchEvent('#party', 'change');
-  await page.fill('#amount', '1500'); await page.selectOption('#method', 'cheque');
+  step('receipt voucher by cheque with the keyboard');
+  await page.goto(URL + '#/new/RV'); await page.waitForSelector('#party'); await page.waitForTimeout(150);
+  await page.keyboard.type('صيدلية الرح'); await key('Enter');
+  console.log('  two matches, not auto-picked:', await page.inputValue('#party'), '|', await toast(), '| still on:', await focused());
+  await page.fill('#party', 'C-0100'); await key('Enter');
+  console.log('  party by code:', await page.inputValue('#party'));
+  await key('Enter', 2); console.log('  on:', await focused());
+  await page.keyboard.type('1500'); await page.selectOption('#method', 'cheque');
   await page.fill('#chequeNo', '3333'); await page.fill('#chequeBank', 'Bank of Palestine'); await page.fill('#dueDate', '2026-12-01');
-  await page.click('#post'); await page.waitForTimeout(700);
-  console.log('  receipt:', await page.textContent('h1'));
+  await page.locator('#dueDate').press('Enter'); console.log('  last field → ', await focused());
+  await page.keyboard.press('p'); await page.waitForTimeout(1000);
+  console.log('  receipt:', (await page.textContent('h1')).replace(/\s+/g, ' '), '| pages:', await page.locator('#printArea .doc-print .stamp').allTextContents());
 
   step('statement');
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');
-  console.log('  statement rows:', await page.locator('#out tbody tr').count(), '| closing:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
-  await page.screenshot({ path: OUT + '/3-statement.png', fullPage: true });
+  console.log('  closing:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
+  const counts = await page.evaluate(async () => { const d = (await (await import('./js/db.js')).all('docs')).filter((x) => x.status !== 'draft'); return { SI: d.filter((x) => x.type === 'SI').length, RV: d.filter((x) => x.type === 'RV').length }; });
+  console.log('  posted once each:', counts.SI === 1 && counts.RV === 1, counts);
 
-  step('void the invoice with reversal');
+  step('void the invoice');
   await page.goto(URL + '#/docs?type=SI'); await page.click('#dl tbody tr');
   await page.waitForSelector('#void'); dialogAnswers.push('wrong customer');
   await page.click('#void'); await page.waitForTimeout(700);
-  console.log('  after void:', await page.textContent('h1'));
+  console.log('  after void:', (await page.textContent('h1')).replace(/\s+/g, ' '));
 
   step('reports');
   for (const r of ['tb', 'integrity', 'stock', 'sales', 'dashboard', 'audit']) {
-    await page.goto(URL + '#/' + r); await page.waitForTimeout(400);
-    const t = (await page.textContent('main')).replace(/\s+/g, ' ').slice(0, 220);
-    console.log(`  ${r}:`, t);
+    await page.goto(URL + '#/' + r); await page.waitForTimeout(350);
     await page.screenshot({ path: `${OUT}/4-${r}.png`, fullPage: true });
   }
   await page.goto(URL + '#/integrity'); await page.waitForTimeout(300);
-  console.log('  integrity pills:', await page.locator('.pill').allTextContents());
+  console.log('  integrity:', await page.locator('.pill').allTextContents());
 
-  step('accountant cannot void or add items');
+  step('roles');
   await page.goto(URL + '#/settings'); await page.click('#toAcc'); await page.goto(URL + '#/items'); await page.waitForTimeout(300);
-  console.log('  add button visible for accountant:', await page.locator('#add').count());
+  console.log('  accountant sees Add item:', await page.locator('#add').count());
 
-  step('smart entry text lines');
+  step('smart entry, then post');
   await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party');
-  await page.fill('#party', 'C-0100 — صيدلية الرحمة');
-  await page.click('#smart'); await page.fill('#smartText', 'ITM-C300 50 +10\nITM-A100 20\nUNKNOWN 5');
+  await page.fill('#party', 'C-0100');
+  await page.click('#smart'); await page.fill('#smartText', '1003 50 +10\n1001 20\n9999 5');
   await page.click('#smartGo'); await page.waitForTimeout(800);
-  console.log('  smart toast:', await toast(), '| lines:', await page.locator('#lines tbody tr').count());
-
-  step('post the smart-entry invoice, then sales report and inventory');
+  console.log('  smart:', await toast(), '| rows:', await page.locator('#lines tbody tr').count());
   await page.click('#post'); await page.waitForTimeout(800);
-  console.log('  posted:', await page.textContent('h1'));
+  console.log('  posted:', (await page.textContent('h1')).replace(/\s+/g, ' '));
   await page.goto(URL + '#/sales'); await page.waitForTimeout(400);
-  console.log('  sales tfoot:', (await page.textContent('tfoot')).replace(/\s+/g, ' '));
-  await page.goto(URL + '#/stock'); await page.waitForTimeout(400);
-  console.log('  stock rows:', (await page.locator('tbody tr').allTextContents()).map((t) => t.replace(/\s+/g, ' ')));
-  await page.goto(URL + '#/integrity'); await page.waitForTimeout(300);
-  console.log('  integrity pills:', await page.locator('.pill').allTextContents());
+  console.log('  sales totals:', (await page.textContent('#main tfoot')).replace(/\s+/g, ' '));
 
-  step('names: free to fix before any movement, locked after');
+  step('names: free before movement, locked after');
   await page.goto(URL + '#/settings'); await page.click('#toAdmin'); await page.waitForTimeout(200);
   await page.goto(URL + '#/items'); await page.waitForSelector('#add');
-  await page.click('#add'); await page.fill('dialog [name=name]', 'VITAMN C 1000MG'); await page.click('dialog button[value=save]'); await page.waitForTimeout(500);
+  await page.click('#add'); console.log('  next item code:', await page.inputValue('dialog [name=code]'));
+  await page.fill('dialog [name=name]', 'VITAMN C 1000MG'); await page.click('dialog button[value=save]'); await page.waitForTimeout(500);
   await page.locator('#tb tr', { hasText: 'VITAMN C' }).locator('[data-edit]').click(); await page.waitForSelector('dialog [name=name]');
-  console.log('  unused item name editable:', !(await page.locator('dialog [name=name]').getAttribute('readonly')));
   await page.fill('dialog [name=name]', 'VITAMIN C 1000MG'); await page.click('dialog button[value=save]'); await page.waitForTimeout(500);
-  console.log('  renamed unused item:', await page.locator('#tb tr', { hasText: 'VITAMIN C 1000MG' }).count() === 1);
-  await page.locator('#tb tr', { hasText: 'ITM-C300' }).locator('[data-edit]').click(); await page.waitForSelector('dialog [name=name]');
-  console.log('  used item name locked:', (await page.locator('dialog [name=name]').getAttribute('readonly')) !== null);
-  await page.click('dialog button[value=cancel]'); await page.waitForTimeout(200);
-  const refused = await page.evaluate(async () => { const db = await import('./js/db.js'); const it = (await db.all('items')).find((i) => i.code === 'ITM-C300');
+  console.log('  renamed unused:', await page.locator('#tb tr', { hasText: 'VITAMIN C 1000MG' }).count() === 1);
+  const refused = await page.evaluate(async () => { const db = await import('./js/db.js'); const it = (await db.all('items')).find((i) => i.code === '1003');
     try { await db.saveMaster('items', { ...it, name: 'X' }, 'test'); return false; } catch (e) { return e.message; } });
-  console.log('  database refuses rename of used item:', refused);
+  console.log('  used item rename refused:', !!refused);
 
-  step('deactivate a pharmacy with a balance: hidden from invoices, kept in accounts and vouchers');
+  step('deactivate a pharmacy with a balance');
   await page.goto(URL + '#/customers'); await page.waitForSelector('[data-edit]');
   await page.locator('#tb tr', { hasText: 'C-0100' }).locator('[data-edit]').click(); await page.waitForSelector('dialog [name=active]');
-  await page.selectOption('dialog [name=active]', 'false');
-  await page.click('dialog button[value=save]'); await page.waitForTimeout(600);
-  console.log('  inactive pill:', await page.locator('#tb tr', { hasText: 'C-0100' }).locator('.pill').count() === 1);
+  await page.selectOption('dialog [name=active]', 'false'); await page.click('dialog button[value=save]'); await page.waitForTimeout(600);
   await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party');
-  console.log('  in invoice list:', (await page.locator('#dlParties option').evaluateAll((o) => o.map((x) => x.value))).some((v) => v.startsWith('C-0100')));
+  const inSI = (await page.locator('#dlParties option').evaluateAll((o) => o.map((x) => x.value))).some((v) => v.startsWith('C-0100'));
   await page.goto(URL + '#/new/RV'); await page.waitForSelector('#party');
-  console.log('  in receipt list:', (await page.locator('#dlParties option').evaluateAll((o) => o.map((x) => x.value))).some((v) => v.startsWith('C-0100')));
-  await page.goto(URL + '#/tb'); await page.waitForTimeout(300);
-  console.log('  trial balance still balanced:', await page.locator('.pill.ok').count() === 1);
+  const inRV = (await page.locator('#dlParties option').evaluateAll((o) => o.map((x) => x.value))).some((v) => v.startsWith('C-0100'));
+  console.log('  in invoice list:', inSI, '| in receipt list:', inRV);
 
-  step('mobile width');
-  await page.setViewportSize({ width: 390, height: 844 }); await page.goto(URL + '#/dashboard'); await page.waitForTimeout(400);
+  step('Arabic, right to left');
+  await page.click('#langBtn'); await page.waitForTimeout(600);
+  console.log('  dir:', await page.evaluate(() => document.documentElement.dir), '| button:', await page.textContent('#langBtn'));
+  const leftovers = new Set();
+  for (const r of ['dashboard', 'new/SI', 'new/RV', 'docs', 'items', 'customers', 'statement', 'sales', 'stock', 'tb', 'integrity', 'import', 'backup', 'settings']) {
+    await page.goto(URL + '#/' + r); await page.waitForTimeout(300);
+    (await page.evaluate(() => {
+      const out = []; const w = document.createTreeWalker(document.getElementById('app'), NodeFilter.SHOW_TEXT);
+      while (w.nextNode()) { const n = w.currentNode; const t = n.nodeValue.trim(); const el = n.parentElement;
+        if (/[A-Za-z]{3,}/.test(t) && !el.closest('[dir=auto],textarea,code,[data-notr],#tb,#dl,.doc-print') && !/^[A-Z0-9 .\-—₪%/·]+$/.test(t)) out.push(t); }
+      return out;
+    })).forEach((t) => leftovers.add(t));
+    if (['dashboard', 'new/SI', 'settings'].includes(r)) await page.screenshot({ path: `${OUT}/6-ar-${r.replace('/', '-')}.png`, fullPage: true });
+  }
+  console.log('  untranslated:', [...leftovers].slice(0, 60));
+
+  step('phone width');
+  await page.setViewportSize({ width: 390, height: 844 }); await page.goto(URL + '#/new/SI'); await page.waitForTimeout(400);
   await page.screenshot({ path: OUT + '/5-mobile.png', fullPage: false });
-  console.log('  horizontal overflow:', await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
+  console.log('  horizontal page scroll:', await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
 
   console.log('ERRORS:', errors.length ? errors : 'none');
   await browser.close();

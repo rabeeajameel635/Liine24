@@ -2,8 +2,9 @@ import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
   computeTotals, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
-  sequenceGaps, similarNames, validateImport, nextPartyCode, avgCostC,
+  sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
+import { apply as applyLang, getLang, setLang, translate, T } from './i18n.js';
 
 // ---------- state ----------
 const S = { settings: null, items: [], parties: [], docs: [], role: sessionStorage.getItem('role') || 'accountant', user: sessionStorage.getItem('user') || 'User' };
@@ -22,7 +23,7 @@ const lineItem = (l) => { const it = itemById(l.itemId) || {}; return { code: it
 
 function toast(msg, err = false) {
   const t = $('#toast');
-  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  t.textContent = T(msg); t.className = 'show' + (err ? ' err' : '');
   clearTimeout(toast.h); toast.h = setTimeout(() => (t.className = ''), err ? 6000 : 2800);
 }
 async function guard(fn) {
@@ -34,7 +35,7 @@ async function reload() {
   S.parties.sort((a, b) => a.code.localeCompare(b.code));
   document.documentElement.dataset.size = S.settings.fontScale;
   $('#brandName').textContent = S.settings.companyName || 'Ledger';
-  $('#whoami').innerHTML = `${esc(S.user)} · <b>${isAdmin() ? 'Admin' : 'Accountant'}</b><br><a href="#/settings">Switch role</a>`;
+  $('#whoami').innerHTML = `<span data-notr>${esc(S.user)}</span> · <b>${isAdmin() ? 'Admin' : 'Accountant'}</b><br><a href="#/settings">Switch role</a>`;
 }
 
 // ---------- router ----------
@@ -47,6 +48,7 @@ async function render() {
   await reload();
   $('#main').innerHTML = '';
   await guard(() => fn(...args));
+  translate($('#app'));
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', render);
@@ -74,7 +76,7 @@ routes.dashboard = async () => {
   const gaps = sequenceGaps(S.docs.filter((d) => d.number));
   const healthy = tb.balanced && !gaps.length;
   $('#main').innerHTML = `
-    <h1>${esc(S.settings.companyName)}</h1><p class="sub">${new Date().toDateString()}</p>
+    <h1>${esc(S.settings.companyName)}</h1><p class="sub">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
     <div class="cards">
       ${kpi("Today's sales", money(salesOf((d) => d.date === today())))}
       ${kpi('This month', money(salesOf((d) => (d.date || '').startsWith(month))))}
@@ -153,39 +155,44 @@ function editor(doc) {
   $('#main').innerHTML = `
     <h1>${t.name} <span class="pill draft">${doc.id ? 'Draft' : 'New'}</span></h1>
     <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
-    <datalist id="dlItems">${itemsList.map((i) => `<option value="${esc(i.code)} — ${esc(i.name)}">`).join('')}</datalist>
+    <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row">
-      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<input id="party" list="dlParties" dir="auto" placeholder="Type code or name" value="${esc(partyLabel(partyById(doc.partyId)))}"></label>` : ''}
-      <label class="f">Date<input id="date" type="date" value="${esc(doc.date)}"></label>
-      <label class="f">Reference no. (optional)<input id="ref" value="${esc(doc.reference || '')}"></label>
-      ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" value="${esc(doc.salesman || '')}"></label>` : ''}
+      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<input id="party" data-flow list="dlParties" dir="auto" placeholder="Type code or name" value="${esc(partyLabel(partyById(doc.partyId)))}"></label>` : ''}
+      <label class="f">Date<input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
+      <label class="f">Reference no. (optional)<input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
+      ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" data-flow value="${esc(doc.salesman || '')}"></label>` : ''}
     </div>
-    <div id="partyInfo" class="muted" style="margin:10px 0 0"></div>
+    <div id="partyInfo" class="muted" style="margin:12px 0 0"></div>
     ${t.lines ? linesUI(doc) : voucherUI(doc)}
-    <label class="f" style="margin-top:16px">Notes<input id="notes" dir="auto" value="${esc(doc.notes || '')}"></label>
-    <div class="actions">
-      <button class="btn" id="save">Save draft</button>
-      <button class="btn primary" id="post">Post</button>
-      <button class="btn primary" id="postprint">Post &amp; print original</button>
+    <label class="f" style="margin-top:20px">Notes<input id="notes" dir="auto" value="${esc(doc.notes || '')}"></label>
+    <div class="finish" id="finish" tabindex="0">
+      <span class="grow hint">${t.lines ? '<span>Enter on an empty line brings you here.</span>' : ''} <kbd>Enter</kbd> <span>Save draft</span> · <kbd>P</kbd> <span>Print &amp; post</span></span>
+      <button class="btn" id="save">Save draft <kbd>Enter</kbd></button>
+      <button class="btn primary" id="postprint">Print &amp; post <kbd>P</kbd></button>
+      <button class="btn" id="post">Post</button>
       <button class="btn" id="printdraft">Print draft</button>
       ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
     </div>`;
 
+  // exact code or label wins; a name search picks only when exactly one record matches
+  const findParty = (v, report = false) => {
+    v = v.trim(); if (!v) return null;
+    const low = v.toLowerCase();
+    const exact = parties.find((x) => partyLabel(x) === v || x.code.toLowerCase() === low || x.name.toLowerCase() === low);
+    if (exact) return exact;
+    return uniqueMatch(parties, low, report);
+  };
   const readDoc = () => {
     const d = { ...doc, date: $('#date').value, reference: $('#ref').value.trim(), notes: $('#notes').value.trim() };
     if ($('#salesman')) d.salesman = $('#salesman').value.trim();
-    if ($('#party')) {
-      const v = $('#party').value.trim();
-      const p = parties.find((x) => partyLabel(x) === v || x.code === v);
-      d.partyId = p ? p.id : '';
-    }
+    if ($('#party')) d.partyId = findParty($('#party').value)?.id || '';
     if (t.lines) {
       d.lines = $$('#lines tbody tr').map((tr) => {
         const g = (k) => $(`[data-k="${k}"]`, tr).value.trim();
-        const it = findItem(g('item'));
-        return { itemId: it?.id || '', itemText: g('item'), qty: num(g('qty')), bonus: num(g('bonus')), price: num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: g('expiry') };
-      }).filter((l) => l.itemId || l.qty || l.bonus);
+        const it = itemById(tr.dataset.item);
+        return { itemId: it?.id || '', itemText: g('code') || g('name'), qty: num(g('qty')), bonus: num(g('bonus')), price: num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: g('expiry') };
+      }).filter((l) => l.itemId || l.itemText || l.qty || l.bonus);
       d.invoiceDiscount = num($('#invdisc').value);
     } else {
       Object.assign(d, { amount: num($('#amount').value), method: $('#method').value, cashAccount: $('#cashAccount').value, chequeNo: $('#chequeNo').value.trim(), chequeBank: $('#chequeBank').value.trim(), dueDate: $('#dueDate').value });
@@ -204,13 +211,13 @@ function editor(doc) {
     if (['OB', 'OS'].includes(d.type) && !isAdmin()) throw new Error('Opening balances are entered by the admin');
   };
   const save = async (forPost) => { const d = readDoc(); validate(d, forPost); const r = await db.saveDraft(d, S.user); doc.id = r.id; return r; };
-  $('#save').onclick = () => guard(async () => { const r = await save(false); toast('Draft saved'); go('#/doc/' + r.id); });
+  const saveDraftNow = () => { if (!busy) guard(async () => { const r = await save(false); toast('Draft saved'); go('#/doc/' + r.id); }); };
   const doPost = async (andPrint) => {
     const r = await save(true);
     const p = partyById(r.partyId);
     if (r.type === 'SI' && p?.creditLimit) {
       const after = (await partyBalanceC(p.id)) + draftTotalC(r);
-      if (after > toCents(p.creditLimit) && !confirm(`Credit limit ${fmt(p.creditLimit)} will be exceeded (balance after: ${money(after)}). Post anyway?`)) return;
+      if (after > toCents(p.creditLimit) && !confirm(T(`Credit limit ${fmt(p.creditLimit)} will be exceeded (balance after: ${money(after)}). Post anyway?`))) return;
     }
     let posted;
     try { posted = await db.post(r.id, S.user, S.settings); }
@@ -222,32 +229,84 @@ function editor(doc) {
       posted = await db.post(r.id, S.user, S.settings, { allowBackdate: true, backdateReason: reason });
     }
     toast(`Posted ${posted.number}`);
-    if (andPrint) await printDoc(posted);
+    if (andPrint) await printDoc(posted, '', copiesFor(posted.type));
     go('#/doc/' + posted.id);
   };
-  $('#post').onclick = () => guard(() => doPost(false));
-  $('#postprint').onclick = () => guard(() => doPost(true));
+  // one posting at a time: a double key press or double click can never post twice
+  let busy = false;
+  const once = (fn) => async () => { if (busy) return; busy = true; try { await guard(fn); } finally { busy = false; } };
+  const printAndPost = once(async () => { if (confirm(T('Print and post this document?'))) await doPost(true); });
+  $('#save').onclick = saveDraftNow;
+  $('#post').onclick = once(() => doPost(false));
+  $('#postprint').onclick = printAndPost;
   $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); });
+
+  // Enter walks the form: header fields, then lines, then the finish bar.
+  const finish = $('#finish');
+  const arm = () => { finish.classList.add('armed'); finish.focus(); };
+  finish.addEventListener('blur', () => finish.classList.remove('armed'));
+  finish.addEventListener('keydown', (e) => {
+    if (e.target !== finish) return;
+    if (e.key === 'Enter' || e.code === 'KeyS') { e.preventDefault(); e.stopPropagation(); saveDraftNow(); }
+    else if (e.code === 'KeyP') { e.preventDefault(); e.stopPropagation(); printAndPost(); }
+  });
+  editor.keyHandler && document.removeEventListener('keydown', editor.keyHandler);
+  editor.keyHandler = (e) => {
+    if (!document.body.contains(finish)) return document.removeEventListener('keydown', editor.keyHandler);
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]');
+    if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); printAndPost(); }
+  };
+  document.addEventListener('keydown', editor.keyHandler);
+
+  const header = $$('[data-flow]');
+  header.forEach((el, i) => el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (el.id === 'party') {
+      const p = findParty(el.value, true);
+      if (!p) return;
+      el.value = partyLabel(p); el.dispatchEvent(new Event('change'));
+    }
+    const next = header[i + 1];
+    if (next) next.focus();
+    else if (t.lines) $('#lines tbody tr [data-k=code]').focus();
+    else $('#amount').focus();
+  }));
 
   if ($('#party')) {
     const info = async () => {
-      const v = $('#party').value.trim();
-      const p = parties.find((x) => partyLabel(x) === v || x.code === v);
+      const p = findParty($('#party').value);
       if (!p) { $('#partyInfo').textContent = ''; return; }
       const bal = await partyBalanceC(p.id);
       $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · ${REGIONS[p.region]}` : ''}`;
+      translate($('#partyInfo'));
     };
     $('#party').addEventListener('change', info); info();
   }
-  if (t.lines) wireLines(doc);
+  if (t.lines) wireLines(doc, arm);
   else {
     const m = () => { const c = $('#method').value === 'cheque'; $$('.cheque').forEach((x) => (x.style.display = c ? '' : 'none')); if (c && $('#cashAccount').value === '1100') $('#cashAccount').value = '1120'; };
     $('#method').onchange = m; m();
     const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; };
     $('#amount').oninput = w; w();
+    const vf = ['#amount', '#method', '#cashAccount', '#chequeNo', '#chequeBank', '#dueDate'].map((q) => $(q)).filter((x) => x && x.type !== 'hidden');
+    vf.forEach((el) => el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return; e.preventDefault();
+      const rest = vf.slice(vf.indexOf(el) + 1).filter((x) => x.offsetParent);
+      rest.length ? rest[0].focus() : arm();
+    }));
   }
   $('#smart') && ($('#smart').onclick = () => smartEntry(doc, readDoc));
+  setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }
+function uniqueMatch(list, low, report) {
+  let m = list.filter((x) => x.name.toLowerCase().startsWith(low));
+  if (!m.length) m = list.filter((x) => x.name.toLowerCase().includes(low));
+  if (m.length === 1) return m[0];
+  if (report) toast(m.length ? `${m.length} matches: type more letters or pick from the list` : `Nothing matches "${low}"`, true);
+  return null;
+}
+const copiesFor = (type) => Math.max(1, Number(DOC_TYPES[type].lines ? S.settings.copiesInvoice : S.settings.copiesVoucher) || 1);
 
 const num = (v) => (v === '' || v == null ? '' : Number(String(v).replace(/,/g, '')));
 function findItem(text) {
@@ -264,62 +323,108 @@ function defaultPrice(item, type) {
 function linesUI(doc) {
   const row = (l) => {
     const it = itemById(l.itemId);
-    return `<tr>
-      <td class="item"><input data-k="item" list="dlItems" dir="auto" value="${esc(it ? `${it.code} — ${it.name}` : l.itemText || '')}" placeholder="Code or name"></td>
-      <td><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" style="width:100px"></td>
-      <td><input data-k="expiry" type="month" value="${esc(l.expiry)}" style="width:150px"></td>
-      <td class="num"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:90px"></td>
-      <td class="num"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:80px"></td>
-      <td class="num"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:100px"></td>
-      <td class="num"><input data-k="disc" inputmode="decimal" value="${esc(l.disc)}" placeholder="%" style="width:70px"></td>
+    return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
+      <td class="ln"></td>
+      <td class="code"><input data-k="code" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
+      <td class="item"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name">
+        <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"></div></td>
+      <td class="num"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
+      <td class="num"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:92px"></td>
+      <td class="num"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:84px"></td>
+      <td class="num"><input data-k="disc" inputmode="decimal" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
       <td class="n amt"></td>
-      <td><button class="btn small" data-del title="Remove line from draft">×</button></td></tr>`;
+      <td><button class="btn small" data-del tabindex="-1" title="Remove line from draft">×</button></td></tr>`;
   };
-  return `<div class="tablewrap" style="margin-top:18px"><table class="t lines" id="lines"><thead><tr>
-    <th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th><th></th></tr></thead>
-    <tbody>${doc.lines.map(row).join('')}</tbody></table></div>
-    <div class="row" style="margin-top:10px"><button class="btn small" id="addline">+ Line</button><span class="muted" style="font-size:.85em">Enter moves to the next field. Enter on the last field adds a line.</span></div>
-    <div class="row" style="margin-top:16px;align-items:flex-start">
-      <label class="f">Invoice discount (₪)<input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" style="width:160px"></label>
+  return `<div class="tablewrap" style="margin-top:24px"><table class="t lines" id="lines"><thead><tr>
+    <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th><th></th></tr></thead>
+    <tbody>${(doc.lines.length ? doc.lines : [blankLine()]).map(row).join('')}</tbody></table></div>
+    <p class="hint" style="margin:12px 4px">Type the item code, or leave it empty and type the first letters of the name. <kbd>Enter</kbd> moves: code → name → price → qty → bonus → discount → next line. <kbd>Enter</kbd> on an empty line finishes.</p>
+    <div class="row" style="margin-top:8px;align-items:flex-start">
+      <div><button class="btn small" id="addline" tabindex="-1">+ Line</button>
+      <label class="f" style="margin-top:16px">Invoice discount (₪)<input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" style="width:180px"></label></div>
       <div class="totals card" id="totals"></div>
     </div>
     <template id="rowTpl">${row(blankLine())}</template>`;
 }
 
-function wireLines(doc) {
+function wireLines(doc, arm) {
   const tbody = $('#lines tbody');
+  const ORDER = ['code', 'name', 'price', 'qty', 'bonus', 'disc'];
+  const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.ln', tr).textContent = i + 1));
   const recalc = () => {
     const lines = $$('tr', tbody).map((tr) => ({ qty: num($('[data-k=qty]', tr).value) || 0, bonus: num($('[data-k=bonus]', tr).value) || 0, price: num($('[data-k=price]', tr).value) || 0, disc: num($('[data-k=disc]', tr).value) || 0 }));
     const tot = computeTotals(lines, { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: num($('#invdisc').value) || 0 });
     $$('tr', tbody).forEach((tr, i) => { $('.amt', tr).textContent = tot.lines[i].amountC ? money(tot.lines[i].amountC) : ''; });
     $('#totals').innerHTML = `
-      <div><span>Lines</span><span>${lines.filter((l) => l.qty || l.bonus).length}</span></div>
+      <div><span>Lines</span><span>${$$('tr', tbody).filter((tr) => tr.dataset.item).length}</span></div>
       <div><span>Total qty / bonus</span><span>${fmt(tot.qtyTotal, 0)} / ${fmt(tot.bonusTotal, 0)}</span></div>
       <div><span>Subtotal</span><span>${money(tot.subtotalC)}</span></div>
       ${tot.discC ? `<div><span>Invoice discount</span><span>−${money(tot.discC)}</span></div>` : ''}
       <div><span>Net before VAT</span><span>${money(tot.netC)}</span></div>
-      <div><span>VAT ${S.settings.vatRate}%${S.settings.pricesIncludeVat ? ' (included)' : ''}</span><span>${money(tot.vatC)}</span></div>
+      <div><span>VAT ${S.settings.vatRate}%</span><span>${money(tot.vatC)}</span></div>
       <div class="grand"><span>Total ₪</span><span>${money(tot.totalC)}</span></div>
       <div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div>`;
+    translate($('#totals'));
   };
-  const addRow = () => { tbody.insertAdjacentHTML('beforeend', $('#rowTpl').innerHTML); const tr = tbody.lastElementChild; $('[data-k=item]', tr).focus(); return tr; };
-  tbody.addEventListener('input', recalc);
-  tbody.addEventListener('change', (e) => {
-    if (e.target.dataset.k !== 'item') return;
-    const tr = e.target.closest('tr'); const it = findItem(e.target.value);
-    if (it) { const pr = $('[data-k=price]', tr); if (!pr.value) pr.value = defaultPrice(it, doc.type); $('[data-k=qty]', tr).focus(); }
+  const setItem = (tr, it) => {
+    tr.dataset.item = it ? it.id : '';
+    tr.classList.toggle('found', !!it);
+    if (!it) return;
+    $('[data-k=code]', tr).value = it.code;
+    $('[data-k=name]', tr).value = it.name;
+    const pr = $('[data-k=price]', tr); if (!pr.value) pr.value = defaultPrice(it, doc.type);
+  };
+  const byName = (v) => {
+    const low = v.trim().toLowerCase(); if (!low) return null;
+    const act = S.items.filter((i) => i.active !== false);
+    return act.find((i) => i.name.toLowerCase() === low) || uniqueMatch(act, low, true);
+  };
+  const addRow = () => { tbody.insertAdjacentHTML('beforeend', $('#rowTpl').innerHTML); renumber(); translate(tbody.lastElementChild); return tbody.lastElementChild; };
+  const isEmpty = (tr) => !tr.dataset.item && !$('[data-k=code]', tr).value.trim() && !$('[data-k=name]', tr).value.trim();
+
+  tbody.addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); const k = e.target.dataset.k;
+    if (k === 'code') {
+      const v = e.target.value.trim().toLowerCase();
+      const it = v ? S.items.find((i) => i.code.toLowerCase() === v && i.active !== false) : null;
+      if (it) setItem(tr, it);
+      else { tr.dataset.item = ''; tr.classList.remove('found'); $('[data-k=name]', tr).value = ''; }
+      tr.classList.toggle('unknown', !!v && !it);
+    }
+    if (k === 'name') { const it = S.items.find((i) => i.name === e.target.value && i.active !== false); if (it) setItem(tr, it); }
     recalc();
   });
-  tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined) { e.target.closest('tr').remove(); if (!tbody.children.length) addRow(); recalc(); } });
+  tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined) { e.target.closest('tr').remove(); if (!tbody.children.length) addRow(); renumber(); recalc(); } });
   tbody.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     e.preventDefault();
-    const inputs = $$('input', tbody); const i = inputs.indexOf(e.target);
-    if (i === inputs.length - 1) addRow(); else inputs[i + 1].focus();
+    const tr = e.target.closest('tr'); const k = e.target.dataset.k;
+    const focus = (key, row = tr) => { const el = $(`[data-k=${key}]`, row); el.focus(); el.select?.(); };
+    if (k === 'code') {
+      const v = e.target.value.trim();
+      if (tr.dataset.item) return focus('price');
+      if (!v) return focus('name');
+      toast(`No item with code ${v}`, true); return;
+    }
+    if (k === 'name') {
+      if (isEmpty(tr)) {
+        // empty line: drop it and go to saving
+        if (tbody.children.length > 1) { tr.remove(); renumber(); recalc(); }
+        return arm();
+      }
+      const it = tr.dataset.item ? itemById(tr.dataset.item) : byName(e.target.value);
+      if (!it) return;
+      setItem(tr, it); recalc(); return focus('price');
+    }
+    const i = ORDER.indexOf(k);
+    if (i >= 0 && i < ORDER.length - 1) return focus(ORDER[i + 1]);
+    // last field of the line (or batch/expiry): next line
+    const next = tr.nextElementSibling || addRow();
+    focus('code', next);
   });
-  $('#addline').onclick = () => addRow();
+  $('#addline').onclick = () => { const tr = addRow(); $('[data-k=code]', tr).focus(); };
   $('#invdisc').oninput = recalc;
-  recalc();
+  renumber(); recalc();
 }
 
 function voucherUI(doc) {
@@ -338,7 +443,7 @@ function voucherUI(doc) {
 function smartEntry(doc, readDoc) {
   const dlg = document.createElement('dialog');
   dlg.innerHTML = `<h2 style="margin-top:0">Smart entry</h2>
-    <p class="muted">Paste JSON produced by Claude, ChatGPT or Gemini (see the prompt on the Import page), or simple lines like <code>ITM-0001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
+    <p class="muted">Paste JSON produced by Claude, ChatGPT or Gemini (see the prompt on the Import page), or simple lines like <code>1001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
     <textarea id="smartText" dir="auto"></textarea>
     <div class="actions"><button class="btn primary" id="smartGo">Add to draft</button><button class="btn" id="smartClose">Close</button></div>`;
   document.body.appendChild(dlg); dlg.showModal();
@@ -416,16 +521,17 @@ async function viewDoc(d) {
 }
 
 // ---------- printing ----------
-async function printDoc(d, reason = '') {
-  const { label, copyNo } = await db.logPrint(d.id, S.user, 'print', reason);
+async function printDoc(d, reason = '', copies = 1) {
+  const pages = [];
+  for (let i = 0; i < (d.status === 'draft' ? 1 : copies); i++) pages.push(await db.logPrint(d.id, S.user, 'print', reason));
   const t = DOC_TYPES[d.type];
   const p = partyById(d.partyId) || {};
   const s = S.settings;
   const opt = { vatRate: d.settingsAtPost?.vatRate ?? s.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? s.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount };
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
-  const stamp = label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة';
+  const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
   const ar = { SI: 'فاتورة ضريبية', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
-  $('#printArea').innerHTML = `<div class="doc-print">
+  const page = ({ label, copyNo }) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">
     ${label === 'DRAFT' ? '<div class="wm">مسودة</div>' : ''}
     <div class="ph"><div><div class="co" dir="auto">${esc(s.companyName)}</div>${s.companyNameAr ? `<div dir="rtl">${esc(s.companyNameAr)}</div>` : ''}
       <div>${esc(s.address)} ${s.phone ? '· ' + esc(s.phone) : ''}</div>${s.taxNo ? `<div>Licensed dealer no. / رقم المشتغل: ${esc(s.taxNo)}</div>` : ''}</div>
@@ -445,7 +551,8 @@ async function printDoc(d, reason = '') {
        ${d.method ? `<p>${PAY_METHODS[d.method] || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} · ${esc(d.chequeBank)} · due ${esc(d.dueDate)}` : ''}</p>` : ''}${d.notes ? `<p dir="auto">${esc(d.notes)}</p>` : ''}`}
     <div class="sign"><span>Received by · المستلم</span><span>Signature · التوقيع</span></div>
     <div class="meta"><span>Printed by ${esc(S.user)} · ${new Date().toLocaleString('en-GB')}</span><span>${esc(stamp)}</span></div>
-  </div>`;
+  </div>`; };
+  $('#printArea').innerHTML = pages.map(page).join('');
   document.body.classList.add('printing');
   setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
 }
@@ -475,7 +582,7 @@ function itemForm(it, locked = false) {
     <p class="muted" style="grid-column:1/-1;margin:0">${locked ? 'This item has movements, so its name is locked: one code is one account with one name. If the name is wrong, set Active to No (it disappears from the lists but stays in every account and report) and add a new item with the right name.' : 'No movements yet, so the name can still be corrected freely.'}</p>
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
-  if (!it.id) $('[name=code]', dlg).value = nextPartyCode('ITM', S.items.map((i) => i.code));
+  if (!it.id) $('[name=code]', dlg).value = nextNumericCode(S.items.map((i) => i.code));
   dlg.addEventListener('close', () => guard(async () => {
     if (dlg.returnValue !== 'save') return dlg.remove();
     const fd = Object.fromEntries(new FormData($('form', dlg)));
@@ -526,7 +633,7 @@ function partyForm(p, locked = false) {
       <p class="muted" style="grid-column:1/-1;margin:0">${locked ? `This ${p.kind} has movements, so its name is locked: one code is one account with one name. If the name is wrong, set Active to No (it disappears from the lists but stays in every account and report) and add a new ${p.kind} with the right name.` : 'No movements yet, so the name can still be corrected freely.'}</p>` : ''}
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
-  if (!p.id) $('[name=code]', dlg).value = nextPartyCode(cust ? 'CUS' : 'SUP', S.parties.filter((x) => x.kind === p.kind).map((x) => x.code));
+  if (!p.id) $('[name=code]', dlg).value = nextNumericCode(S.parties.filter((x) => x.kind === p.kind).map((x) => x.code));
   dlg.addEventListener('close', () => guard(async () => {
     if (dlg.returnValue !== 'save') return dlg.remove();
     const fd = Object.fromEntries(new FormData($('form', dlg)));
@@ -627,7 +734,7 @@ routes.sales = async () => {
     <div class="row"><label class="f">From<input id="from" type="date" value="${from}"></label><label class="f">To<input id="to" type="date" value="${to}"></label>
     <label class="f">Group by<select id="by">${[['item', 'Item'], ['customer', 'Customer'], ['region', 'Region'], ['type', 'Customer type'], ['date', 'Date']].map(([k, v]) => `<option value="${k}" ${k === by ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <button class="btn primary" id="show">Show</button><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print</button></div>
-    <div class="tablewrap" style="margin-top:20px"><table class="t"><thead><tr><th>${by}</th>${by === 'item' ? '<th>Name</th>' : ''}<th class="n">Qty</th><th class="n">Bonus</th><th class="n">Total qty</th><th class="n">Total ₪</th></tr></thead><tbody>
+    <div class="tablewrap" style="margin-top:20px"><table class="t"><thead><tr><th>${{ item: 'Item', customer: 'Customer', region: 'Region', type: 'Customer type', date: 'Date' }[by]}</th>${by === 'item' ? '<th>Name</th>' : ''}<th class="n">Qty</th><th class="n">Bonus</th><th class="n">Total qty</th><th class="n">Total ₪</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td dir="auto"><b>${esc(r.key)}</b></td>${by === 'item' ? `<td dir="auto">${esc(r.name)}</td>` : ''}<td class="n">${fmt(r.qty, 0)}</td><td class="n">${fmt(r.bonus, 0)}</td><td class="n">${fmt(r.qty + r.bonus, 0)}</td><td class="n">${money(r.amountC)}</td></tr>`).join('')}
     </tbody><tfoot><tr><td ${by === 'item' ? 'colspan="2"' : ''}>Totals</td><td class="n">${fmt(tsum.q, 0)}</td><td class="n">${fmt(tsum.b, 0)}</td><td class="n">${fmt(tsum.q + tsum.b, 0)}</td><td class="n">${money(tsum.a)}</td></tr></tfoot></table></div>`;
   $('#show').onclick = () => (location.hash = `#/sales?from=${$('#from').value}&to=${$('#to').value}&by=${$('#by').value}`);
@@ -744,7 +851,7 @@ async function runImport(obj) {
   let n = 0; const osLines = [];
   for (const it of obj.items || []) {
     if (S.items.some((x) => (it.code && x.code === String(it.code)) || x.name === it.name)) continue;
-    const code = String(it.code || nextPartyCode('ITM', S.items.map((i) => i.code)));
+    const code = String(it.code || nextNumericCode(S.items.map((i) => i.code)));
     const rec = await db.saveMaster('items', { code, name: it.name, brand: it.brand || '', category: it.category || '', unit: it.unit || 'PCS', barcode: String(it.barcode || ''),
       buyPrice: Number(it.buyPrice) || '', pricePublic: Number(it.pricePublic) || '', pricePharmacist: Number(it.pricePharmacist) || '', active: true }, S.user);
     S.items.push(rec); n++;
@@ -757,7 +864,7 @@ async function runImport(obj) {
   for (const k of ['customers', 'suppliers']) for (const c of obj[k] || []) {
     const kind = k.slice(0, -1);
     if (S.parties.some((x) => x.kind === kind && ((c.code && x.code === String(c.code)) || x.name === c.name))) continue;
-    const code = String(c.code || nextPartyCode(kind === 'customer' ? 'CUS' : 'SUP', S.parties.filter((x) => x.kind === kind).map((x) => x.code)));
+    const code = String(c.code || nextNumericCode(S.parties.filter((x) => x.kind === kind).map((x) => x.code)));
     const rec = await db.saveMaster('parties', { kind, code, name: c.name, phone: String(c.phone || ''), address: c.address || '', region: c.region || (kind === 'customer' ? 'gaza' : ''), type: c.type || (kind === 'customer' ? 'pharmacy' : ''), creditLimit: Number(c.creditLimit) || '' }, S.user);
     S.parties.push(rec); n++;
     if (Number(c.openingBalance)) await postOpening(rec, Number(c.openingBalance));
@@ -809,15 +916,20 @@ routes.settings = async () => {
   $('#main').innerHTML = `<h1>Settings</h1>
     <h2>You</h2><div class="row"><label class="f">Your name<input id="uname" value="${esc(S.user)}"></label>
       <label class="f">Text size<select id="size">${[['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']].map(([k, v]) => `<option value="${k}" ${s.fontScale === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="f">Language<select id="lang"><option value="en">English</option><option value="ar" ${getLang() === 'ar' ? 'selected' : ''}>العربية</option></select></label>
       <button class="btn" id="saveMe">Save</button></div>
     <h2>Role</h2><p class="muted">Admin adds items, customers and suppliers, voids documents, imports and restores. Accountant enters and posts documents.</p>
     <div class="actions">${isAdmin() ? '<button class="btn" id="toAcc">Switch to accountant</button>' : '<button class="btn primary" id="toAdmin">Switch to admin</button>'}</div>
     <h2>Company</h2><form id="co" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
       ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('taxNo', 'Licensed dealer no.')}${f('address', 'Address')}${f('phone', 'Phone')}${f('branch', 'Branch / vehicle code (series prefix)')}
-      ${f('vatRate', 'VAT %', 'number')}<label class="f">Prices include VAT<select name="pricesIncludeVat" ${isAdmin() ? '' : 'disabled'}><option value="true">Yes</option><option value="false" ${s.pricesIncludeVat ? '' : 'selected'}>No</option></select></label></form>
+      ${f('vatRate', 'VAT %', 'number')}${f('copiesInvoice', 'Print copies · Invoices', 'number')}${f('copiesVoucher', 'Print copies · Vouchers', 'number')}<label class="f">Prices include VAT<select name="pricesIncludeVat" ${isAdmin() ? '' : 'disabled'}><option value="true">Yes</option><option value="false" ${s.pricesIncludeVat ? '' : 'selected'}>No</option></select></label></form>
     ${isAdmin() ? `<div class="actions"><button class="btn primary" id="saveCo">Save company</button></div><h2>Admin PIN</h2><div class="row"><label class="f">New PIN<input id="pin" type="password" inputmode="numeric"></label><button class="btn" id="savePin">Set PIN</button></div>` : ''}
     <div class="note" style="margin-top:24px">This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.</div>`;
-  $('#saveMe').onclick = () => guard(async () => { S.user = $('#uname').value.trim() || 'User'; sessionStorage.setItem('user', S.user); await db.setSetting('fontScale', $('#size').value, S.user); toast('Saved'); render(); });
+  $('#saveMe').onclick = () => guard(async () => {
+    S.user = $('#uname').value.trim() || 'User'; sessionStorage.setItem('user', S.user); await db.setSetting('fontScale', $('#size').value, S.user);
+    if ($('#lang').value !== getLang()) { setLang($('#lang').value); location.reload(); return; }
+    toast('Saved'); render();
+  });
   $('#toAcc') && ($('#toAcc').onclick = () => { S.role = 'accountant'; sessionStorage.setItem('role', 'accountant'); render(); });
   $('#toAdmin') && ($('#toAdmin').onclick = () => guard(async () => {
     if (S.settings.adminPin) { const pin = prompt('Admin PIN'); if (pin !== S.settings.adminPin) throw new Error('Wrong PIN'); }
@@ -826,6 +938,7 @@ routes.settings = async () => {
   $('#saveCo') && ($('#saveCo').onclick = () => guard(async () => {
     const fd = Object.fromEntries(new FormData($('#co')));
     fd.vatRate = Number(fd.vatRate); fd.pricesIncludeVat = fd.pricesIncludeVat === 'true';
+    fd.copiesInvoice = Math.max(1, Number(fd.copiesInvoice) || 2); fd.copiesVoucher = Math.max(1, Number(fd.copiesVoucher) || 2);
     for (const [k, v] of Object.entries(fd)) await db.setSetting(k, v, S.user);
     toast('Saved'); render();
   }));
@@ -842,6 +955,10 @@ function printHtml(html) {
 
 // ---------- boot ----------
 (async () => {
+  applyLang();
+  const lb = $('#langBtn');
+  lb.textContent = getLang() === 'ar' ? 'English' : 'العربية';
+  lb.onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); };
   await db.open();
   if (!location.hash) location.hash = '#/dashboard';
   await render();

@@ -50,7 +50,7 @@ export async function getSettings() {
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return {
     companyName: 'My Company', companyNameAr: '', taxNo: '', address: '', phone: '',
-    vatRate: 16, pricesIncludeVat: true, fontScale: 'normal', adminPin: '', branch: '',
+    vatRate: 16, pricesIncludeVat: true, fontScale: 'normal', adminPin: '', branch: '', copiesInvoice: 2, copiesVoucher: 2,
     ...s,
   };
 }
