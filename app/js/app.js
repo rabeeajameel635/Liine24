@@ -17,8 +17,8 @@ const itemById = (id) => S.items.find((i) => i.id === id);
 const partyById = (id) => S.parties.find((p) => p.id === id);
 const partyLabel = (p) => (p ? `${p.code} — ${p.name}` : '');
 const docLabel = (d) => d.number || 'DRAFT';
-const docPartyName = (d) => d.partyName || partyById(d.partyId)?.name || '';
-const lineItem = (l) => { const it = itemById(l.itemId) || {}; return { code: l.itemCode || it.code || '', name: l.itemName || it.name || '' }; };
+const docPartyName = (d) => partyById(d.partyId)?.name || '';
+const lineItem = (l) => { const it = itemById(l.itemId) || {}; return { code: it.code || '', name: it.name || '' }; };
 
 function toast(msg, err = false) {
   const t = $('#toast');
@@ -148,7 +148,7 @@ const blankLine = () => ({ itemId: '', qty: '', bonus: '', price: '', disc: '', 
 function editor(doc) {
   const t = DOC_TYPES[doc.type];
   const partyKind = t.party === 'supplier' ? 'supplier' : 'customer';
-  const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && p.active !== false);
+  const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && (p.active !== false || !t.lines));
   const itemsList = S.items.filter((i) => i.active !== false);
   $('#main').innerHTML = `
     <h1>${t.name} <span class="pill draft">${doc.id ? 'Draft' : 'New'}</span></h1>
@@ -378,8 +378,7 @@ function parseSmart(text) {
 // ---------- view posted / voided ----------
 async function viewDoc(d) {
   const t = DOC_TYPES[d.type];
-  const p0 = partyById(d.partyId) || {};
-  const p = { ...p0, code: d.partyCode || p0.code, name: d.partyName || p0.name };
+  const p = partyById(d.partyId);
   const prints = await db.byIndex('printlog', 'docId', d.id);
   const tot = t.lines ? computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? S.settings.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount }) : null;
   $('#main').innerHTML = `
@@ -420,8 +419,7 @@ async function viewDoc(d) {
 async function printDoc(d, reason = '') {
   const { label, copyNo } = await db.logPrint(d.id, S.user, 'print', reason);
   const t = DOC_TYPES[d.type];
-  const p0 = partyById(d.partyId) || {};
-  const p = d.status === 'draft' ? p0 : { ...p0, code: d.partyCode || p0.code, name: d.partyName || p0.name };
+  const p = partyById(d.partyId) || {};
   const s = S.settings;
   const opt = { vatRate: d.settingsAtPost?.vatRate ?? s.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? s.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount };
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
@@ -464,17 +462,17 @@ routes.items = async () => {
       <td>${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
   $('#add') && ($('#add').onclick = () => itemForm({}));
-  $$('[data-edit]').forEach((b) => (b.onclick = () => itemForm(itemById(b.dataset.edit))));
+  $$('[data-edit]').forEach((b) => (b.onclick = () => guard(async () => itemForm(itemById(b.dataset.edit), await db.hasMovements('items', b.dataset.edit)))));
 };
-function itemForm(it) {
+function itemForm(it, locked = false) {
   const dlg = document.createElement('dialog');
-  const f = (k, label, type = 'text') => `<label class="f">${label}<input name="${k}" type="${type}" ${type === 'number' ? 'step="any"' : ''} dir="auto" value="${esc(it[k] ?? '')}" ${k === 'code' && it.id ? 'readonly' : ''}></label>`;
+  const f = (k, label, type = 'text') => `<label class="f">${label}<input name="${k}" type="${type}" ${type === 'number' ? 'step="any"' : ''} dir="auto" value="${esc(it[k] ?? '')}" ${(k === 'code' && it.id) || (k === 'name' && locked) ? 'readonly' : ''}></label>`;
   dlg.innerHTML = `<h2 style="margin-top:0">${it.id ? 'Edit item' : 'New item'}</h2><form method="dialog" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     ${f('code', 'Code (permanent)')}${f('name', 'Name')}${f('brand', 'Brand / company')}${f('category', 'Category')}${f('unit', 'Unit')}${f('barcode', 'Barcode')}
     ${f('buyPrice', 'Buy price', 'number')}${f('pricePublic', 'Public price', 'number')}${f('pricePharmacist', 'Pharmacist price', 'number')}
     <label class="f">Active<select name="active"><option value="true">Yes</option><option value="false" ${it.active === false ? 'selected' : ''}>No</option></select></label>
     ${it.id ? `<label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.items.filter((x) => x.id !== it.id && x.active !== false).map((x) => `<option value="${x.id}" ${it.replacedBy === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></label>` : ''}
-    <p class="muted" style="grid-column:1/-1;margin:0">Wrong spelling? Fix the name here; the code stays and the change is logged. Posted invoices keep the name they were posted with. Wrong item altogether? Set Active to No, add the right item, and pick it under Replaced by.</p>
+    <p class="muted" style="grid-column:1/-1;margin:0">${locked ? 'This item has movements, so its name is locked: one code is one account with one name. If the name is wrong, set Active to No (it disappears from the lists but stays in every account and report) and add a new item with the right name.' : 'No movements yet, so the name can still be corrected freely.'}</p>
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
   if (!it.id) $('[name=code]', dlg).value = nextPartyCode('ITM', S.items.map((i) => i.code));
@@ -511,11 +509,11 @@ async function partiesPage(kind) {
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
   $('#add') && ($('#add').onclick = () => partyForm({ kind }));
-  $$('[data-edit]').forEach((b) => (b.onclick = () => partyForm(partyById(b.dataset.edit))));
+  $$('[data-edit]').forEach((b) => (b.onclick = () => guard(async () => partyForm(partyById(b.dataset.edit), await db.hasMovements('parties', b.dataset.edit)))));
 }
-function partyForm(p) {
+function partyForm(p, locked = false) {
   const dlg = document.createElement('dialog');
-  const f = (k, label, type = 'text') => `<label class="f">${label}<input name="${k}" type="${type}" ${type === 'number' ? 'step="any"' : ''} dir="auto" value="${esc(p[k] ?? '')}" ${k === 'code' && p.id ? 'readonly' : ''}></label>`;
+  const f = (k, label, type = 'text') => `<label class="f">${label}<input name="${k}" type="${type}" ${type === 'number' ? 'step="any"' : ''} dir="auto" value="${esc(p[k] ?? '')}" ${(k === 'code' && p.id) || (k === 'name' && locked) ? 'readonly' : ''}></label>`;
   const cust = p.kind === 'customer';
   dlg.innerHTML = `<h2 style="margin-top:0">${p.id ? 'Edit' : 'New'} ${p.kind}</h2><form method="dialog" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     ${f('code', 'Code (permanent)')}${f('name', 'Name')}${f('phone', 'Phone')}${f('address', 'Address')}${f('taxNo', 'Tax / licensed dealer no.')}
@@ -525,7 +523,7 @@ function partyForm(p) {
     ${p.id ? '' : f('openingBalance', 'Opening balance (₪)', 'number')}
     ${p.id ? `<label class="f">Active<select name="active"><option value="true">Yes</option><option value="false" ${p.active === false ? 'selected' : ''}>No</option></select></label>
       <label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.parties.filter((x) => x.kind === p.kind && x.id !== p.id && x.active !== false).map((x) => `<option value="${x.id}" ${p.replacedBy === x.id ? 'selected' : ''}>${esc(partyLabel(x))}</option>`).join('')}</select></label>
-      <p class="muted" style="grid-column:1/-1;margin:0">Wrong spelling? Fix the name here; the code stays and the change is logged. Posted documents keep the name they were posted with. Wrong ${p.kind} altogether? Set Active to No, add the right one, and pick it under Replaced by. A balance must be settled before deactivating.</p>` : ''}
+      <p class="muted" style="grid-column:1/-1;margin:0">${locked ? `This ${p.kind} has movements, so its name is locked: one code is one account with one name. If the name is wrong, set Active to No (it disappears from the lists but stays in every account and report) and add a new ${p.kind} with the right name.` : 'No movements yet, so the name can still be corrected freely.'}</p>` : ''}
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
   document.body.appendChild(dlg); dlg.showModal();
   if (!p.id) $('[name=code]', dlg).value = nextPartyCode(cust ? 'CUS' : 'SUP', S.parties.filter((x) => x.kind === p.kind).map((x) => x.code));
@@ -541,7 +539,7 @@ function partyForm(p) {
     if (fd.active !== undefined) fd.active = fd.active === 'true';
     if (p.id && fd.active === false && p.active !== false) {
       const bal = await partyBalanceC(p.id);
-      if (bal !== 0) throw new Error(`Balance is ${money(bal)}. Settle it (receipt, payment or credit/debit note) before deactivating.`);
+      if (bal !== 0 && !confirm(`${p.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) return;
     }
     if (fd.creditLimit !== undefined) fd.creditLimit = fd.creditLimit === '' ? '' : Number(fd.creditLimit);
     const rec = await db.saveMaster('parties', { ...p, ...fd }, S.user);
@@ -617,7 +615,7 @@ routes.sales = async () => {
     const factor = tot.subtotalC ? tot.totalC / tot.subtotalC : 0;
     const p = partyById(d.partyId) || {};
     for (const l of tot.lines) {
-      const it = { ...lineItem(l), code: itemById(l.itemId)?.code || l.itemCode };
+      const it = lineItem(l);
       const key = by === 'item' ? it.code : by === 'region' ? REGIONS[p.region] || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' ' + p.name : d.date;
       const a = (agg[key] ||= { key, name: by === 'item' ? it.name : '', qty: 0, bonus: 0, amountC: 0 });
       a.qty += sign * (Number(l.qty) || 0); a.bonus += sign * (Number(l.bonus) || 0); a.amountC += sign * Math.round(l.amountC * factor);

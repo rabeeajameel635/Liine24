@@ -62,10 +62,26 @@ export async function setSetting(key, value, user) {
 }
 
 // master data: items and parties can be added or edited, never deleted (deactivate instead)
+// A record "has movements" once any posted entry or stock move points to it.
+// One code is one account with one name: after the first movement the name is locked.
+// To correct it, deactivate the record (it stays in every report) and add a new one.
+export async function hasMovements(store, id) {
+  if (!id) return false;
+  const tx = db.transaction(['ledger', 'stock']);
+  if (store === 'items') return (await req(tx.objectStore('stock').index('itemId').count(id))) > 0;
+  return (await req(tx.objectStore('ledger').index('partyId').count(id))) > 0;
+}
+
 export async function saveMaster(store, obj, user) {
-  const tx = db.transaction([store, 'audit'], 'readwrite');
+  const tx = db.transaction([store, 'audit', 'ledger', 'stock'], 'readwrite');
   const before = obj.id ? await req(tx.objectStore(store).get(obj.id)) : null;
   if (before && before.code && obj.code !== before.code) throw new Error('Codes are permanent and cannot be changed');
+  if (before && obj.name !== undefined && obj.name !== before.name) {
+    const used = store === 'items'
+      ? await req(tx.objectStore('stock').index('itemId').count(before.id))
+      : await req(tx.objectStore('ledger').index('partyId').count(before.id));
+    if (used) { tx.abort(); throw new Error(`${before.code} already has movements, so its name is locked. Deactivate it and add a new one with the correct name.`); }
+  }
   const rec = { ...before, ...obj, id: obj.id || uid(), updatedAt: now(), createdAt: before?.createdAt || now() };
   tx.objectStore(store).put(rec);
   const changes = before ? Object.keys(rec).filter((k) => !['updatedAt'].includes(k) && JSON.stringify(before[k] ?? '') !== JSON.stringify(rec[k] ?? ''))
@@ -89,7 +105,6 @@ export async function saveDraft(doc, user) {
 // Posting is one atomic transaction: number, ledger, stock and audit together or nothing.
 export async function post(docId, user, settings, { allowBackdate = false, backdateReason = '' } = {}) {
   const items = Object.fromEntries((await all('items')).map((i) => [i.id, i]));
-  const parties = Object.fromEntries((await all('parties')).map((p) => [p.id, p]));
   const tx = db.transaction(['docs', 'ledger', 'stock', 'seqs', 'audit'], 'readwrite');
   const docs = tx.objectStore('docs');
   const doc = await req(docs.get(docId));
@@ -105,11 +120,7 @@ export async function post(docId, user, settings, { allowBackdate = false, backd
   const number = formatNumber(series, seq.next);
   const totals = posting.totals;
   const rec = {
-    ...doc,
-    // names are frozen at posting: renaming an item or customer later never changes a posted document
-    partyCode: parties[doc.partyId]?.code || '', partyName: parties[doc.partyId]?.name || '',
-    lines: (doc.lines || []).map((l) => ({ ...l, itemCode: items[l.itemId]?.code || '', itemName: items[l.itemId]?.name || '', unit: items[l.itemId]?.unit || '' })),
-    status: 'posted', series, seqNo: seq.next, number, postedAt: now(), postedBy: user,
+    ...doc, status: 'posted', series, seqNo: seq.next, number, postedAt: now(), postedBy: user,
     backdated: !!backdated, backdateReason: backdated ? backdateReason : '',
     totalC: totals.totalC, vatC: totals.vatC || 0, netC: totals.netC ?? totals.totalC,
     qtyTotal: totals.qtyTotal || 0, bonusTotal: totals.bonusTotal || 0,
