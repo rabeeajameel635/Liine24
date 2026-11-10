@@ -1200,15 +1200,14 @@ routes.items = async () => {
   $('#main').innerHTML = `<h1>Items</h1><p class="sub">${S.items.length} items. Codes are permanent. Items are never deleted, only deactivated.</p>
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}</div>
     <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : ''} <kbd>Enter</kbd> <span>opens the only match.</span></p>
-    <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Company</th><th>Category</th><th>Unit</th><th class="n">Buy</th><th class="n">Public</th><th class="n">Pharmacist</th><th></th></tr></thead><tbody id="tb">
-    ${S.items.map((i) => `<tr data-id="${i.id}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td><b>${esc(i.code)}</b></td><td dir="auto">${esc(i.name)}${i.active === false ? ` <span class="pill">inactive</span>${i.replacedBy ? ` → ${esc(itemById(i.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(i.brand || '')}</td><td>${esc(i.category || '')}</td><td>${esc(i.unit || '')}</td>
-      <td class="n">${fmt(i.buyPrice || 0, 3)}</td><td class="n">${fmt(i.pricePublic || 0, 3)}</td><td class="n">${fmt(i.pricePharmacist || 0, 3)}</td>
-      <td>${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    <div class="tablewrap"><table class="t deflist"><tbody id="tb">
+    ${S.items.map((i) => `<tr data-id="${i.id}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td class="dl"><b dir="ltr">${esc(i.code)}</b> <span dir="auto">${esc(i.name)}</span>${i.active === false ? ` <span class="pill">inactive</span>` : ''}</td>
+      <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
   $('#add') && ($('#add').onclick = () => itemForm({}));
-  const openItem = (id) => isAdmin() && guard(async () => itemForm(itemById(id), await db.hasMovements('items', id)));
+  const openItem = (id) => (isAdmin() ? guard(async () => itemForm(itemById(id), await db.hasMovements('items', id))) : itemCard(itemById(id), null, 'SI', { change: false }));
   $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.edit); }));
-  $$('#tb tr').forEach((tr) => { tr.style.cursor = isAdmin() ? 'pointer' : ''; tr.onclick = () => openItem(tr.dataset.id); });
+  $$('#tb tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openItem(tr.dataset.id); });
   $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openItem(vis[0].dataset.id); };
   $('#q').focus();
 };
@@ -1252,10 +1251,10 @@ async function partiesPage(kind) {
     ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(location.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
     ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
     <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its card.'} <kbd>Enter</kbd> <span>opens the only match.</span></p>
-    <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Phone</th>${kind === 'customer' ? '<th>Region</th><th>Type</th><th class="n">Credit limit</th>' : ''}<th></th></tr></thead><tbody id="tb">
-    ${(kind === 'customer' ? [...list].sort((a, b) => (regionOf(a.region)?.code || '99').localeCompare(regionOf(b.region)?.code || '99') || a.code.localeCompare(b.code, undefined, { numeric: true })) : list).map((p, i, arr) => `${kind === 'customer' && (i === 0 || arr[i - 1].region !== p.region) ? `<tr class="rgh" data-r="${p.region || ''}" data-s=""><td colspan="7"><b>${esc(regionLabel(p.region) || T('No region'))}</b> <span class="muted">· ${arr.filter((x) => x.region === p.region).length}</span></td></tr>` : ''}<tr data-id="${p.id}" data-s=""${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
-      ${kind === 'customer' ? `<td>${esc(regionLabel(p.region))}</td><td>${CUSTOMER_TYPES[p.type] || ''}</td><td class="n">${p.creditLimit ? fmt(p.creditLimit) : ''}</td>` : ''}
-      <td style="white-space:nowrap">${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    <div class="tablewrap"><table class="t deflist"><tbody id="tb">
+    ${(kind === 'customer' ? [...list].sort((a, b) => (regionOf(a.region)?.code || '99').localeCompare(regionOf(b.region)?.code || '99') || a.code.localeCompare(b.code, undefined, { numeric: true })) : [...list].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true })))
+      .map((p) => `<tr data-id="${p.id}" data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td class="dl"><b dir="ltr">${esc(p.code)}</b> <span dir="auto">${esc(p.name)}</span>${kind === 'customer' && regionName(p.region) ? ` <span class="dreg">- ${esc(regionName(p.region))}</span>` : ''}${p.active === false ? ` <span class="pill">inactive</span>` : ''}</td>
+      <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
   $('#add') && ($('#add').onclick = () => partyForm({ kind }));

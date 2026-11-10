@@ -1048,3 +1048,21 @@ table.regs td:first-child input { width: 64px; text-align: center; font-variant-
   table.bal tfoot tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n b"; background: var(--accent-soft); border-radius: 14px; padding: 12px; border: none; margin-top: 8px; }
   table.bal tfoot td:nth-child(1) { grid-area: n; font-weight: 700; } table.bal tfoot td:nth-child(2), table.bal tfoot td:nth-child(3) { display: none; } table.bal tfoot td:nth-child(4) { grid-area: b; font-weight: 800; }
 }
+/* definition lists: one plain line per record, a line between them */
+.tablewrap:has(table.deflist) { background: #fff; border: 1px solid var(--cl-line, #E2DFD6); border-radius: 18px; box-shadow: none; padding: 2px 14px; }
+table.t.deflist { border-spacing: 0; }
+table.t.deflist td { background: transparent !important; border-radius: 0 !important; padding: 13px 4px !important; border-bottom: 1px solid var(--cl-line, #E2DFD6); font-size: 1.02em; }
+table.t.deflist tr:last-child td { border-bottom: none; }
+table.t.deflist td.dl b { font-variant-numeric: tabular-nums; margin-inline-end: 10px; }
+table.t.deflist .dreg { color: var(--muted); }
+table.t.deflist td.de { width: 1%; white-space: nowrap; text-align: end; }
+table.t.deflist td.de .btn { background: transparent; color: var(--muted); }
+table.t.deflist tr:hover td { background: var(--cl-cream, #FAF9F5) !important; }
+@media (max-width: 860px) {
+  table.t.deflist, table.t.deflist tbody { display: block; width: 100%; }
+  table.t.deflist tr { display: flex; align-items: center; gap: 6px; padding: 0; margin: 0; background: transparent; box-shadow: none; border-radius: 0; }
+  table.t.deflist td { display: block; border-bottom: none; }
+  table.t.deflist tr + tr { border-top: 1px solid var(--cl-line, #E2DFD6); }
+  table.t.deflist td.dl { flex: 1; min-width: 0; }
+}
+@media (max-width: 860px) { table.t.deflist td.de { display: none; } }

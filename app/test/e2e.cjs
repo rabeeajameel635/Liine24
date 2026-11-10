@@ -274,7 +274,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.locator('table.regs tr[data-i]').last().locator('.rc').fill('04'); await page.click('#saveReg'); await page.waitForTimeout(500);
   console.log('  saved regions:', await page.locator('table.regs .rc').evaluateAll((els) => els.map((e) => e.value).join(' ')));
   await page.goto(URL + '#/customers'); await page.waitForSelector('#tb');
-  console.log('  directory group lines:', (await page.locator('#tb tr.rgh').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()));
+  console.log('  directory lines:', (await page.locator('#tb tr td.dl').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()));
   await page.goto(URL + '#/balances'); await page.waitForSelector('table.bal');
   console.log('  balances report:', (await page.locator('table.bal tr.rgh, table.bal tr.rgt, table.bal tfoot tr').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()).slice(0, 4));
 
