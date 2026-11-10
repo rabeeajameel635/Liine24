@@ -178,7 +178,9 @@ function draftTotalC(d) {
 // ---------- documents ----------
 routes.new = async (type) => {
   if (!DOC_TYPES[type]) throw new Error('Unknown document type');
-  const doc = { type, date: today(), partyId: '', reference: '', notes: '', lines: [], invoiceDiscount: 0, amount: '', method: 'cash', cashAccount: '1100' };
+  // Bisan-style chain: customer → statement → new document, with the customer already filled in
+  const pre = partyById(new URLSearchParams(location.hash.split('?')[1] || '').get('party'));
+  const doc = { type, date: today(), partyId: pre?.id || '', reference: '', notes: '', lines: [], invoiceDiscount: 0, amount: '', method: 'cash', cashAccount: '1100' };
   if (DOC_TYPES[type].lines) doc.lines = [blankLine()];
   editor(doc);
 };
@@ -479,6 +481,7 @@ function editor(doc) {
   setTimeout(() => {
     if (!phone) return ($('#party') || $('#date')).focus();
     if ($('#party') && !findParty($('#party').value)) { openSheet(); $('#party').focus(); }
+    else if (!doc.id) ($('#cItem') || $('#amount'))?.focus();
   }, 50);
 }
 // Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
@@ -1055,12 +1058,14 @@ routes.statement = async (pid) => {
       <button class="btn primary" id="show">Show</button><button class="btn" id="pr">Print / PDF</button><button class="btn" id="xl">Excel</button></div><div id="out" style="margin-top:20px"></div>`;
   $('#show').onclick = () => { const p = all.find((x) => partyLabel(x) === $('#p').value.trim()); if (p) location.hash = `#/statement/${p.id}?from=${$('#from').value}&to=${$('#to').value}`; };
   if (!party) return;
+  const mk = party.kind === 'supplier' ? [['PV', 'Payment voucher'], ['PI', 'Purchase invoice']] : [['RV', 'Receipt voucher'], ['SI', 'Sales invoice']];
+  $('#out').insertAdjacentHTML('beforebegin', `<div class="chain">${mk.map(([k, n], i) => `<a class="btn ${i ? '' : 'ink'}" href="#/new/${k}?party=${party.id}">${ic('plus')}<span>${n}</span></a>`).join('')}</div>`);
   const st = statement(await ledger(), S.docs, party.id, party.kind, { from: q.get('from') || '', to: q.get('to') || '' });
   const rows = st.rows.map((r) => [r.date, r.number || r.doc?.number, DOC_TYPES[r.type]?.name + (r.reversal ? ' (void reversal)' : ''), r.doc?.reference || '', r.debitC, r.creditC, r.balanceC]);
-  $('#out').innerHTML = `<div class="tablewrap"><table class="t"><thead><tr><th>Date</th><th>Document</th><th>Type</th><th>Ref.</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
+  $('#out').innerHTML = `<div class="tablewrap"><table class="t st"><thead><tr><th>Date</th><th>Document</th><th>Type</th><th>Ref.</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
     ${st.opening ? `<tr><td colspan="6"><i>Opening balance</i></td><td class="n">${money(st.opening)}</td></tr>` : ''}
-    ${st.rows.map((r) => `<tr><td>${esc(r.date)}</td><td><a href="#/doc/${r.docId}">${esc(r.number || '')}</a></td><td>${esc(DOC_TYPES[r.type]?.name || '')}${r.reversal ? ' <span class="pill voided">reversal</span>' : ''}</td><td>${esc(r.doc?.reference || '')}</td>
-      <td class="n">${r.debitC ? money(r.debitC) : ''}</td><td class="n">${r.creditC ? money(r.creditC) : ''}</td><td class="n"><b>${money(r.balanceC)}</b></td></tr>`).join('')}
+    ${st.rows.map((r) => `<tr><td class="sd">${esc(r.date)}</td><td class="sn"><a href="#/doc/${r.docId}">${esc(r.number || '')}</a></td><td class="sy">${esc(DOC_TYPES[r.type]?.name || '')}${r.reversal ? ' <span class="pill voided">reversal</span>' : ''}</td><td class="sr">${esc(r.doc?.reference || '')}</td>
+      <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="4">Closing balance</td><td class="n">${money(st.rows.reduce((s, r) => s + r.debitC, 0))}</td><td class="n">${money(st.rows.reduce((s, r) => s + r.creditC, 0))}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>
     <p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
   $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [['Date', 'Document', 'Type', 'Ref', 'Debit', 'Credit', 'Balance'], ...rows.map((r) => [...r.slice(0, 4), fromCents(r[4]), fromCents(r[5]), fromCents(r[6])])]);

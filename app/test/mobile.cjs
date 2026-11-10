@@ -51,6 +51,11 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.fill('#amount', '250'); await p.waitForTimeout(200);
     console.log(lang, 'voucher bar balance:', (await p.textContent('#barBal')).trim());
     await p.screenshot({ path: `${OUT}/${lang}-6-voucher.png` });
+    await p.goto(U + '?s=1#/customers'); await p.waitForTimeout(700);
+    await p.locator('a[href^="#/statement/"]').first().tap(); await p.waitForTimeout(500);
+    await p.screenshot({ path: `${OUT}/${lang}-7-statement.png` });
+    await p.locator('.chain a').first().tap(); await p.waitForTimeout(600);
+    console.log(lang, 'chain statement → receipt, party filled:', await p.inputValue('#party'), '| sheet closed:', !(await p.evaluate(() => document.body.classList.contains('sheet-open'))));
     console.log(lang, 'errors:', errors.length ? errors : 'none');
     await ctx.close();
   }

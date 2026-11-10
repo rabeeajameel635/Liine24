@@ -535,3 +535,24 @@ dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); marg
   .psheet .totals > div { padding: 3px 0; font-size: .92em; }
 }
 @media (max-width: 860px) { #lines thead { position: static; } #lines tbody tr { scroll-margin-top: calc(var(--bar, 104px) + 8px); } }
+.chain { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.chain .btn .ic { width: 18px; height: 18px; }
+/* statement on phones: one plain line per movement — document, amount, running balance */
+@media (max-width: 860px) {
+  .tablewrap:has(table.st) { background: transparent; box-shadow: none; padding: 0; overflow: visible; }
+  table.st, table.st tbody, table.st tfoot { display: block; }
+  table.st thead { display: none; }
+  table.st tr { display: grid; grid-template-columns: minmax(0, 1fr) auto 96px; grid-template-areas: "sn amt sb" "sy amt sb"; column-gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  table.st td { padding: 0 !important; background: transparent !important; border-radius: 0 !important; }
+  table.st .sn { grid-area: sn; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.st .sy { grid-area: sy; font-size: 12px; color: var(--muted); }
+  table.st .sd { grid-area: sy; justify-self: end; font-size: 12px; color: var(--muted); direction: ltr; }
+  table.st .sr { display: none; }
+  table.st .sdb, table.st .scr { grid-area: amt; font-size: 15px; }
+  table.st .scr { color: #188038; } table.st .scr:not(:empty)::before { content: "−"; }
+  table.st .sb { grid-area: sb; font-size: 15px; text-align: end; }
+  table.st tbody tr:not(:has(.sn)), table.st tfoot tr { display: flex; justify-content: space-between; gap: 10px; }
+  table.st tfoot tr { background: var(--accent-soft); border-radius: 14px; padding: 12px; border: none; margin-top: 8px; }
+  table.st tfoot td { background: transparent !important; }
+  table.st tfoot td:nth-child(2), table.st tfoot td:nth-child(3) { display: none; }
+}
