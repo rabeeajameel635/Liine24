@@ -267,6 +267,7 @@ function editor(doc) {
     </div></div>`;
   document.body.classList.add('editing');
   const phone = window.matchMedia('(max-width: 860px)').matches;
+  const firstEntry = () => $('#lines tbody tr:not(.found) [data-k=code]') || $('#amount');
   const openSheet = () => document.body.classList.add('sheet-open');
   const closeSheet = () => document.body.classList.remove('sheet-open');
   if (phone) {
@@ -438,7 +439,7 @@ function editor(doc) {
       if (!p) { $('#partyInfo').textContent = ''; return; }
       const bal = await partyBalanceC(p.id);
       balBase = bal; showBal();
-      if (phone && document.activeElement === $('#party')) { closeSheet(); ($('#cItem') || $('#amount')).focus(); }
+      if (phone && document.activeElement === $('#party')) { closeSheet(); firstEntry()?.focus(); }
       $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · <span>${esc(T(REGIONS[p.region]))}</span>` : ''}`;
       translate($('#partyInfo'));
     };
@@ -481,7 +482,7 @@ function editor(doc) {
   setTimeout(() => {
     if (!phone) return ($('#party') || $('#date')).focus();
     if ($('#party') && !findParty($('#party').value)) { openSheet(); $('#party').focus(); }
-    else if (!doc.id) ($('#cItem') || $('#amount'))?.focus();
+    else if (!doc.id) firstEntry()?.focus();
   }, 50);
 }
 // Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
@@ -753,6 +754,20 @@ function wireLines(doc, arm, parties = []) {
 
   // Phone composer: one capsule above the keyboard that feeds the next line.
   // Enter: item → price → qty → bonus → line added, back to item.
+  // Phone: the card above the keyboard IS the lines table. You fill the line itself, like Bisan's grid;
+  // the card's two buttons are lookup (F2) and next (Enter).
+  const phone = window.matchMedia('(max-width: 860px)').matches;
+  if (phone) {
+    $('#composer').prepend($('#lines').closest('.tablewrap'));
+    ORDER.pop();                                          // discount is not part of the Enter walk on phones
+    if (!$$('tr', tbody).some((r) => isEmpty(r))) addRow();
+    let lastIn = null;
+    tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined && !$$('tr', tbody).some((r) => isEmpty(r))) addRow(); });   // always one empty line to write on
+    tbody.addEventListener('focusin', (e) => { if (e.target.dataset.k) { lastIn = e.target; e.target.closest('tr').scrollIntoView({ block: 'nearest' }); } });
+    const cur = () => (lastIn && tbody.contains(lastIn) ? lastIn : $('[data-k=code]', $$('tr', tbody).find((r) => isEmpty(r)) || addRow()));
+    const key = (k) => { const el = cur(); const t = k === 'F2' && !['code', 'name'].includes(el.dataset.k) ? $('[data-k=code]', el.closest('tr')) : el; t.focus(); t.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); };
+    setTimeout(() => { $('#cLook').onclick = () => key('F2'); $('#cAdd').onclick = () => key('Enter'); });
+  }
   const C = { item: $('#cItem'), price: $('#cPrice'), qty: $('#cQty'), bonus: $('#cBonus'), name: $('#cName'), nums: $('#cNums') };
   let cPicked = null;
   const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; $('#cOh').textContent = ''; };
