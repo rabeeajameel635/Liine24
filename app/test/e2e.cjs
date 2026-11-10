@@ -266,6 +266,18 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.goto(URL + '#/tb'); await page.waitForTimeout(400);
   console.log('  trial balance shows own codes:', (await page.locator('#main tbody td:first-child').allTextContents()).join(' '), '| ledger rows unchanged:', tbBefore === await page.evaluate(async () => { const db = await import('./js/db.js'); return (await db.all('ledger')).length; }));
 
+  step('regions directory: codes 01-03, customers grouped, balances by region');
+  await page.goto(URL + '#/regions'); await page.waitForSelector('table.regs');
+  console.log('  regions:', await page.locator('table.regs tr[data-i]').evaluateAll((trs) => trs.map((t) => t.querySelector('.rc').value + ' ' + t.querySelector('.rn').value + ' (' + t.cells[2].textContent + ')')));
+  await page.click('#addReg'); await page.locator('table.regs tr[data-i]').last().locator('.rn').fill('Test region'); await page.locator('table.regs tr[data-i]').last().locator('.rc').fill('02');
+  await page.click('#saveReg'); await page.waitForTimeout(300); console.log('  duplicate region code refused:', (await page.textContent('#toast')).slice(0, 40));
+  await page.locator('table.regs tr[data-i]').last().locator('.rc').fill('04'); await page.click('#saveReg'); await page.waitForTimeout(500);
+  console.log('  saved regions:', await page.locator('table.regs .rc').evaluateAll((els) => els.map((e) => e.value).join(' ')));
+  await page.goto(URL + '#/customers'); await page.waitForSelector('#tb');
+  console.log('  directory group lines:', (await page.locator('#tb tr.rgh').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()));
+  await page.goto(URL + '#/balances'); await page.waitForSelector('table.bal');
+  console.log('  balances report:', (await page.locator('table.bal tr.rgh, table.bal tr.rgt, table.bal tfoot tr').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()).slice(0, 4));
+
   step('deactivate a pharmacy with a balance');
   await page.goto(URL + '#/customers'); await page.waitForSelector('[data-edit]');
   await page.locator('#tb tr', { hasText: 'C-0100' }).locator('[data-edit]').click(); await page.waitForSelector('dialog [name=active]');

@@ -28,7 +28,7 @@ export const ACCOUNTS = {
 // What people see is their own account code (Rabee's chart, Nov 2026), editable in Accounts setup.
 export const DEFAULT_ACCOUNT_CODES = {
   '1100': '100', '1110': '101', '5200': '102', '4100': '103', '1400': '104',
-  '2100': '1300', '1200': '2300', '1250': '3300',
+  '1200': '1300', '2100': '2300', '1250': '3300',
   '1120': '105', '1300': '106', '2200': '2400', '3100': '3100', '4110': '4110', '4120': '4120', '4200': '4200', '5100': '5100',
 };
 // codes must be filled in, digits only, and unique
@@ -58,6 +58,22 @@ export const DOC_TYPES = {
 };
 
 export const REGIONS = { gaza: 'Gaza', middle: 'Middle Area', south: 'South' };
+// Regions directory (Rabee, Nov 2026): each region has a two-digit code; customers carry the region key,
+// so renaming or recoding a region never touches a customer or a number.
+export const DEFAULT_REGIONS = [
+  { key: 'gaza', code: '01', name: 'Gaza and North' },
+  { key: 'middle', code: '02', name: 'Middle Area' },
+  { key: 'south', code: '03', name: 'South' },
+];
+export function checkRegions(list) {
+  const errors = []; const seen = {};
+  for (const r of list) {
+    if (!/^\d{2}$/.test(String(r.code || ''))) errors.push(`${r.name || r.key}: region code must be two digits`);
+    else if (seen[r.code]) errors.push(`Region code ${r.code} is used twice`); else seen[r.code] = 1;
+    if (!String(r.name || '').trim()) errors.push(`Region ${r.code || r.key}: name is required`);
+  }
+  return errors;
+}
 export const CUSTOMER_TYPES = {
   pharmacy: 'Pharmacy', warehouse: 'Medical warehouse', cosmetics: 'Medical cosmetics center', other: 'Other',
 };

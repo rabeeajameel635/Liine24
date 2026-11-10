@@ -189,8 +189,16 @@ test('account codes: Rabee\'s chart as default, codes digits-only and unique', a
   const { DEFAULT_ACCOUNT_CODES, checkAccountCodes } = await import('../js/core.js');
   assert.equal(DEFAULT_ACCOUNT_CODES['1100'], '100'); assert.equal(DEFAULT_ACCOUNT_CODES['1110'], '101');
   assert.equal(DEFAULT_ACCOUNT_CODES['5200'], '102'); assert.equal(DEFAULT_ACCOUNT_CODES['4100'], '103'); assert.equal(DEFAULT_ACCOUNT_CODES['1400'], '104');
-  assert.equal(DEFAULT_ACCOUNT_CODES['2100'], '1300'); assert.equal(DEFAULT_ACCOUNT_CODES['1200'], '2300'); assert.equal(DEFAULT_ACCOUNT_CODES['1250'], '3300');
+  assert.equal(DEFAULT_ACCOUNT_CODES['1200'], '1300'); assert.equal(DEFAULT_ACCOUNT_CODES['2100'], '2300'); assert.equal(DEFAULT_ACCOUNT_CODES['1250'], '3300');
   assert.deepEqual(checkAccountCodes(DEFAULT_ACCOUNT_CODES), []);
   assert.equal(checkAccountCodes({ ...DEFAULT_ACCOUNT_CODES, '1110': '100' }).length, 1);
   assert.equal(checkAccountCodes({ ...DEFAULT_ACCOUNT_CODES, '1110': 'B1' }).length, 1);
+});
+
+test('regions directory: two-digit codes, unique, named', async () => {
+  const { DEFAULT_REGIONS, checkRegions } = await import('../js/core.js');
+  assert.deepEqual(DEFAULT_REGIONS.map((r) => r.code), ['01', '02', '03']);
+  assert.deepEqual(checkRegions(DEFAULT_REGIONS), []);
+  assert.equal(checkRegions([...DEFAULT_REGIONS, { key: 'r4', code: '03', name: 'X' }]).length, 1);
+  assert.equal(checkRegions([{ key: 'r5', code: '4', name: 'X' }]).length, 1);
 });

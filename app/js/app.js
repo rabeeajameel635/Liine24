@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
-  computeTotals, docTotalsOpts, round1, draftEntries, DEFAULT_ACCOUNT_CODES, checkAccountCodes, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
+  computeTotals, docTotalsOpts, round1, draftEntries, DEFAULT_ACCOUNT_CODES, checkAccountCodes, DEFAULT_REGIONS, checkRegions, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
@@ -16,6 +16,12 @@ const money = (c) => fmt(fromCents(c || 0));
 // the account as people know it: their own code and name (Accounts setup), over the fixed internal key
 const acctCode = (k) => String((S.settings.accountCodes || {})[k] || DEFAULT_ACCOUNT_CODES[k] || k);
 const acctName = (k) => (S.settings.accountNames || {})[k] || T(ACCOUNTS[k]?.name || k);
+// regions as defined in the regions directory: code + name, by the key a customer carries
+const regionsList = () => [...(S.settings.regions || DEFAULT_REGIONS)].sort((a, b) => a.code.localeCompare(b.code));
+const regionOf = (k) => regionsList().find((r) => r.key === k);
+const regionName = (k) => { const r = regionOf(k); return r ? T(r.name) : ''; };
+const regionLabel = (k) => { const r = regionOf(k); return r ? `${r.code} · ${T(r.name)}` : ''; };
+const regionOptions = (cur, all = '') => `${all ? `<option value="">${esc(T(all))}</option>` : ''}${regionsList().map((r) => `<option value="${r.key}" ${cur === r.key ? 'selected' : ''}>${esc(r.code)} · ${esc(T(r.name))}</option>`).join('')}`;
 // invoice amounts under the rounding rule show one decimal (31,600.0), others keep agorot
 const amt = (c, r) => (r ? fmt(fromCents(c || 0), 1) : money(c));
 const pricef = (v, r) => fmt(Number(v) || 0, r ? 1 : 3);
@@ -70,8 +76,8 @@ async function render() {
   const tab = name === 'dashboard' ? 'home'
     : name === 'invoices' ? 'inv' : name === 'vouchers' ? 'vch' : name === 'purchases' ? 'pur'
     : (name === 'docs' || name === 'new') ? (GROUPS.vch.includes(qType) ? 'vch' : GROUPS.pur.includes(qType) ? 'pur' : 'inv')
-    : ['reports', 'statement', 'sales', 'stock', 'tb'].includes(name) ? 'rep'
-    : ['dirs', 'customers', 'suppliers', 'items', 'accounts'].includes(name) ? 'dir' : '';
+    : ['reports', 'statement', 'sales', 'stock', 'tb', 'balances'].includes(name) ? 'rep'
+    : ['dirs', 'customers', 'suppliers', 'items', 'accounts', 'regions'].includes(name) ? 'dir' : '';
   $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
   $('#mTitle').textContent = best ? best.textContent : (S.settings?.companyName || 'Ledger');
   const fn = routes[name] || routes.dashboard;
@@ -194,10 +200,10 @@ const MAP = [
   { k: 'vch', title: 'Vouchers', icon: 'wallet', groups: [
     [['#/docs?type=RV', 'in', 'Receipt vouchers', 'RV']], [['#/docs?type=PV', 'out', 'Payment vouchers', 'PV']], [['', 'journal', 'Journal vouchers']]] },
   { k: 'dir', title: 'Definitions', icon: 'book', groups: [
-    [['#/customers', 'users', 'Customers directory'], ['#/suppliers', 'truck', 'Suppliers directory']], [['#/items', 'box', 'Items']], [['', 'users', 'Employees']], [['', 'pin', 'Regions']], [['#/accounts', 'book', 'Accounts setup']]] },
+    [['#/customers', 'users', 'Customers directory'], ['#/suppliers', 'truck', 'Suppliers directory']], [['#/items', 'box', 'Items']], [['', 'users', 'Employees']], [['#/regions', 'pin', 'Regions']], [['#/accounts', 'book', 'Accounts setup']]] },
   { k: 'rep', title: 'Reports', icon: 'bars', groups: [
-    [['#/statement', 'list', 'Account statement']],
-    [['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer']],
+    [['#/statement', 'list', 'Account statement'], ['#/balances', 'users', 'Customer balances']],
+    [['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer'], ['#/sales?kind=sales&by=region', 'pin', 'Sales by region']],
     [['#/sales?kind=purchases&by=item', 'cart', 'Purchases by item'], ['#/sales?kind=purchases&by=customer', 'truck', 'Purchases by supplier']],
     [['#/stock', 'box', 'Inventory'], ['#/tb', 'layers', 'Trial balance']]] },
   { k: 'sys', title: 'System', icon: 'gear', groups: [
@@ -221,6 +227,54 @@ routes.invoices = async () => sectionPage('inv');
 routes.vouchers = async () => sectionPage('vch');
 routes.purchases = async () => sectionPage('pur');
 routes.system = async () => sectionPage('sys');
+// ---------- regions directory: code + name; customers carry the region, reports group by it ----------
+routes.regions = async () => {
+  const entries = await ledger();
+  const bal = {}; for (const e of entries) if (e.partyId && e.account === '1200') bal[e.partyId] = (bal[e.partyId] || 0) + e.debitC - e.creditC;
+  const cust = S.parties.filter((p) => p.kind === 'customer');
+  let list = regionsList().map((r) => ({ ...r }));
+  const ro = isAdmin() ? '' : 'readonly';
+  const draw = () => {
+    $('#main').innerHTML = `<h1>Regions</h1><p class="sub">Each region has a two-digit code. Customers carry their region; the customers directory and the reports group by it.</p>
+      <div class="tablewrap"><table class="t regs"><thead><tr><th>Code</th><th>Region</th><th class="n">Customers</th><th class="n">Balance</th><th></th></tr></thead><tbody>
+      ${list.map((r, i) => { const mine = cust.filter((p) => p.region === r.key); return `<tr data-i="${i}"><td><input class="rc" inputmode="numeric" dir="ltr" maxlength="2" value="${esc(r.code)}" ${ro}></td><td><input class="rn" dir="auto" value="${esc(T(r.name))}" ${ro}></td>
+        <td class="n">${mine.length}</td><td class="n">${money(mine.reduce((t, p) => t + (bal[p.id] || 0), 0))}</td><td><a class="btn small" href="#/customers?region=${r.key}">Customers</a> <a class="btn small" href="#/balances?region=${r.key}">Balances</a></td></tr>`; }).join('')}</tbody></table></div>
+      ${isAdmin() ? '<div class="actions"><button class="btn" id="addReg">+ Region</button><button class="btn primary" id="saveReg">Save regions</button></div>' : '<p class="muted">Switch to admin to change regions.</p>'}`;
+    translate($('#main'));
+    $('#addReg') && ($('#addReg').onclick = () => { read(); const n = Math.max(0, ...list.map((r) => Number(r.code) || 0)) + 1; list.push({ key: 'r' + Date.now().toString(36), code: String(n).padStart(2, '0'), name: '' }); draw(); $$('.rn').at(-1).focus(); });
+    $('#saveReg') && ($('#saveReg').onclick = () => guard(async () => {
+      read(); const errs = checkRegions(list); if (errs.length) throw new Error(errs.join('\n'));
+      await db.setSetting('regions', list, S.user); await reload(); toast('Saved'); render();
+    }));
+  };
+  // a default name left as shown (translated) keeps its English key so both languages stay right
+  const read = () => $$('tr[data-i]').forEach((tr) => { const r = list[Number(tr.dataset.i)]; r.code = $('.rc', tr).value.trim(); const n = $('.rn', tr).value.trim(); if (n !== T(r.name)) r.name = n; });
+  draw();
+};
+// ---------- customer balances (Bisan's list): one line per customer, grouped by region, with totals ----------
+routes.balances = async () => {
+  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const reg = q.get('region') || '';
+  const entries = await ledger();
+  const dr = {}, cr = {}; for (const e of entries) if (e.partyId && e.account === '1200') { dr[e.partyId] = (dr[e.partyId] || 0) + e.debitC; cr[e.partyId] = (cr[e.partyId] || 0) + e.creditC; }
+  const cust = S.parties.filter((p) => p.kind === 'customer' && (!reg || p.region === reg))
+    .sort((a, b) => (regionOf(a.region)?.code || '99').localeCompare(regionOf(b.region)?.code || '99') || a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const groups = []; for (const p of cust) { const g = groups.at(-1); if (g && g.key === (p.region || '')) g.rows.push(p); else groups.push({ key: p.region || '', rows: [p] }); }
+  const sum = (rows, m) => rows.reduce((t, p) => t + (m[p.id] || 0), 0);
+  const row = (p) => `<tr><td dir="ltr">${esc(p.code)}</td><td dir="auto"><a href="#/statement/${p.id}">${esc(p.name)}</a></td><td class="n">${money(dr[p.id] || 0)}</td><td class="n">${money(cr[p.id] || 0)}</td><td class="n"><b>${money((dr[p.id] || 0) - (cr[p.id] || 0))}</b></td></tr>`;
+  $('#main').innerHTML = `<h1>Customer balances</h1><p class="sub">${esc(acctCode('1200'))} · ${esc(acctName('1200'))} · <span>NIS</span></p>
+    <div class="searchbar"><select id="reg">${regionOptions(reg, 'All regions')}</select><button class="btn" id="pr">Print / PDF</button><button class="btn" id="xl">Excel</button></div>
+    <div class="tablewrap"><table class="t bal"><thead><tr><th>Code</th><th>Customer</th><th class="n">Total debit</th><th class="n">Total credit</th><th class="n">Balance</th></tr></thead><tbody>
+    ${groups.map((g) => `<tr class="rgh"><td colspan="5"><b>${esc(regionLabel(g.key) || T('No region'))}</b></td></tr>${g.rows.map(row).join('')}
+      <tr class="rgt"><td colspan="2">${esc(T('Region total'))}</td><td class="n">${money(sum(g.rows, dr))}</td><td class="n">${money(sum(g.rows, cr))}</td><td class="n"><b>${money(sum(g.rows, dr) - sum(g.rows, cr))}</b></td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="2">Total</td><td class="n">${money(sum(cust, dr))}</td><td class="n">${money(sum(cust, cr))}</td><td class="n">${money(sum(cust, dr) - sum(cust, cr))}</td></tr></tfoot></table></div>`;
+  $('#reg').onchange = () => go('#/balances?region=' + $('#reg').value);
+  $('#pr').onclick = () => printHtml(`<div class="tb"><div class="t1">${esc(T('Customer balances'))}</div><div class="tno">${esc(reg ? regionLabel(reg) : T('All regions'))} · ${esc(today())}</div></div>` + $('.tablewrap').outerHTML.replace(/<a [^>]*>|<\/a>/g, ''));
+  $('#xl').onclick = () => toExcel('customer-balances.xlsx', [[S.settings.companyName], [T('Customer balances'), reg ? regionLabel(reg) : T('All regions')], [],
+    ['Region', 'Code', 'Customer', 'Total debit', 'Total credit', 'Balance'].map(T),
+    ...cust.map((p) => [regionLabel(p.region), p.code, p.name, fromCents(dr[p.id] || 0), fromCents(cr[p.id] || 0), fromCents((dr[p.id] || 0) - (cr[p.id] || 0))]),
+    [T('Total'), '', '', fromCents(sum(cust, dr)), fromCents(sum(cust, cr)), fromCents(sum(cust, dr) - sum(cust, cr))]], { cols: [22, 10, 40, 14, 14, 14] });
+};
 routes.accounts = async () => {
   const tb = trialBalance(await ledger());
   const bal = Object.fromEntries(tb.rows.map((r) => [r.account, r.balDebitC - r.balCreditC]));
@@ -537,7 +591,7 @@ function editor(doc) {
   if ($('#party')) {
     const info = async () => {
       const p = findParty($('#party').value); curPartyId = p?.id || null;
-      $('#pRegion').textContent = p?.region ? T(REGIONS[p.region]) : '—';
+      $('#pRegion').textContent = p?.region ? regionName(p.region) : '—';
       balBase = null; showBal();
       if (!p) return;
       balBase = await partyBalanceC(p.id); showBal();
@@ -582,7 +636,7 @@ function editor(doc) {
   onMasters = () => {
     parties = pickParties();
     $('#dlParties').innerHTML = parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('');
-    const p = partyById(curPartyId); if (p && $('#party')) { $('#party').value = partyLabel(p); $('#pRegion').textContent = p.region ? T(REGIONS[p.region]) : '—'; }
+    const p = partyById(curPartyId); if (p && $('#party')) { $('#party').value = partyLabel(p); $('#pRegion').textContent = p.region ? regionName(p.region) : '—'; }
     $$('#lines tbody tr').forEach((tr) => { const it = itemById(tr.dataset.item); if (it) $('[data-k=name]', tr).value = it.name; });
     if (alive()) soon();
   };
@@ -636,7 +690,7 @@ async function lookupParty(list, filter = '') {
   const bal = {};
   for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + e.debitC - e.creditC;
   const id = await lookup({ title: list[0]?.kind === 'supplier' ? 'Suppliers' : 'Customers', headers: ['Region', 'Balance'], filter,
-    rows: list.map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [REGIONS[p.region] || '', money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })) });
+    rows: list.map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [regionLabel(p.region), money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })) });
   return id ? partyById(id) : null;
 }
 async function lookupItem(filter = '', type = 'SI', partyId = null) {
@@ -718,7 +772,7 @@ async function partyCard(p, opts = {}) {
     title: `${p.code} — ${p.name}`,
     fields: [
       ['Code', esc(p.code)], ['Name', esc(p.name), { k: 'name', v: p.name }],
-      ['Region', esc(T(REGIONS[p.region] || '')), p.kind === 'customer' ? { k: 'region', v: p.region || '', type: 'select', options: [['', '—'], ...Object.entries(REGIONS).map(([k, v]) => [k, T(v)])] } : null],
+      ['Region', esc(regionLabel(p.region)), p.kind === 'customer' ? { k: 'region', v: p.region || '', type: 'select', options: [['', '—'], ...regionsList().map((r) => [r.key, `${r.code} · ${T(r.name)}`])] } : null],
       ['Type', esc(T(CUSTOMER_TYPES[p.type] || ''))],
       ['Phone', esc(p.phone || ''), { k: 'phone', v: p.phone }], ['Address', esc(p.address || ''), { k: 'address', v: p.address }],
       ['Tax / licensed dealer no.', esc(p.taxNo || ''), { k: 'taxNo', v: p.taxNo }], ['Guarantor', esc(p.guarantor || ''), p.kind === 'customer' ? { k: 'guarantor', v: p.guarantor } : null],
@@ -1119,7 +1173,7 @@ async function printDoc(d, reason = '', copies = 1) {
     <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
         <div class="tno">${L('No.', 'الرقم')}: <b dir="ltr">${esc(d.number || L('DRAFT', 'مسودة'))}</b> · ${L('Date', 'التاريخ')}: <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}: <b>${esc(d.reference)}</b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
-      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}: <b dir="auto">${esc(p.code)} — ${esc(p.name)}</b>${p.address || p.region ? ` — ${L('Address', 'العنوان')}: <b dir="auto">${esc([p.address, p.region ? T(REGIONS[p.region]) : ''].filter(Boolean).join(' · '))}</b>` : ''}</div>
+      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}: <b dir="auto">${esc(p.code)} — ${esc(p.name)}</b>${p.address || p.region ? ` — ${L('Address', 'العنوان')}: <b dir="auto">${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</b>` : ''}</div>
       <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', L('All amounts in NIS', 'جميع المبالغ بالشيكل') + (t.lines && opt.pricesIncludeVat ? L(', VAT included', '، الأسعار تشمل ض.ق.م') : '')].filter(Boolean).join(' · ')}</div>` : ''}</div>
     ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
       ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch || '—')}</span> · ${L('Exp.', 'انتهاء')} <span dir="ltr">${esc(l.expiry || '—')}</span></div>` : ''}</td>
@@ -1197,12 +1251,12 @@ async function partiesPage(kind) {
   const title = kind === 'customer' ? 'Customers' : 'Suppliers';
   $('#main').innerHTML = `<h1>${title}</h1><p class="sub">${list.length} ${title.toLowerCase()}. Codes are permanent. Only the admin adds them.</p>
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>
-    ${kind === 'customer' ? `<select id="reg"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>` : ''}
+    ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(location.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
     ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
     <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its statement.'} <kbd>Enter</kbd> <span>opens the only match.</span></p>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Phone</th>${kind === 'customer' ? '<th>Region</th><th>Type</th><th class="n">Credit limit</th>' : ''}<th class="n">Balance</th><th></th></tr></thead><tbody id="tb">
-    ${list.map((p) => `<tr data-id="${p.id}" data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
-      ${kind === 'customer' ? `<td>${REGIONS[p.region] || ''}</td><td>${CUSTOMER_TYPES[p.type] || ''}</td><td class="n">${p.creditLimit ? fmt(p.creditLimit) : ''}</td>` : ''}
+    ${(kind === 'customer' ? [...list].sort((a, b) => (regionOf(a.region)?.code || '99').localeCompare(regionOf(b.region)?.code || '99') || a.code.localeCompare(b.code, undefined, { numeric: true })) : list).map((p, i, arr) => `${kind === 'customer' && (i === 0 || arr[i - 1].region !== p.region) ? `<tr class="rgh" data-r="${p.region || ''}" data-s=""><td colspan="7"><b>${esc(regionLabel(p.region) || T('No region'))}</b> <span class="muted">· ${arr.filter((x) => x.region === p.region).length} · ${money(arr.filter((x) => x.region === p.region).reduce((t, x) => t + (bal[x.id] || 0), 0))}</span></td></tr>` : ''}<tr data-id="${p.id}" data-s=""${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td><b>${esc(p.code)}</b></td><td dir="auto">${esc(p.name)}${p.active === false ? ` <span class="pill">inactive</span>${p.replacedBy ? ` → ${esc(partyById(p.replacedBy)?.code || '')}` : ''}` : ''}</td><td>${esc(p.phone || '')}</td>
+      ${kind === 'customer' ? `<td>${esc(regionLabel(p.region))}</td><td>${CUSTOMER_TYPES[p.type] || ''}</td><td class="n">${p.creditLimit ? fmt(p.creditLimit) : ''}</td>` : ''}
       <td class="n"><b>${money(bal[p.id] || 0)}</b></td><td style="white-space:nowrap"><a class="btn small" href="#/statement/${p.id}">Statement</a> ${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
@@ -1210,9 +1264,9 @@ async function partiesPage(kind) {
   const openParty = (id) => (isAdmin() ? guard(async () => partyForm(partyById(id), await db.hasMovements('parties', id))) : go('#/statement/' + id));
   $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openParty(b.dataset.edit); }));
   $$('#tb tr a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
-  $$('#tb tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openParty(tr.dataset.id); });
-  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openParty(vis[0].dataset.id); };
-  $('#q').focus();
+  $$('#tb tr[data-id]').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openParty(tr.dataset.id); });
+  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr[data-id]').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openParty(vis[0].dataset.id); };
+  filt(); $('#q').focus();
 }
 function partyForm(p, locked = false) {
   const dlg = document.createElement('dialog');
@@ -1220,7 +1274,7 @@ function partyForm(p, locked = false) {
   const cust = p.kind === 'customer';
   dlg.innerHTML = `<h2 style="margin-top:0">${p.id ? 'Edit' : 'New'} ${p.kind}</h2><form method="dialog" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     ${f('code', 'Code (permanent)')}${f('name', 'Name')}${f('phone', 'Phone')}${f('address', 'Address')}${f('taxNo', 'Tax / licensed dealer no.')}
-    ${cust ? `<label class="f">Region<select name="region">${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}" ${p.region === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    ${cust ? `<label class="f">Region<select name="region">${regionOptions(p.region || regionsList()[0]?.key)}</select></label>
       <label class="f">Type<select name="type">${Object.entries(CUSTOMER_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${f('creditLimit', 'Credit limit (₪)', 'number')}${f('guarantor', 'Guarantor')}` : ''}
     ${p.id ? '' : f('openingBalance', 'Opening balance (₪)', 'number')}
@@ -1303,14 +1357,14 @@ function statementHead(party, o, st) {
   const owes = st.closing >= 0;
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
   return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
-      <div class="sths">${party.region ? `${esc(T(REGIONS[party.region]))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
+      <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }
 function statementOptions(cur = {}) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog'); dlg.className = 'lookup card-dlg stopts';
     let party = partyById(cur.pid);
-    const regionSel = `<select id="soRegion"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}" ${cur.region === k ? 'selected' : ''}>${esc(T(v))}</option>`).join('')}</select>`;
+    const regionSel = `<select id="soRegion">${regionOptions(cur.region, 'All regions')}</select>`;
     dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">Account statement</h2>
       <div class="sog">
         <label class="f wide">Customer or supplier<div class="namewrap"><input id="soParty" dir="auto" readonly placeholder="Tap to choose" value="${esc(partyLabel(party))}"><button type="button" class="lkbtn" id="soLook" title="Lookup">${ic('search')}</button></div></label>
@@ -1349,7 +1403,7 @@ routes.statement = async (pid) => {
     go(`#/statement/${r.pid}?from=${r.from}&to=${r.to}&region=${r.region}&detail=${r.detail ? 1 : 0}&saved=${r.saved ? 1 : 0}`);
   };
   $('#main').innerHTML = `<div class="sthead"><div><h1>Account statement</h1>
-      <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(T(REGIONS[party.region]))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${o.saved ? 'Including saved' : 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
+      <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(regionName(party.region))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${o.saved ? 'Including saved' : 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
       <div class="stbtns"><button class="rb main" id="stOpts" title="Statement options" aria-label="Statement options">${ic('undo')}</button><button class="rb" id="pr" title="Print / PDF" aria-label="Print / PDF">${ic('printer')}</button><button class="rb" id="xl" title="Excel" aria-label="Excel">${ic('in')}</button></div></div>
     <div id="out" style="margin-top:16px"></div>`;
   $('#stOpts').onclick = open;
@@ -1362,7 +1416,7 @@ routes.statement = async (pid) => {
   // export in the same order as the paper: company, customer, required balance, the table, the total
   $('#xl').onclick = () => {
     const w = o.saved ? 6 : 5; const pad = (row) => [...row, ...Array(Math.max(0, w - row.length)).fill('')];
-    const head = [pad([S.settings.companyName]), pad([`${party.code} — ${party.name}`]), pad([`${party.region ? T(REGIONS[party.region]) + ' · ' : ''}${o.from || '…'} → ${o.to || today()} · ${T('NIS')}${o.saved ? ' · ' + T('Including saved') : ''}`]),
+    const head = [pad([S.settings.companyName]), pad([`${party.code} — ${party.name}`]), pad([`${party.region ? regionName(party.region) + ' · ' : ''}${o.from || '…'} → ${o.to || today()} · ${T('NIS')}${o.saved ? ' · ' + T('Including saved') : ''}`]),
       pad([T('Required balance'), fromCents(st.closing)]), pad([])];
     const body = [['Date', 'Description', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
       ...(st.opening ? [['', T('Balance brought forward'), ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
@@ -1432,7 +1486,7 @@ routes.sales = async () => {
     const p = partyById(d.partyId) || {};
     for (const l of tot.lines) {
       const it = lineItem(l);
-      const key = by === 'item' ? it.code : by === 'region' ? REGIONS[p.region] || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' — ' + p.name : d.date;
+      const key = by === 'item' ? it.code : by === 'region' ? regionLabel(p.region) || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' — ' + p.name : d.date;
       const a = (agg[key] ||= { key, name: by === 'item' ? it.name : '', qty: 0, bonus: 0, amountC: 0, det: [] });
       const amt = sign * Math.round(l.amountC * factor);
       a.qty += sign * (Number(l.qty) || 0); a.bonus += sign * (Number(l.bonus) || 0); a.amountC += amt;
