@@ -34,7 +34,13 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.keyboard.type('1001'); await p.keyboard.press('Enter'); await p.keyboard.press('Enter'); await p.keyboard.type('10'); await p.keyboard.press('Enter'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
     await p.keyboard.press('Enter'); await p.keyboard.type('omep'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
     console.log(lang, 'name search fills the line:', await p.locator('#lines tbody tr.found').last().locator('[data-k=name]').inputValue());
-    await p.locator('#lines tbody tr.found').last().locator('[data-del]').tap(); await p.waitForTimeout(200);
+    // five items: the grid keeps four full rows in view and scrolls inside
+    for (const q of ['3', '4']) { await p.locator('#lines tbody tr.found').last().locator('[data-k=qty]').fill(q); await p.locator('#lines tbody tr.found').last().locator('[data-k=bonus]').press('Enter'); await p.keyboard.type('1001'); await p.keyboard.press('Enter'); await p.waitForTimeout(150); }
+    await p.locator('#lines tbody tr.found').last().locator('[data-k=qty]').fill('5'); await p.waitForTimeout(200);
+    await p.screenshot({ path: `${OUT}/${lang}-3a-five-lines.png` });
+    const box = await p.evaluate(() => { const w = document.querySelector('#lines').closest('.tablewrap'); const r = [...document.querySelectorAll('#lines tbody tr.found')].map((x) => Math.round(x.getBoundingClientRect().height)); return { h: w.clientHeight, scroll: w.scrollHeight > w.clientHeight, rows: r }; });
+    console.log(lang, 'grid box:', JSON.stringify(box));
+    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-del]').tap(); await p.waitForTimeout(150); }
     const r1 = p.locator('#lines tbody tr.found').first();
     await r1.locator('[data-k=expiry]').fill('2026-12');
     console.log(lang, 'lines:', await p.locator('#lines tbody tr.found').count(), '| first:', await r1.locator('[data-k=code]').inputValue(), await r1.locator('[data-k=name]').inputValue(), '| total bar:', await p.textContent('#barTotal'));
