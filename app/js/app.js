@@ -47,7 +47,7 @@ async function reload() {
   S.items.sort((a, b) => a.code.localeCompare(b.code));
   S.parties.sort((a, b) => a.code.localeCompare(b.code));
   document.documentElement.dataset.size = S.settings.fontScale;
-  $('#brandName').textContent = S.settings.companyName || 'Ledger';
+  $('#brandName').textContent = (getLang() === 'ar' && S.settings.companyNameAr) || S.settings.companyName || 'Ledger';
   $('#whoami').innerHTML = `<span data-notr>${esc(S.user)}</span> · <b>${isAdmin() ? 'Admin' : 'Accountant'}</b><br><a href="#/settings">Switch role</a>`;
 }
 
@@ -176,7 +176,7 @@ routes.dashboard = async () => {
     .sort((a, b) => (b.postedAt || b.updatedAt || '').localeCompare(a.postedAt || a.updatedAt || '')).slice(0, 12);
   const tile = (href, icon, label) => `<a class="tile" href="${href}"><span class="tico">${ic(icon)}</span><span>${label}</span></a>`;
   $('#main').innerHTML = `
-    <div class="homehead"><div><h1 dir="auto">${esc(S.settings.companyName)}</h1>
+    <div class="homehead"><div><h1 dir="auto">${esc(getLang() === 'ar' && S.settings.companyNameAr ? S.settings.companyNameAr : S.settings.companyName)}</h1>
       <p class="date">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p></div>
       <a href="#/integrity" class="pill ${healthy ? 'ok' : 'bad'}">${healthy ? 'Balanced' : 'Check'}</a></div>
     <div class="homemap">${MAP.map((sec) => `<details class="hsec" data-k="${sec.k}" ${homeOpen().includes(sec.k) ? 'open' : ''}>
@@ -282,10 +282,12 @@ routes.accounts = async () => {
     '2100': 'Suppliers: purchases, returns, payments', '1300': 'Stock value', '2200': 'VAT on invoices', '3100': 'Opening balances', '4100': 'Sales invoices', '4110': 'Sales returns',
     '4120': 'Credit notes', '4200': 'Debit notes', '5100': 'Cost of what was sold', '5200': 'Journal vouchers (soon)', '1400': 'Journal vouchers (soon)', '1250': 'Journal vouchers (soon)' };
   const order = Object.keys(ACCOUNTS).sort((a, b) => Number(acctCode(a)) - Number(acctCode(b)));
+  const nCust = S.parties.filter((p) => p.kind === 'customer').length, nSup = S.parties.filter((p) => p.kind === 'supplier').length;
+  const DIR = { '1200': `<a href="#/customers">${esc(T('Customers directory'))}</a> · ${nCust}`, '2100': `<a href="#/suppliers">${esc(T('Suppliers directory'))}</a> · ${nSup}`, '1250': `${esc(T('Employees'))} · ${esc(T('Soon'))}` };
   const ro = isAdmin() ? '' : 'readonly';
   $('#main').innerHTML = `<h1>Accounts setup</h1><p class="sub">Your own code and name for each account. Postings keep their fixed link, so changing a code or a name never changes a number. Balances are in the trial balance.</p>
     <div class="tablewrap"><table class="t acct"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Used by</th></tr></thead><tbody>
-    ${order.map((k) => `<tr data-k="${k}"><td><input class="ac" inputmode="numeric" dir="ltr" value="${esc(acctCode(k))}" ${ro}></td><td><input class="an" dir="auto" value="${esc(acctName(k))}" ${ro}></td><td>${esc(T(ACCOUNTS[k].type))}</td><td class="muted">${esc(T(USED[k] || ''))}</td></tr>`).join('')}</tbody></table></div>
+    ${order.map((k) => `<tr data-k="${k}"><td><input class="ac" inputmode="numeric" dir="ltr" value="${esc(acctCode(k))}" ${ro}></td><td><input class="an" dir="auto" value="${esc(acctName(k))}" ${ro}></td><td>${esc(T(ACCOUNTS[k].type))}</td><td class="muted">${DIR[k] ? `<b class="dirlink">${DIR[k]}</b><br>` : ''}${esc(T(USED[k] || ''))}</td></tr>`).join('')}</tbody></table></div>
     ${isAdmin() ? '<div class="actions"><button class="btn primary" id="saveAc">Save accounts</button></div>' : '<p class="muted">Switch to admin to change codes and names.</p>'}`;
   $('#saveAc') && ($('#saveAc').onclick = () => guard(async () => {
     const codes = {}, names = {};
@@ -343,8 +345,8 @@ routes.docs = async () => {
   const list = ofType.filter(pred).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0) || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   const link = (t, tb) => `#/docs?type=${t}&tab=${tb}`;
   const group = GROUPS.vch.includes(type) ? GROUPS.vch : GROUPS.pur.includes(type) ? GROUPS.pur : type ? GROUPS.inv : [...GROUPS.inv, ...GROUPS.pur, ...GROUPS.vch];
-  $('#main').innerHTML = `<div class="listhead"><h1>${type ? DOC_TYPES[type].name : 'All documents'}</h1>
-      ${type && DOC_TYPES[type].party !== 'none' && type !== 'OB' ? `<a class="btn ink" id="newDoc" href="#/new/${type}">${ic('plus')}<span>New</span></a>` : ''}</div>
+  const canNew = type && DOC_TYPES[type].party !== 'none' && type !== 'OB';
+  $('#main').innerHTML = `${canNew ? modeCapsule(type, 'archive') : ''}<div class="listhead"><h1>${type ? DOC_TYPES[type].name : 'All documents'}</h1></div>
     <div class="chips scroll">${group.map((k) => `<a class="chip small ${k === type ? 'on' : ''}" href="${link(k, q.get('tab') || '')}">${DOC_TYPES[k].name}</a>`).join('')}</div>
     <div class="segrow"><div class="seg">${STATUS_TABS.map(([k, label, icon, f]) => `<a class="s-${k} ${k === tab ? 'on' : ''}" href="${link(type, k)}" title="${label}"><i>${ic(icon)}</i><span>${label}</span><b>${ofType.filter(f).length}</b></a>`).join('')}</div>
       <label class="searchpill">${ic('search')}<input id="fq" placeholder="Number, party, reference"></label></div>
@@ -356,6 +358,9 @@ routes.docs = async () => {
   };
 };
 
+// Task | Archive (like Claude's Chat | Code): Task is the document being entered, Archive is every stored one
+// of that type (saved, posted, voided). Task from the archive starts a new document; a saved one opens as the task.
+const modeCapsule = (type, on) => `<div class="modecap"><a ${on === 'task' ? 'class="on" aria-current="page"' : `id="newDoc" href="#/new/${type}"`}>${ic('plus')}<span>Task</span></a><a ${on === 'archive' ? 'class="on" aria-current="page"' : `id="toArchive" href="#/docs?type=${type}"`}>${ic('layers')}<span>Archive</span></a></div>`;
 const blankLine = () => ({ itemId: '', qty: '', bonus: '', price: '', disc: '', batch: '', expiry: '' });
 
 function editor(doc) {
@@ -374,7 +379,7 @@ function editor(doc) {
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <header class="whead">
-      <div class="wl0"><button class="wback" id="eBack" tabindex="-1" title="Exit" aria-label="Exit">${ic('chev')}</button><span class="wtype">${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
+      <div class="wl0"><button class="wback" id="eBack" tabindex="-1" title="Exit" aria-label="Exit">${ic('chev')}</button><span class="wtype">${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span>${modeCapsule(doc.type, 'task')}</div>
       ${t.party !== 'none' ? `<div class="wl"><label class="lf grow"><span>${partyKind === 'supplier' ? 'Supplier' : 'Customer'}</span><input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="party" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></label>
         <label class="lf reg"><span>Region</span><output id="pRegion" dir="auto">—</output></label></div>` : ''}
       <div class="wl"><label class="lf date"><span>Date</span><input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
@@ -771,7 +776,7 @@ async function partyCard(p, opts = {}) {
   return recordCard({
     title: `${p.code} — ${p.name}`,
     fields: [
-      ['Code', esc(p.code)], ['Name', esc(p.name), { k: 'name', v: p.name }],
+      ['Code', esc(p.code)], ['Account', `<span dir="ltr">${esc(acctCode(p.kind === 'supplier' ? '2100' : '1200'))} / ${esc(p.code)}</span>`], ['Name', esc(p.name), { k: 'name', v: p.name }],
       ['Region', esc(regionLabel(p.region)), p.kind === 'customer' ? { k: 'region', v: p.region || '', type: 'select', options: [['', '—'], ...regionsList().map((r) => [r.key, `${r.code} · ${T(r.name)}`])] } : null],
       ['Type', esc(T(CUSTOMER_TYPES[p.type] || ''))],
       ['Phone', esc(p.phone || ''), { k: 'phone', v: p.phone }], ['Address', esc(p.address || ''), { k: 'address', v: p.address }],
@@ -1246,7 +1251,8 @@ async function partiesPage(kind) {
   const bal = {};
   for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + (kind === 'supplier' ? e.creditC - e.debitC : e.debitC - e.creditC);
   const title = kind === 'customer' ? 'Customers' : 'Suppliers';
-  $('#main').innerHTML = `<h1>${title}</h1><p class="sub">${list.length} ${title.toLowerCase()}. Codes are permanent. Only the admin adds them.</p>
+  const ctl = kind === 'customer' ? '1200' : '2100';
+  $('#main').innerHTML = `<h1>${title}</h1><p class="sub"><span>Account</span> <b dir="ltr">${esc(acctCode(ctl))}</b> · ${esc(acctName(ctl))} · ${list.length} <span>${title.toLowerCase()}</span> · <span>Codes are permanent.</span></p>
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>
     ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(location.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
     ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
@@ -1354,6 +1360,7 @@ function statementHead(party, o, st) {
   const owes = st.closing >= 0;
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
   return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
+      <div class="sths"><span>Account</span> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
       <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }

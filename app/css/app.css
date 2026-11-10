@@ -1066,3 +1066,65 @@ table.t.deflist tr:hover td { background: var(--cl-cream, #FAF9F5) !important; }
   table.t.deflist td.dl { flex: 1; min-width: 0; }
 }
 @media (max-width: 860px) { table.t.deflist td.de { display: none; } }
+
+/* ======================================================================
+   Claude palette everywhere (Rabee, Nov 2026): cream page, white cards,
+   light greys, terracotta for the main action, and the selected state in
+   grey with olive green. System fonts (SF on iPhone), like Claude/Gemini.
+   ====================================================================== */
+:root {
+  --bg: #ffffff; --page: #F5F4EE; --surface: #F0EEE6; --surface-2: #E8E6DC; --line: #E2DFD6;
+  --text: #1F1E1C; --muted: #75736C;
+  --accent: #5C6B30; --accent-soft: #E7E9DC; --accent-ink: #3B4520;      /* olive: links and the selected state */
+  --cl-orange: #C96442; --cl-orange-h: #B5573A;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Geeza Pro", Tahoma, sans-serif;
+}
+html, body { background: var(--page); }
+.sheet { background: var(--cl-cream, #FAF9F5); box-shadow: 0 1px 2px rgba(31,30,28,.05); }
+.brand .dot { background: var(--cl-orange); }
+#mbar, #tabs { background: rgba(245,244,238,.94); }
+a { color: var(--accent-ink); }
+.btn.primary { background: var(--cl-orange); color: #fff; }
+.btn.primary:hover { background: var(--cl-orange-h); }
+.btn.tonal { background: var(--surface-2); color: var(--text); }
+.btn.ink { background: var(--text); color: #fff; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(92,107,48,.16) !important; }
+/* selected state: grey with olive green */
+#nav a.on, #nav a:hover.on { background: var(--surface-2); color: var(--accent-ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+[dir=rtl] #nav a.on { box-shadow: inset -3px 0 0 var(--accent); }
+#tabs a.on { color: var(--accent-ink); }
+#tabs a.on i, #tabs a.on .ic { color: var(--accent); }
+#tabs a.on { background: var(--surface-2); }
+.chip.on, .chip.small.on { background: var(--surface-2); color: var(--accent-ink); border-color: transparent; font-weight: 600; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.seg a.on { background: #fff; color: var(--accent-ink); }
+.seg a.on i, .seg a.on .ic { color: var(--accent); }
+.hgrp .hrow:active, .hgrp .hrow:focus-within, .drow:active { background: var(--surface-2); }
+.hgrp .hrow:active .tico, .hgrp .hrow:active .hgo { color: var(--accent-ink); }
+.pill.draft { background: #F3E8D6; color: #7A4F12; }
+.pill.posted, .pill.ok { background: #E4EAD6; color: #3B4520; }
+/* Task | Archive capsule */
+.modecap { display: flex; width: max-content; margin: 0 auto 14px; padding: 4px; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; }
+.modecap a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 22px; border-radius: 999px; color: var(--muted); font-weight: 600; text-decoration: none; }
+.modecap a .ic { width: 17px; height: 17px; }
+.modecap a.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(31,30,28,.12); }
+.modecap a:not(.on):hover { color: var(--text); }
+.whead .modecap { margin-bottom: 4px; }
+@media (max-width: 860px) { .modecap a { min-height: 38px; padding: 0 18px; } }
+#nav a.on, #nav a:hover.on, [dir=rtl] #nav a.on { box-shadow: none; }
+#nav a.on::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-inline-end: 10px; flex: none; }
+.wl0 .modecap { margin: 0; margin-inline-start: auto; padding: 3px; }
+.wl0 .modecap a { min-height: 32px; padding: 0 14px; font-size: .95em; }
+.wl0 .modecap a .ic { width: 15px; height: 15px; }
+/* inside the work sheet, fields keep their own quiet focus (a line, not a box) */
+.ws input:focus, .ws select:focus, .ws textarea:focus { box-shadow: none !important; }
+.ws .wsum .sr input:focus { border-bottom-color: var(--accent) !important; }
+/* the last greens become olive */
+table.lines tr.found td.code input, .wbody #lines tr.found td.code input { color: var(--accent); }
+.seg a.on i { background: var(--accent) !important; color: #fff !important; }
+.seg a.on i .ic { color: #fff !important; }
+.wbal .wlink { font-size: .82em; font-weight: 400; }
+@media (max-width: 860px) { .wbal .wlink { font-size: .7em; } .wbal b { font-size: 1.05em; } .wl0 .modecap a { padding: 0 12px; } }
+@media (max-width: 860px) { .wl0 .modecap { padding: 2px; } .wl0 .modecap a { min-height: 26px; padding: 0 11px; font-size: .9em; } .wl0 .modecap a .ic { width: 13px; height: 13px; } }
+@media (max-width: 860px) { .ws { gap: 8px; } .whead { gap: 5px; } }
+.hnew { background: var(--surface-2); color: var(--accent); }
+.hnew:hover, .hnew:active { background: var(--cl-orange); color: #fff; }
