@@ -41,6 +41,16 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.click('#importJson'); await page.click('#doImport'); await page.waitForTimeout(800);
   console.log('  toast:', await toast());
 
+  step('a prepared .json file (items + purchase invoice) imports from the file picker');
+  { const fp = OUT + '/prepared.json';
+    require('fs').writeFileSync(fp, JSON.stringify({ items: [{ code: '7001', name: 'TEST ITEM A', buyPrice: 10 }, { code: '7002', name: 'TEST ITEM B', buyPrice: 4 }],
+      invoice: { type: 'PI', reference: 'stock count', lines: [{ itemCode: '7001', qty: 3, price: 10, disc: 10, expiry: '2027-07' }, { itemCode: '7002', qty: 5, price: 4, disc: 10 }] } }));
+    await page.goto(URL + '#/import'); await page.waitForSelector('#file'); await page.setInputFiles('#file', fp); await page.waitForTimeout(800);
+    console.log('  json file preview:', (await page.textContent('#jsonOut')).replace(/\s+/g, ' ').slice(0, 80));
+    await page.click('#doImport'); await page.waitForTimeout(1500);
+    console.log('  purchase draft from file:', await page.locator('#lines tbody tr.found').count(), 'lines | total', (await page.textContent('#gTotal')).trim());
+    await page.goto(URL + '#/dashboard'); await page.waitForTimeout(300); }
+
   step('similar-name warning');
   await page.goto(URL + '#/customers'); await page.waitForSelector('#add');
   await page.click('#add'); console.log('  next customer code:', await page.inputValue('dialog [name=code]'));

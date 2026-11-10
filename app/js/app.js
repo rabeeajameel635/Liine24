@@ -1486,7 +1486,7 @@ routes.import = async () => {
   $('#main').innerHTML = `<h1>Import · Excel · AI</h1><p class="sub">Bring data in from Excel, CSV, or any AI assistant. Everything is checked before it is saved, and invoices arrive as drafts.</p>
     <h2>1 · From Excel or CSV</h2>
     <div class="row"><label class="f">What<select id="kind"><option value="items">Items</option><option value="customers">Customers</option><option value="suppliers">Suppliers</option></select></label>
-      <label class="f grow">File<input id="file" type="file" accept=".xlsx,.xls,.csv"></label><button class="btn" id="tpl">Download template</button></div>
+      <label class="f grow">File<input id="file" type="file" accept=".xlsx,.xls,.csv,.json"></label><button class="btn" id="tpl">Download template</button></div>
     <div id="preview" style="margin-top:14px"></div>
     <h2>2 · From an AI assistant (Claude, ChatGPT, Gemini)</h2>
     <p class="muted">Copy this prompt, add your Excel sheet, photo or message under it, and paste the JSON answer below.</p>
@@ -1502,6 +1502,8 @@ routes.import = async () => {
   };
   $('#file').onchange = () => guard(async () => {
     const f = $('#file').files[0]; if (!f) return;
+    // a prepared .json file (items + purchase invoice) goes through the same check as pasted JSON
+    if (/\.json$/i.test(f.name)) { $('#json').value = await f.text(); $('#importJson').click(); $('#json').scrollIntoView({ block: 'start' }); return; }
     const wb = XLSX.read(await f.arrayBuffer());
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     const kind = $('#kind').value;
