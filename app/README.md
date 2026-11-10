@@ -63,3 +63,7 @@ node test/mobile.cjs                   # الجوال (iPhone) باللمس فق
 | `js/app.js` | الشاشات |
 | `css/app.css` | الشكل والطباعة A4 |
 | `vendor/xlsx.full.min.js` | قراءة وكتابة Excel بدون نت (SheetJS، رخصة Apache 2.0) |
+
+## Books runner (Claude keeps the books)
+
+`node app/tools/books.cjs --ops ops.json --out books.json [--in books.json] [--pdf dir]` opens a books file (the app's backup format) in the app's own engine, applies operations (settings, import, draft, post, print, report) through the same code the app uses, writes the books file back and prints PDFs. The books file and any data files stay outside the repository; the books live in the owner's Google Drive with a backup log in Notion.
