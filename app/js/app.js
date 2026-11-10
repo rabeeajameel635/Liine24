@@ -1080,12 +1080,9 @@ async function printDoc(d, reason = '', copies = 1) {
   // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
   const A = getLang() === 'ar';
   const L = (en, a) => (A ? a : en);
-  const mono = (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
   const page = ({ label, copyNo }, idx) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="${A ? 'rtl' : 'ltr'}">
     ${label === 'DRAFT' ? '<div class="wm">مسودة</div>' : ''}
-    <div class="ph"><div><div class="co" dir="auto">${esc(A && s.companyNameAr ? s.companyNameAr : s.companyName)}</div>${s.companyNameAr && !A ? `<div dir="rtl">${esc(s.companyNameAr)}</div>` : ''}
-      <div class="cosub">${[s.address, s.phone].filter(Boolean).map(esc).join(' — ')}</div>${s.taxNo ? `<div class="cosub">${L('Licensed dealer no.', 'رقم المشتغل')}: ${esc(s.taxNo)}</div>` : ''}</div>
-      ${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>
+    ${letterhead()}
     <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
         <div class="tno">${L('No.', 'الرقم')}: <b dir="ltr">${esc(d.number || L('DRAFT', 'مسودة'))}</b> · ${L('Date', 'التاريخ')}: <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}: <b>${esc(d.reference)}</b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
@@ -1607,13 +1604,18 @@ routes.settings = async () => {
     <h2>Role</h2><p class="muted">Admin adds items, customers and suppliers, voids documents, imports and restores. Accountant enters and posts documents.</p>
     <div class="actions">${isAdmin() ? '<button class="btn" id="toAcc">Switch to accountant</button>' : '<button class="btn primary" id="toAdmin">Switch to admin</button>'}</div>
     <h2>Company</h2><form id="co" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
-      ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('taxNo', 'Licensed dealer no.')}${f('address', 'Address')}${f('phone', 'Phone')}${f('branch', 'Branch / vehicle code (series prefix)')}
+      ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('city', 'City')}${f('monogram', 'Monogram (2–3 letters)')}
+      <label class="f" style="grid-column:1/-1">Letterhead contacts · one per line: department | person | phone<textarea name="contacts" dir="auto" rows="3" ${isAdmin() ? '' : 'readonly'}>${esc(s.contacts || '')}</textarea></label>
+      <div class="lhprev" id="lhPrev" style="grid-column:1/-1"></div>
+      ${f('taxNo', 'Licensed dealer no.')}${f('address', 'Address')}${f('phone', 'Phone')}${f('branch', 'Branch / vehicle code (series prefix)')}
       ${f('vatRate', 'VAT %', 'number')}${f('copiesInvoice', 'Print copies · Invoices', 'number')}${f('copiesVoucher', 'Print copies · Vouchers', 'number')}<label class="f">Prices include VAT<select name="pricesIncludeVat" ${isAdmin() ? '' : 'disabled'}><option value="true">Yes</option><option value="false" ${s.pricesIncludeVat ? '' : 'selected'}>No</option></select></label></form>
     ${isAdmin() ? `<div class="actions"><button class="btn primary" id="saveCo">Save company</button></div><h2 id="sec-pin">Password · admin PIN</h2><div class="row"><label class="f">New PIN<input id="pin" type="password" inputmode="numeric"></label><button class="btn" id="savePin">Set PIN</button></div>` : ''}
     <h2 id="sec-cur">Currency</h2><div class="row"><label class="f grow">Currency<input value="${esc(T('Israeli new shekel (₪, NIS)'))}" readonly></label></div>
     <p class="muted">One currency in this version: every amount, statement and report is in shekels.</p>
     ${isAdmin() ? '' : '<h2 id="sec-pin">Password</h2><p class="muted">Switch to admin to set or change the admin PIN.</p>'}
     <div class="note" style="margin-top:24px">This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.</div>`;
+  const prev = () => { const fd = Object.fromEntries(new FormData($('#co'))); const keep = S.settings; S.settings = { ...keep, ...fd }; $('#lhPrev').innerHTML = `<div class="doc-print" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">${letterhead()}</div>`; S.settings = keep; };
+  $('#co').addEventListener('input', prev); prev();
   const fq = new URLSearchParams(location.hash.split('?')[1] || '').get('f');
   if (fq) setTimeout(() => { const el = $('#sec-' + fq); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); (el.querySelector('select,input') || el.nextElementSibling?.querySelector?.('input'))?.focus(); } }, 60);
   $('#saveMe').onclick = () => guard(async () => {
@@ -1646,11 +1648,33 @@ function toExcel(name, aoa, { cols, merges, sheet = 'Sheet1' } = {}) {
   if (getLang() === 'ar') wb.Workbook = { Views: [{ RTL: true }] };   // the sheet opens right to left
   XLSX.writeFile(wb, name);
 }
+// Letterhead (Rabee, Nov 2026): name and city on one line, then one line per contact: department · person · phone.
+// Contacts are typed in Settings, one per line: "Management | 05xxxxxxxx" or "Sales | Dr. Name | 05xxxxxxxx".
+function contactLines(txt) {
+  // hidden direction marks come along when numbers are copied from a phone: drop them
+  return String(txt || '').replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+    let parts = l.split('|').map((x) => x.trim()).filter(Boolean);
+    if (parts.length === 1) { const m = l.match(/^(.*?)[\s:·-]*((?:\+|00)?[\d][\d\s-]{6,})$/); parts = m ? [m[1].trim(), m[2].trim()].filter(Boolean) : [l]; }
+    const tel = /^(?:\+|00)?[\d][\d\s-]{6,}$/.test(parts[parts.length - 1]) ? parts.pop() : '';
+    return { label: parts.shift() || '', who: parts.join(' · '), tel };
+  });
+}
+function letterhead() {
+  const s = S.settings; const A = getLang() === 'ar';
+  const name = A && s.companyNameAr ? s.companyNameAr : s.companyName;
+  const mono = (s.monogram || (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('')).toUpperCase().slice(0, 3);
+  const cl = contactLines(s.contacts);
+  const old = !cl.length && (s.address || s.phone) ? `<div class="cosub">${[s.address, s.phone].filter(Boolean).map(esc).join(' — ')}</div>` : '';
+  return `<div class="ph lh"><div class="lhm">
+      <div class="co" dir="auto">${esc(name)}${s.city ? `<span class="lcity"> - ${esc(s.city)}</span>` : ''}</div>
+      ${cl.length ? `<div class="lhc">${cl.map((c) => `<div class="lct"><b dir="auto">${esc(c.label)}</b>${c.who ? `<span dir="auto">${esc(c.who)}</span>` : ''}${c.tel ? `<span class="tel" dir="ltr">${esc(c.tel)}</span>` : ''}</div>`).join('')}</div>` : old}
+      ${s.taxNo ? `<div class="cosub">${esc(T('Licensed dealer no.'))}: <span dir="ltr">${esc(s.taxNo)}</span></div>` : ''}</div>
+    ${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>`;
+}
 function printStatement(party, o, st) {
   const s = S.settings; const A = getLang() === 'ar';
-  const mono = (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
   $('#printArea').innerHTML = `<div class="doc-print page stprint" dir="${A ? 'rtl' : 'ltr'}">
-    <div class="ph"><div><div class="co" dir="auto">${esc(A && s.companyNameAr ? s.companyNameAr : s.companyName)}</div><div class="cosub">${[s.address, s.phone].filter(Boolean).map(esc).join(' — ')}</div></div>${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>
+    ${letterhead()}
     <div class="tb"><div class="tbh"><div><div class="t1">${esc(T('Account statement'))}</div></div></div>${statementHead(party, o, st)}</div>
     ${statementTable(st, { ...o, print: true })}
     <div class="wbox"><div class="wl">${esc(T('Amount in words'))}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</div></div>
@@ -1659,7 +1683,7 @@ function printStatement(party, o, st) {
   document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
 }
 function printHtml(html) {
-  $('#printArea').innerHTML = `<div class="doc-print"><div class="ph"><div class="co">${esc(S.settings.companyName)}</div><div>${new Date().toLocaleString('en-GB')}</div></div>${html}</div>`;
+  $('#printArea').innerHTML = `<div class="doc-print" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">${letterhead()}${html}<div class="meta"><span dir="ltr">${new Date().toLocaleString('en-GB')}</span><span></span></div></div>`;
   document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
 }
 

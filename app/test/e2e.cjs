@@ -151,6 +151,14 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.focus('#ref'); await page.keyboard.type('€'); await page.waitForTimeout(1500);
   console.log('  € posted:', (await page.textContent('h1')).replace(/\s+/g, ' '));
 
+  step('letterhead: name - city, one line per contact');
+  await page.evaluate(async () => { const db = await import('./js/db.js');
+    for (const [k, v] of Object.entries({ companyNameAr: 'شركة الاختبار للأدوية', city: 'غزة', monogram: 'ش', contacts: 'الإدارة | 0590000001\nالمبيعات | د. اسم تجريبي | 0590000002\u202c\nالمخزن 0590000003' })) await db.setSetting(k, v, 'test'); });
+  await page.goto(URL + '#/settings'); await page.waitForSelector('#lhPrev .lh');
+  console.log('  letterhead preview:', (await page.locator('#lhPrev .lct').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()), '|', (await page.textContent('#lhPrev .co')).trim());
+  await page.locator('#lhPrev').screenshot({ path: OUT + '/6-letterhead.png' });
+  console.log('  phones recognised (hidden marks dropped):', await page.locator('#lhPrev .tel').count());
+
   step('statement');
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');
