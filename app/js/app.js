@@ -754,11 +754,10 @@ function wireLines(doc, arm, parties = []) {
 
   // Phone composer: one capsule above the keyboard that feeds the next line.
   // Enter: item → price → qty → bonus → line added, back to item.
-  // Phone: the card above the keyboard IS the lines table. You fill the line itself, like Bisan's grid;
-  // the card's two buttons are lookup (F2) and next (Enter).
+  // Phone: the lines grid fills the screen under the top bar and you fill the line itself, like Bisan's grid.
+  // The slim bar above the keyboard has lookup (F2), save | print & post, and next (Enter).
   const phone = window.matchMedia('(max-width: 860px)').matches;
   if (phone) {
-    $('#composer').prepend($('#lines').closest('.tablewrap'));
     ORDER.pop();                                          // discount is not part of the Enter walk on phones
     if (!$$('tr', tbody).some((r) => isEmpty(r))) addRow();
     let lastIn = null;
