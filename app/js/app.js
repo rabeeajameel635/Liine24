@@ -53,7 +53,7 @@ const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
 document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
 const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
-  guardEditor = null; pageKeys = null; document.body.classList.remove('editing', 'sheet-open');
+  guardEditor = null; pageKeys = null; document.onvisibilitychange = null; document.body.classList.remove('editing', 'sheet-open');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
@@ -351,16 +351,32 @@ function editor(doc) {
   let clean = null;
   setTimeout(() => { if (alive()) clean = snapshot(); }, 120);
   const isDirty = () => alive() && clean !== null && snapshot() !== clean;
-  const leave = async () => {
-    const v = await leaveDialog(!!doc.id);
-    if (v === 'stay') return false;
-    if (v === 'save') { const r = await guard(() => save(false)); if (!r) return false; toast('Draft saved'); return true; }
-    if (v === 'post') { await postAndPrintNow(); return false; }
-    if (v === 'discard') { if (doc.id) await guard(() => db.cancelDraft(doc.id, S.user)); toast(doc.id ? 'Draft cancelled' : 'Discarded'); return true; }
-    return false;
+  // Autosave (Rabee, Nov 2026): once a document has a real line (or an amount), every change is kept
+  // as a draft in the background. Leaving never asks; the draft waits in the Saved tab.
+  const meaningful = (d) => (t.lines ? d.lines.some((l) => l.itemId) : num(d.amount) > 0);
+  let saving = null, lastSaved = null;
+  const autosave = async () => {
+    if (!alive() || busy) return;
+    const d = readDoc(); if (!meaningful(d)) return;
+    const snap = JSON.stringify(d); if (snap === lastSaved) return;
+    await saving;
+    saving = (async () => {
+      try {
+        const r = await db.saveDraft({ ...d, id: doc.id }, S.user);
+        doc.id = r.id; lastSaved = snap; if (alive()) clean = snapshot();
+        const pill = $('.whead .pill'); if (pill && pill.dataset.s !== 'saved') { pill.dataset.s = 'saved'; pill.textContent = T('Saved'); }
+        history.replaceState(null, '', '#/doc/' + r.id); currentHash = location.hash;
+      } catch (e) { console.warn('autosave', e); }
+    })();
+    await saving;
   };
+  let tmr = null;
+  const soon = () => { clearTimeout(tmr); tmr = setTimeout(autosave, 700); };
+  $('#main').addEventListener('change', soon);
+  document.onvisibilitychange = () => { if (document.hidden) autosave(); };
+  const leave = async () => { clearTimeout(tmr); await autosave(); if (doc.id && isDirty()) toast('Draft saved'); return true; };
   guardEditor = { isDirty, leave };
-  const back = () => { if (isDirty()) leave().then((ok) => ok && backToPlace()); else backToPlace(); };
+  const back = () => { if (isDirty()) leave().then(() => { guardEditor = null; backToPlace(); }); else backToPlace(); };
   $('#postprint').onclick = printAndPost;
   $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); go('#/doc/' + r.id); });
   // cancel: a saved draft becomes "cancelled" (kept in the records); a new one is simply dropped
