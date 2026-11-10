@@ -12,7 +12,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   const dialogAnswers = [];
   page.on('dialog', async (d) => { const a = dialogAnswers.shift(); if (d.type() === 'prompt') await d.accept(a ?? 'test reason'); else await d.accept(); });
-  await page.addInitScript(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
+  await page.addInitScript(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; if (!localStorage.getItem('lang')) localStorage.setItem('lang', 'en'); });
   const toast = async () => (await page.textContent('#toast')).trim();
   const step = (s) => console.log('▶', s);
   const key = async (k, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); };
