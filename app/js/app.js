@@ -44,7 +44,7 @@ async function reload() {
 
 // ---------- router ----------
 const routes = {};
-const GROUPS = { inv: ['SI', 'SR', 'PI', 'PR', 'CN', 'DN'], vch: ['RV', 'PV'] };
+const GROUPS = { inv: ['SI', 'SR', 'CN', 'DN'], pur: ['PI', 'PR'], vch: ['RV', 'PV'] };
 // The open editor registers itself here so leaving it can be guarded.
 let guardEditor = null, currentHash = location.hash, bypass = false;
 // Bisan keys: F2 lookup · F4 save · F9 print (posts, so it asks) · Esc exit back to where you were
@@ -65,8 +65,8 @@ async function render() {
   document.body.classList.remove('menu-open');
   const qType = name === 'new' ? args[0] : new URLSearchParams(hash.split('?')[1] || '').get('type');
   const tab = name === 'dashboard' ? 'home'
-    : name === 'invoices' ? 'inv' : name === 'vouchers' ? 'vch'
-    : (name === 'docs' || name === 'new') ? (GROUPS.vch.includes(qType) ? 'vch' : 'inv')
+    : name === 'invoices' ? 'inv' : name === 'vouchers' ? 'vch' : name === 'purchases' ? 'pur'
+    : (name === 'docs' || name === 'new') ? (GROUPS.vch.includes(qType) ? 'vch' : GROUPS.pur.includes(qType) ? 'pur' : 'inv')
     : ['reports', 'statement', 'sales', 'stock', 'tb'].includes(name) ? 'rep'
     : ['dirs', 'customers', 'suppliers', 'items', 'accounts'].includes(name) ? 'dir' : '';
   $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
@@ -185,8 +185,9 @@ routes.dashboard = async () => {
 const MAP = [
   { k: 'inv', title: 'Invoices', icon: 'doc', groups: [
     [['#/docs?type=SI', 'doc', 'Sales invoices', 'SI'], ['#/docs?type=SR', 'undo', 'Sales returns', 'SR']],
-    [['#/docs?type=PI', 'cart', 'Purchase invoices', 'PI'], ['#/docs?type=PR', 'undo', 'Purchase returns', 'PR']],
     [['#/docs?type=CN', 'minus', 'Credit notes', 'CN'], ['#/docs?type=DN', 'pluscircle', 'Debit notes', 'DN']]] },
+  { k: 'pur', title: 'Purchases', icon: 'cart', groups: [
+    [['#/docs?type=PI', 'cart', 'Purchase invoices', 'PI'], ['#/docs?type=PR', 'undo', 'Purchase returns', 'PR']]] },
   { k: 'vch', title: 'Vouchers', icon: 'wallet', groups: [
     [['#/docs?type=RV', 'in', 'Receipt vouchers', 'RV']], [['#/docs?type=PV', 'out', 'Payment vouchers', 'PV']], [['', 'journal', 'Journal vouchers']]] },
   { k: 'dir', title: 'Definitions', icon: 'book', groups: [
@@ -196,6 +197,10 @@ const MAP = [
     [['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer']],
     [['#/sales?kind=purchases&by=item', 'cart', 'Purchases by item'], ['#/sales?kind=purchases&by=customer', 'truck', 'Purchases by supplier']],
     [['#/stock', 'box', 'Inventory'], ['#/tb', 'layers', 'Trial balance']]] },
+  { k: 'sys', title: 'System', icon: 'gear', groups: [
+    [['#/settings?f=pin', 'lock', 'Password'], ['#/settings?f=lang', 'grid', 'Language'], ['#/settings?f=cur', 'wallet', 'Currency']],
+    [['#/settings', 'gear', 'Settings'], ['#/import', 'spark', 'Import · Excel · AI'], ['#/backup', 'saved', 'Backup']],
+    [['#/integrity', 'check', 'Integrity check'], ['#/audit', 'list', 'Audit log']]] },
 ];
 const mapEntry = ([href, icon, label, nt]) => (href
   ? `<div class="hrow"><a class="hgo" href="${href}"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span></a>${nt ? `<a class="hnew" href="#/new/${nt}" title="New" aria-label="New">${ic('plus')}</a>` : ic('chev')}</div>`
@@ -211,6 +216,8 @@ routes.reports = async () => sectionPage('rep');
 routes.dirs = async () => sectionPage('dir');
 routes.invoices = async () => sectionPage('inv');
 routes.vouchers = async () => sectionPage('vch');
+routes.purchases = async () => sectionPage('pur');
+routes.system = async () => sectionPage('sys');
 routes.accounts = async () => {
   const tb = trialBalance(await ledger());
   const bal = Object.fromEntries(tb.rows.map((r) => [r.account, r.balDebitC - r.balCreditC]));
@@ -264,7 +271,7 @@ routes.docs = async () => {
   const pred = (STATUS_TABS.find((x) => x[0] === tab) || STATUS_TABS[0])[3];
   const list = ofType.filter(pred).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0) || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   const link = (t, tb) => `#/docs?type=${t}&tab=${tb}`;
-  const group = GROUPS.vch.includes(type) ? GROUPS.vch : type ? GROUPS.inv : [...GROUPS.inv, ...GROUPS.vch];
+  const group = GROUPS.vch.includes(type) ? GROUPS.vch : GROUPS.pur.includes(type) ? GROUPS.pur : type ? GROUPS.inv : [...GROUPS.inv, ...GROUPS.pur, ...GROUPS.vch];
   $('#main').innerHTML = `<div class="listhead"><h1>${type ? DOC_TYPES[type].name : 'All documents'}</h1>
       ${type && DOC_TYPES[type].party !== 'none' && type !== 'OB' ? `<a class="btn ink" id="newDoc" href="#/new/${type}">${ic('plus')}<span>New</span></a>` : ''}</div>
     <div class="chips scroll">${group.map((k) => `<a class="chip small ${k === type ? 'on' : ''}" href="${link(k, q.get('tab') || '')}">${DOC_TYPES[k].name}</a>`).join('')}</div>
@@ -1595,15 +1602,20 @@ routes.settings = async () => {
   $('#main').innerHTML = `<h1>Settings</h1>
     <h2>You</h2><div class="row"><label class="f">Your name<input id="uname" value="${esc(S.user)}"></label>
       <label class="f">Text size<select id="size">${[['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']].map(([k, v]) => `<option value="${k}" ${s.fontScale === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label class="f">Language<select id="lang"><option value="en">English</option><option value="ar" ${getLang() === 'ar' ? 'selected' : ''}>العربية</option></select></label>
+      <label class="f" id="sec-lang">Language<select id="lang"><option value="en">English</option><option value="ar" ${getLang() === 'ar' ? 'selected' : ''}>العربية</option></select></label>
       <button class="btn" id="saveMe">Save</button></div>
     <h2>Role</h2><p class="muted">Admin adds items, customers and suppliers, voids documents, imports and restores. Accountant enters and posts documents.</p>
     <div class="actions">${isAdmin() ? '<button class="btn" id="toAcc">Switch to accountant</button>' : '<button class="btn primary" id="toAdmin">Switch to admin</button>'}</div>
     <h2>Company</h2><form id="co" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
       ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('taxNo', 'Licensed dealer no.')}${f('address', 'Address')}${f('phone', 'Phone')}${f('branch', 'Branch / vehicle code (series prefix)')}
       ${f('vatRate', 'VAT %', 'number')}${f('copiesInvoice', 'Print copies · Invoices', 'number')}${f('copiesVoucher', 'Print copies · Vouchers', 'number')}<label class="f">Prices include VAT<select name="pricesIncludeVat" ${isAdmin() ? '' : 'disabled'}><option value="true">Yes</option><option value="false" ${s.pricesIncludeVat ? '' : 'selected'}>No</option></select></label></form>
-    ${isAdmin() ? `<div class="actions"><button class="btn primary" id="saveCo">Save company</button></div><h2>Admin PIN</h2><div class="row"><label class="f">New PIN<input id="pin" type="password" inputmode="numeric"></label><button class="btn" id="savePin">Set PIN</button></div>` : ''}
+    ${isAdmin() ? `<div class="actions"><button class="btn primary" id="saveCo">Save company</button></div><h2 id="sec-pin">Password · admin PIN</h2><div class="row"><label class="f">New PIN<input id="pin" type="password" inputmode="numeric"></label><button class="btn" id="savePin">Set PIN</button></div>` : ''}
+    <h2 id="sec-cur">Currency</h2><div class="row"><label class="f grow">Currency<input value="${esc(T('Israeli new shekel (₪, NIS)'))}" readonly></label></div>
+    <p class="muted">One currency in this version: every amount, statement and report is in shekels.</p>
+    ${isAdmin() ? '' : '<h2 id="sec-pin">Password</h2><p class="muted">Switch to admin to set or change the admin PIN.</p>'}
     <div class="note" style="margin-top:24px">This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.</div>`;
+  const fq = new URLSearchParams(location.hash.split('?')[1] || '').get('f');
+  if (fq) setTimeout(() => { const el = $('#sec-' + fq); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); (el.querySelector('select,input') || el.nextElementSibling?.querySelector?.('input'))?.focus(); } }, 60);
   $('#saveMe').onclick = () => guard(async () => {
     S.user = $('#uname').value.trim() || 'User'; sessionStorage.setItem('user', S.user); await db.setSetting('fontScale', $('#size').value, S.user);
     if ($('#lang').value !== getLang()) { setLang($('#lang').value); location.reload(); return; }

@@ -26,11 +26,11 @@
         <a href="#/docs?type=SI" data-k="docs?type=SI">Sales invoices</a>
         <a href="#/docs?type=SR" data-k="docs?type=SR">Sales returns</a>
         <hr class="navsep">
-        <a href="#/docs?type=PI" data-k="docs?type=PI">Purchase invoices</a>
-        <a href="#/docs?type=PR" data-k="docs?type=PR">Purchase returns</a>
-        <hr class="navsep">
         <a href="#/docs?type=CN" data-k="docs?type=CN">Credit notes</a>
         <a href="#/docs?type=DN" data-k="docs?type=DN">Debit notes</a>
+        <div class="navgroup">Purchases</div>
+        <a href="#/docs?type=PI" data-k="docs?type=PI">Purchase invoices</a>
+        <a href="#/docs?type=PR" data-k="docs?type=PR">Purchase returns</a>
         <div class="navgroup">Vouchers</div>
         <a href="#/docs?type=RV" data-k="docs?type=RV">Receipt vouchers</a>
         <hr class="navsep">
@@ -57,11 +57,16 @@
         <a href="#/stock" data-k="stock">Inventory</a>
         <a href="#/tb" data-k="tb">Trial balance</a>
         <div class="navgroup">System</div>
+        <a href="#/settings?f=pin" data-k="settings?f=pin">Password</a>
+        <a href="#/settings?f=lang" data-k="settings?f=lang">Language</a>
+        <a href="#/settings?f=cur" data-k="settings?f=cur">Currency</a>
+        <hr class="navsep">
+        <a href="#/settings" data-k="settings">Settings</a>
         <a href="#/import" data-k="import">Import · Excel · AI</a>
         <a href="#/backup" data-k="backup">Backup</a>
+        <hr class="navsep">
         <a href="#/integrity" data-k="integrity">Integrity check</a>
         <a href="#/audit" data-k="audit">Audit log</a>
-        <a href="#/settings" data-k="settings">Settings</a>
       </nav>
       <div class="whoami" id="whoami"></div>
     </aside>
@@ -70,6 +75,7 @@
   <nav id="tabs">
     <a href="#/dashboard" data-tab="home"><i data-ic="home"></i><span>Home</span></a>
     <a href="#/invoices" data-tab="inv"><i data-ic="doc"></i><span>Invoices</span></a>
+    <a href="#/purchases" data-tab="pur"><i data-ic="cart"></i><span>Purchases</span></a>
     <a href="#/vouchers" data-tab="vch"><i data-ic="wallet"></i><span>Vouchers</span></a>
     <a href="#/reports" data-tab="rep"><i data-ic="bars"></i><span>Reports</span></a>
     <a href="#/dirs" data-tab="dir"><i data-ic="book"></i><span>Definitions</span></a>

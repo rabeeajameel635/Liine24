@@ -984,3 +984,6 @@ table.st tfoot td { font-size: 1.02em; }
 .hnew .ic { width: 17px; height: 17px; stroke-width: 2.2; }
 .hublist.grouped { background: #fff; border: 1px solid var(--cl-line, #E2DFD6); border-radius: 20px; padding: 4px 10px; }
 #nav hr.navsep { border: none; border-top: 1px solid var(--line); margin: 4px 18px; }
+.flash { animation: flash 1.6s ease-out; border-radius: 12px; }
+@keyframes flash { 0%, 40% { background: #FBEDE7; box-shadow: 0 0 0 6px #FBEDE7; } 100% { background: transparent; box-shadow: none; } }
+@media (max-width: 860px) { #tabs a { font-size: .66em; padding: 6px 0; } }
