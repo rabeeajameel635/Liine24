@@ -108,6 +108,7 @@ const AR = {
   'Posted invoices minus returns, VAT included. Tap a row for its details.': 'الفواتير المرحّلة ناقص المرتجعات، شامل الضريبة. اضغط على أي سطر لتفاصيله.',
   'Fixed chart in this version. Balances come from posted entries only.': 'دليل ثابت بهذه النسخة. الأرصدة من القيود المرحّلة فقط.',
   'asset': 'أصول', 'liability': 'التزامات', 'equity': 'حقوق ملكية', 'income': 'إيرادات', 'expense': 'مصروفات',
+  'Code or item name': 'الكود أو اسم الصنف', 'B.': 'بونص', 'Add line': 'أضف السطر', 'Lookup (F2)': 'استعلام',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',

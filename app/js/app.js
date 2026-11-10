@@ -50,7 +50,7 @@ const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
 document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
 const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
-  guardEditor = null; pageKeys = null;
+  guardEditor = null; pageKeys = null; document.body.classList.remove('editing');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
@@ -225,10 +225,11 @@ function editor(doc) {
   const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && (p.active !== false || !t.lines));
   const itemsList = S.items.filter((i) => i.active !== false);
   $('#main').innerHTML = `
-    <div class="docbar"><div><div class="dtitle">${t.name} <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
+    <div class="docbar"><button class="iconbtn monly" id="eBack" tabindex="-1" title="Exit">${ic('chev')}</button>
+      <div><div class="dtitle"><span>${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
       <div class="dparty" id="barParty" dir="auto">—</div></div>
       <div class="dtotal"><span class="muted">Total ₪</span><b id="barTotal">0.00</b></div>
-      <button class="btn small" id="toNotes" tabindex="-1">Notes</button></div>
+      <button class="btn small" id="toNotes" tabindex="-1" title="Notes">${ic('journal')}<span>Notes</span></button></div>
     <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
@@ -241,6 +242,15 @@ function editor(doc) {
     <div id="partyInfo" class="muted" style="margin:12px 0 0"></div>
     ${t.lines ? linesUI(doc) : voucherUI(doc)}
     <label class="f" style="margin-top:20px">Notes<textarea id="notes" dir="auto" rows="3" style="min-height:96px">${esc(doc.notes || '')}</textarea></label>
+    <div class="dock">
+    ${t.lines ? `<div class="composer" id="composer">
+      <div class="cname" id="cName" hidden><b dir="auto"></b><button type="button" class="cx" id="cClear" tabindex="-1">×</button></div>
+      <div class="crow">
+        <button type="button" class="cbtn" id="cLook" tabindex="-1" title="Lookup (F2)">${ic('search')}</button>
+        <input id="cItem" dir="auto" placeholder="Code or item name" enterkeyhint="next" autocomplete="off">
+        <span class="cnums" id="cNums" hidden><label>Price<input id="cPrice" inputmode="decimal" enterkeyhint="next"></label><label>Qty<input id="cQty" inputmode="decimal" enterkeyhint="next"></label><label>B.<input id="cBonus" inputmode="decimal" enterkeyhint="done"></label></span>
+        <button type="button" class="cbtn send" id="cAdd" tabindex="-1" title="Add line">${ic('up')}</button>
+      </div></div>` : ''}
     <div class="finish" id="finish" tabindex="0">
       <span class="grow hint"><kbd>F2</kbd> <kbd>@</kbd> <span>Lookup</span> · <kbd>F4</kbd> <kbd>#</kbd> <span>Save</span> · <kbd>F9</kbd> <kbd>€</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
       <span class="symkeys"><kbd>@</kbd> <span>Lookup</span> · <kbd>#</kbd> <span>Save</span> · <kbd>€</kbd> <span>Print &amp; post</span></span>
@@ -249,7 +259,8 @@ function editor(doc) {
       <button class="btn" id="post">Post</button>
       <button class="btn" id="printdraft">Print draft</button>
       ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
-    </div>`;
+    </div></div>`;
+  document.body.classList.add('editing');
 
   // exact code or label wins; a name search picks only when exactly one record matches
   const findParty = (v, report = false) => {
@@ -381,7 +392,7 @@ function editor(doc) {
     }
     const next = header[i + 1];
     if (next) next.focus();
-    else if (t.lines) $('#lines tbody tr [data-k=code]').focus();
+    else if (t.lines) ($('#cItem').offsetParent ? $('#cItem') : $('#lines tbody tr [data-k=code]')).focus();
     else $('#amount').focus();
   }));
 
@@ -419,7 +430,7 @@ function editor(doc) {
     if (!k || !e.inputType?.startsWith('insert') || e.target.tagName !== 'INPUT' || e.target.closest('dialog')) return;
     e.preventDefault();
     const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
-    if (k === 'F2' && (e.target.id === 'party' || e.target.dataset.k === 'code' || e.target.dataset.k === 'name')) e.target.dispatchEvent(ev);
+    if (k === 'F2' && (e.target.id === 'party' || e.target.id === 'cItem' || e.target.dataset.k === 'code' || e.target.dataset.k === 'name')) e.target.dispatchEvent(ev);
     else pageKeys && pageKeys(ev);
   };
   // touch: the ⌕ buttons do what F2 does
@@ -429,6 +440,7 @@ function editor(doc) {
     el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
   };
   $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
+  $('#eBack').onclick = back;
   setTimeout(() => ($('#party') || $('#date')).focus(), 50);
 }
 // Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
@@ -692,6 +704,40 @@ function wireLines(doc, arm, parties = []) {
     focus('code', next);
   });
   $('#addline').onclick = () => { const tr = addRow(); $('[data-k=code]', tr).focus(); };
+
+  // Phone composer: one capsule above the keyboard that feeds the next line.
+  // Enter: item → price → qty → bonus → line added, back to item.
+  const C = { item: $('#cItem'), price: $('#cPrice'), qty: $('#cQty'), bonus: $('#cBonus'), name: $('#cName'), nums: $('#cNums') };
+  let cPicked = null;
+  const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; };
+  const cPick = (it) => {
+    cPicked = it; $('b', C.name).textContent = `${it.code} — ${it.name}`; C.name.hidden = false; C.nums.hidden = false; C.item.hidden = true;
+    C.price.value = defaultPrice(it, doc.type); C.qty.focus();
+  };
+  const cResolve = async () => {
+    const v = C.item.value.trim();
+    const act = S.items.filter((i) => i.active !== false);
+    const it = v ? (act.find((i) => i.code.toLowerCase() === v.toLowerCase()) || byName(v)) : null;
+    const got = it || (await lookupItem(v, doc.type));
+    if (got) cPick(got); else C.item.focus();
+  };
+  const cAdd = () => {
+    if (!cPicked) return cResolve();
+    if (!(num(C.qty.value) > 0) && !(num(C.bonus.value) > 0)) { C.qty.focus(); return; }
+    const tr = $$('tr', tbody).find((r) => isEmpty(r)) || addRow();
+    setItem(tr, cPicked);
+    $('[data-k=price]', tr).value = C.price.value; $('[data-k=qty]', tr).value = C.qty.value; $('[data-k=bonus]', tr).value = C.bonus.value;
+    renumber(); recalc(); cReset(); C.item.focus();
+    tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  C.item.addEventListener('keydown', (e) => {
+    if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); cResolve(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (C.item.value.trim()) cResolve(); else arm(); }
+  });
+  [[C.qty, () => C.bonus.focus()], [C.price, () => C.qty.focus()], [C.bonus, cAdd]].forEach(([el, next]) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); next(); } }));
+  $('#cLook').onclick = async () => { const it = await lookupItem(cPicked ? '' : C.item.value.trim(), doc.type); if (it) cPick(it); };
+  $('#cAdd').onclick = cAdd;
+  $('#cClear').onclick = () => { cReset(); C.item.focus(); };
   $('#invdisc').oninput = recalc;
   renumber(); recalc();
 }
@@ -1261,6 +1307,8 @@ function printHtml(html) {
 (async () => {
   applyLang();
   $$('[data-ic]').forEach((el) => (el.innerHTML = ic(el.dataset.ic)));
+  const vv = window.visualViewport;
+  if (vv) { const kb = () => document.documentElement.style.setProperty('--kb', Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px'); vv.addEventListener('resize', kb); vv.addEventListener('scroll', kb); kb(); }
   const lb = $('#langBtn');
   lb.textContent = getLang() === 'ar' ? 'English' : 'العربية';
   lb.onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); };

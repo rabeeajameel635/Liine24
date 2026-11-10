@@ -26,6 +26,7 @@ const P = {
   book: '<path d="M5 4h13v16H7a2 2 0 0 1-2-2z"/><path d="M9 8h6"/>',
   pin: '<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   menu: '<path d="M5 7h14M5 12h10M5 17h14"/>',
   chev: '<path d="M9 6l6 6-6 6"/>',
   wallet: '<path d="M4 7h14a2 2 0 0 1 2 2v9H6a2 2 0 0 1-2-2zM4 7V6a2 2 0 0 1 2-2h10"/><path d="M16 13h.01"/>',
