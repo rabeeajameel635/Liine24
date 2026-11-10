@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pentagon Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a film strip of 45 shots across the top (width = screen time), a room list on the
+   side, and one open shot room in the middle. Single dark look, same tokens as Rabee Studio. */
+:root{
+  --stage:#07070a; --stage-2:#101015; --stage-3:#17171e;
+  --line:rgba(243,236,226,.12);
+  --pearl:#f3ece2; --mute:#a19a90;
+  --gold:#e4c28f; --crimson:#b3263a;
+  --ok:#7fd1a4; --warn:#e9b25a; --bad:#e2707a; --info:#8fb6e4;
+  --f-display:"Alexandria","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Arabic","Alexandria",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --radius:16px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{direction:rtl}
+body{margin:0;background:var(--stage);color:var(--pearl);font-family:var(--f-body);font-size:1rem;line-height:1.7;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage)}
+a{color:var(--gold)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{max-width:1240px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.eyebrow{font-family:var(--f-body);font-size:.84rem;font-weight:500;color:var(--gold)}
+.mute{color:var(--mute)}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:rgba(7,7,10,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-direction:column;gap:10px;padding-block:12px}
+.top-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+.top-row h1{font-size:1.15rem;font-weight:800}
+.top-row .song{font-size:.86rem;color:var(--mute)}
+.progress{margin-inline-start:auto;display:flex;align-items:center;gap:10px;font-size:.82rem;color:var(--mute)}
+.progress b{color:var(--pearl);font-weight:600}
+.bar{width:120px;height:6px;border-radius:99px;background:var(--stage-3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);width:0}
+
+/* film strip */
+.strip{display:flex;gap:2px;height:34px;direction:ltr}
+.strip button{flex-basis:0;min-width:3px;border:0;padding:0;border-radius:3px;background:var(--stage-3);cursor:pointer;position:relative;border-bottom:3px solid var(--ch,var(--mute))}
+.strip button:hover{background:#24242e}
+.strip button[aria-current="true"]{background:var(--pearl)}
+.strip button[data-st="trial"]{background:#3a3524}
+.strip button[data-st="candidate"]{background:#2a3445}
+.strip button[data-st="rejected"]{background:#45262b}
+.strip button[data-st="approved"]{background:#27463a}
+.strip button[aria-current="true"]{background:var(--pearl)}
+.strip-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.74rem;color:var(--mute)}
+.strip-legend span::before{content:"";display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--ch);margin-inline-end:6px;vertical-align:middle}
+
+/* notice */
+.notice{margin-block:18px 0;border:1px solid var(--line);border-inline-start:3px solid var(--warn);border-radius:10px;padding:12px 16px;font-size:.9rem;color:var(--mute);background:var(--stage-2)}
+.notice b{color:var(--pearl);font-weight:600}
+
+/* main grid */
+.main{display:grid;grid-template-columns:270px minmax(0,1fr);gap:22px;padding-block:20px 60px;align-items:start}
+.list{position:sticky;top:calc(env(safe-area-inset-top,0px) + 150px);max-height:calc(100vh - 170px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--stage-2);padding:8px}
+.list h3{font-size:.76rem;font-family:var(--f-body);color:var(--mute);font-weight:400;padding:10px 8px 4px;display:flex;justify-content:space-between;gap:8px}
+.list button{display:flex;width:100%;gap:8px;align-items:center;text-align:start;background:transparent;border:0;border-radius:8px;padding:6px 8px;cursor:pointer;font-size:.86rem}
+.list button:hover{background:var(--stage-3)}
+.list button[aria-current="true"]{background:var(--stage-3);box-shadow:inset 2px 0 0 var(--gold)}
+.list .id{font-family:var(--f-mono);font-size:.74rem;color:var(--gold);min-width:30px;direction:ltr}
+.list .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--stage-3);border:1px solid var(--line);flex:none}
+.dot[data-st="trial"]{background:var(--warn);border-color:transparent}
+.dot[data-st="candidate"]{background:var(--info);border-color:transparent}
+.dot[data-st="rejected"]{background:var(--bad);border-color:transparent}
+.dot[data-st="approved"]{background:var(--ok);border-color:transparent}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}.list{display:none}}
+
+/* room */
+.room{display:flex;flex-direction:column;gap:22px;min-width:0}
+.room-nav{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.room-nav select{flex:1;min-width:0;background:var(--stage-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--stage-2);border-radius:10px;padding:8px 14px;cursor:pointer;font-size:.88rem;white-space:nowrap}
+.btn:hover{border-color:var(--gold)}
+.btn[disabled]{opacity:.35;cursor:default}
+.btn-gold{background:var(--gold);color:var(--stage);border-color:var(--gold);font-weight:600}
+.head{display:flex;flex-direction:column;gap:8px}
+.head h2{font-size:clamp(1.5rem,3.4vw,2.2rem);font-weight:800}
+.head .tc{font-size:.95rem;color:var(--mute)}
+.head .tc b{color:var(--pearl);font-weight:600}
+.lyric{font-family:var(--f-body);direction:ltr;text-align:left;font-size:.95rem;color:var(--gold);border-inline-start:0;border-left:2px solid var(--crimson);padding-left:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:.76rem;border:1px solid var(--line);border-radius:99px;padding:2px 10px;color:var(--mute)}
+.chip.k-gen{color:var(--ok);border-color:rgba(127,209,164,.35)}
+.chip.k-reuse{color:var(--info);border-color:rgba(143,182,228,.35)}
+.chip.k-comp{color:var(--warn);border-color:rgba(233,178,90,.35)}
+
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec>h3{font-size:1rem;display:flex;align-items:baseline;gap:10px}
+.sec>h3 small{font-family:var(--f-body);font-weight:400;font-size:.8rem;color:var(--mute)}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.spec div{background:var(--stage-2);padding:14px 16px;min-width:0}
+.spec dt,.kv dt{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.12em;color:var(--mute);margin-bottom:4px}
+.spec dd,.kv dd{margin:0;font-size:.93rem}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 24px;margin:0}
+.kv .ltr{direction:ltr;text-align:left;font-family:var(--f-mono);font-size:.82rem;unicode-bidi:isolate}
+.caution{border-inline-start:3px solid var(--crimson);padding:8px 14px;background:var(--stage-2);border-radius:8px;font-size:.92rem}
+.caution b{color:var(--bad)}
+.refs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.refs li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:.92rem;border-bottom:1px solid var(--line);padding-bottom:8px}
+.refs li:last-child{border-bottom:0;padding-bottom:0}
+.refs .nm{font-family:var(--f-mono);font-size:.82rem;direction:ltr;unicode-bidi:isolate;color:var(--pearl)}
+.refs .why{color:var(--mute);flex:1;min-width:180px}
+
+.prompt{border:1px solid var(--line);border-radius:var(--radius);background:var(--stage-2);overflow:hidden}
+.prompt header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.prompt header b{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.1em}
+.prompt header span{font-size:.8rem;color:var(--mute);flex:1;min-width:140px}
+.prompt pre{margin:0;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;text-align:left;font-family:var(--f-mono);font-size:.8rem;line-height:1.65;color:#d9d2c6;max-height:320px;overflow:auto}
+.src{font-size:.72rem;border-radius:99px;padding:1px 8px;border:1px solid var(--line);color:var(--mute)}
+.src.v{color:var(--gold);border-color:rgba(228,194,143,.4)}
+
+/* review */
+.review{border:1px solid var(--line);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:16px;background:var(--stage-2)}
+.states{display:flex;flex-wrap:wrap;gap:6px}
+.states label{border:1px solid var(--line);border-radius:99px;padding:4px 14px;font-size:.86rem;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.states input{position:absolute;opacity:0;pointer-events:none}
+.states label:has(input:checked){background:var(--pearl);color:var(--stage);border-color:var(--pearl);font-weight:600}
+.states label:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
+.rubric{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px 24px}
+.rubric label{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:.88rem;align-items:center}
+.rubric input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--gold);direction:ltr}
+.rubric output{font-family:var(--f-mono);font-size:.82rem;color:var(--gold)}
+.score{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+.score .n{font-family:var(--f-mono);font-size:2rem;font-weight:600;line-height:1}
+.score .n.hit{color:var(--ok)}
+.field{display:flex;flex-direction:column;gap:4px;font-size:.86rem}
+.field input,.field textarea{background:var(--stage);border:1px solid var(--line);border-radius:10px;padding:8px 12px;width:100%}
+.field textarea{min-height:76px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toast{font-size:.82rem;color:var(--ok)}
+details{border-top:1px solid var(--line);padding-top:14px}
+summary{cursor:pointer;font-family:var(--f-display);font-weight:700}
+.gates{margin:12px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 24px;font-size:.88rem;color:var(--mute)}
+.gates b{color:var(--pearl);font-family:var(--f-mono);font-size:.78rem;margin-inline-end:6px}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+</style>
+
+</head>
+<body>
+<div class="top">
+  <div class="wrap">
+    <div class="top-row">
+      <h1>Pentagon Studio</h1>
+      <span class="song">I AM THE WORLD · أنا الدنيا · <span class="mono">04:16.200</span> · v44</span>
+      <div class="progress"><span><b id="pCount">0</b> / 45 معتمدة</span><div class="bar"><i id="pBar"></i></div></div>
+    </div>
+    <div class="strip" id="strip" role="tablist" aria-label="شريط اللقطات بحسب زمنها في الأغنية"></div>
+    <div class="strip-legend" id="legend"></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="notice"><b>هذي الغرف مبنية على دراسة 7 نوفمبر، وهي دراسة غير مقفلة.</b> التوقيت والعدسة والوصف من «Master Shot Book». فتح الغرفة أو نسخ البرومبت ما يعتبر اعتماد؛ الاعتماد قرارك أنت وتسجله من خانة المراجعة. حالة كل غرفة تنحفظ بهذا المتصفح فقط.</p>
+
+  <div class="main">
+    <nav class="list" id="list" aria-label="الغرف"></nav>
+    <main class="room" id="room"></main>
+  </div>
+</div>
+
+<script>
+const REF = {
+  face:{nm:'FACE_SHEET_LOCK.png',url:'https://drive.google.com/file/d/1aoRzY0FdqZBvYg2Cjo8KZf2-mXqM7PsT/view'},
+  ward:{nm:'WARDROBE_LOCK.png',url:'https://drive.google.com/file/d/1JfYAMcIEPk2WoyIMg-9k5q9n0UqV-aGO/view'},
+  d1:{nm:'DONIA — D1 FRAME 01',url:'https://drive.google.com/drive/folders/1tciXq7vnnHJmyUffNarf8A-D9tOWIGQn'},
+  fame:{nm:'Fame studio LOCKED (Notion)',url:'https://app.notion.com/p/8ff690fc916182bf845401e2935d83be'},
+  r1:{nm:'R1 الشهرة 6 Nov (Notion)',url:'https://app.notion.com/p/410690fc916181e094dccc78fd667ea7'},
+  love:{nm:'Love LOCKED (Notion)',url:'https://app.notion.com/p/181690fc9161830388a901d76d632168'},
+  wnotion:{nm:'Wardrobe LOCK 6 Nov (Notion)',url:'https://app.notion.com/p/5ab690fc916182a199b98183f2479a17'}
+};
+const CH = {
+  H:{ar:'الذاكرة',c:'#8fb6e4',loc:'الممر H2، القاعة H3، النافذة H7 (أصولها في Notion، بعضها REVIEW)',refs:[]},
+  T:{ar:'الطريق إلى المغادرة',c:'#9aa7b8',loc:'البرج الأصلي وطريق المطار وجسر الطائرة',refs:['d1']},
+  D:{ar:'المغادرة',c:'#c9a27a',loc:'جسر الطائرة الزجاجي والماسورة U والمصعد',refs:['d1']},
+  F:{ar:'الشهرة',c:'#d9d2c6',loc:'استوديو الشهرة المقفل',refs:['fame','r1']},
+  L:{ar:'الحب والجسر النفسي',c:'#e9b25a',loc:'غرفة الحب: الساعة الزرقاء والمطر والكرسي الفارغ',refs:['love']},
+  E:{ar:'بسطة الرابع',c:'#b3263a',loc:'البسطة الرابعة والباب الذهبي الأصلي',refs:[]},
+  R:{ar:'البيت والفينيش',c:'#7fd1a4',loc:'البيت المقفل ومرجع النهاية',refs:[]}
+};
+const LOOK = {
+  dep:{ar:'المغادرة',en:'Departure look: camel suede, ivory trousers, brown belt'},
+  fame:{ar:'الشهرة',en:'Fame look: black satin slip dress with matte bolero'},
+  love:{ar:'الحب',en:'Love look: ivory crepe midi'},
+  post:{ar:'العاجي بعد التحرر (يُطابق مع آخر أصل)',en:'the approved post-release ivory look with the crimson accent retained'},
+  tbd:{ar:'غير محددة في الدراسة، تُطابق مع آخر أصل معتمد',en:'the outfit of the latest approved asset for this scene'}
+};
+const MODE = {gen:['توليد','k-gen'],reuse:['إعادة استخدام أصل موجود','k-reuse'],comp:['تركيب / مونتاج','k-comp']};
+const CAT = {A:'عالم بلا وجه',B:'حضور بعيد أو خلفي',C:'هوية قريبة'};
+
+// [id, ar, t0, t1, lyric, cat, look, mode, START, END, MOTION, lens, tool, caution, promptStart, promptEnd, promptMotion]
+const RAW = [
+['H01','الوعد / المفتاح','0:00.000','0:02.100','افتتاح موسيقي قبل Nobody noticed','A','','comp',
+ 'لوح أسود شامباني مقفل، زرّان وموضع ثالث خالٍ. الكاميرا عمودية مباشرة على السطح.',
+ 'إضاءة بيضاء صغيرة وحدة في رقم محدد. بقية المفاتيح ساكنة.',
+ 'تغيّر إضاءة زر واحد بدون تحول معدن أو تبديل أرقام. قطع على بقاء العتمة.',
+ '65mm macro · locked · parallel lines','EDIT / COMPOSITE فوق فريم المرجع. لا توليد فيديو لزر بسيط.',
+ 'تكوين H1 مواصفة، أما START/END في Notion فما زال REVIEW.',
+ 'Extreme macro, camera perpendicular to the surface, all edges parallel to the frame. A locked matte black-champagne keypad panel with two buttons and an empty third position. Dark, quiet, no light on any key.',
+ 'one small white indicator light is now lit on one specific key; every other key stays dark and unchanged; no change to the metal, layout or digits',
+ 'Only the single key light comes on. Nothing else moves. Hold the darkness.'],
+['H02','ممر الذاكرة / اللوحات','0:02.100','0:10.900','Nobody noticed / Nobody bothered','B','tbd','gen',
+ 'ممر خرساني واقعي من مرجع H2: ثلاث لوحات يساراً والثالثة في الظل، خط أرضي قرمزي لا يتوهج، ودنيا صغيرة من الخلف.',
+ 'الكاميرا تقدمت قليلاً واتسع حجم اللوحة الأولى. مكان اللوحات ما يتبدل والثالثة ما تنوّر.',
+ 'دولي بطيء جداً بعمق ثابت. الخط القرمزي ساكن على الأرض. لا انزلاق لجسم دنيا.',
+ '35–40mm · محور معماري واحد · dolly 10–20cm','Higgsfield scene / Blender camera pass ثم compositing من مرجع الممر المقفل.',
+ 'عمارة الممر H2 مقفلة. تحريك الموقع ما يعيد خلقه.',
+ 'A realistic concrete corridor exactly as in the attached corridor reference, one architectural axis. Three paintings hang on the left wall, the third one in shadow. A matte crimson line runs along the floor and does not glow. Donia is small in frame, seen from behind.',
+ 'the camera is 10–20 cm further forward so the first painting reads slightly larger; painting positions unchanged, the third painting stays in shadow, Donia has not slid or moved',
+ 'Very slow dolly forward of 10–20 cm at constant depth. The crimson floor line stays still. Donia does not slide.'],
+['H03','احتضان الذات / القاعة','0:10.900','0:14.300','امتداد الكلمات الأولى','B','tbd','reuse',
+ 'دنيا في القاعة وفق أحدث مرجع H3. الأجنحة مغلقة بتناسق وتحتوي جسدها، والضوء منخفض.',
+ 'الأجنحة باقية مغلقة. استقرار طفيف للنفَس فقط، بدون تمدد أعضاء أو انزلاق قدم.',
+ 'لا حركة كبيرة. قطع تصويري يقاوم تضخيم العاطفة.',
+ '50mm · wide-medium · locked','إعادة استخدام اللقطة LOCKED/REVIEW إن كانت صالحة. اختبار Omni قصير فقط بعد المراجعة.',
+ 'لا نرجع لستارة H3 القديمة المؤرشفة.',
+ 'Wide-medium, locked camera. Donia in the hall exactly as in the latest approved H3 reference: the wings are closed symmetrically and contain her body, low light.',
+ 'the wings remain closed; only a slight settling of her breath; no limb stretching, no foot slide',
+ 'Almost no motion: one quiet breath. Wings stay closed.'],
+['H04','شق الذهب','0:14.300','0:17.600','نقلة نغمية / اتجاه نظرة','A','','comp',
+ 'تفصيل شق ضوء ذهبي ضيق في معمار القاعة. مادة الحجر ثابتة.',
+ 'الضوء يمتد على الحافة قليلاً بعد ما يتضح مصدره. لا هالة ولا نيون.',
+ 'فاصل بيئي واحد بلا شخصية. يمكن تنفيذه بتدرج ضوئي مركّب.',
+ '65mm · locked · narrow strip','COMPOSITE، أو Runway Gen-4.5 إذا احتجنا حركة حجمية بسيطة.',
+ 'المادة REVIEW، وموضع اتصالها بالقاعة يحتاج تأكيد.',
+ 'Tight detail, locked camera. A narrow slit of warm gold light in the stone architecture of the hall. The stone material is unchanged from the hall reference. No halo, no neon.',
+ 'the light has extended slightly along the stone edge now that its source is readable; stone material and geometry unchanged; still no halo or neon',
+ 'The gold light creeps a short distance along the edge. Nothing else moves.'],
+['H05','السؤال / Hero','0:17.600','0:26.300','Who are you?  (0:18.3 – 0:26.3)','C','tbd','reuse',
+ 'لقطة Hero المقفلة تاريخياً. الوجه من المرجع النهائي، وفراغ أمام اتجاه نظرتها.',
+ 'تظل دنيا نفسها، تتقبل السؤال بدون ابتسامة أو نظرة مباشرة مصطنعة. الحركة تنتهي في الوقفة.',
+ 'الأولوية لإعادة استخدام الفيديو المعتمد. ما نولّد نسخة جديدة إلا لفشل موضوعي ظاهر.',
+ '85mm · shallow but readable · locked','الفيديو المقفل الموجود + فحص الوجه. لا إعادة خلق.',
+ 'قارن كل ثانية مع مرجع 6 نوفمبر. لا تعميم لعتبات تشابه وهمية.','','',''],
+['H06','العين / الانكسار المحبوس','0:26.300','0:28.564','Who? Who?  (0:27.324)','C','tbd','reuse',
+ 'فريم ثابت متصل مع Hero، والعين ما بكت بعد.',
+ 'وميض دمع محبوس بدون سقوط قطرة أو حركة فم مفاجئة.',
+ 'تفصيل هوية بتعديلات محدودة جداً، ونهاية قابلة للقطع على السؤال.',
+ '85–100mm · close · locked','المرشح الموجود 141d0caa إذا اعتُمد. Runway Act-Two فقط لو فيه أداء مرجعي.',
+ 'أصل الدموع الأساسي مرشح في Notion. لا تعتمد نسخة أقدم تلقائياً.',
+ 'Close portrait continuous with the approved Hero frame, locked camera. Her eye is dry, not yet crying, mouth neutral.',
+ 'a held-back glint of a tear appears in the eye; no falling drop, no sudden mouth movement, facial structure unchanged',
+ 'Only the eye changes: a restrained wetness appears. No drop falls. No head movement.'],
+['H07','النافذة بلا ستارة','0:28.564','0:34.564','I am the world that broke my own heart','C','tbd','gen',
+ 'دنيا عند النافذة المعتمدة بلا ستارة. الضوء الطبيعي يضغط على وجهها من جانب واحد.',
+ 'تبقى خلف النافذة وأنفاسها تبطأ. بقايا السؤال تذوب في الخطوط المعمارية.',
+ 'إيماءة بشرية وحدة فقط. ما يلزم تحريك الشعر والدمع والزجاج كلهم سوا.',
+ '50mm · 3/4 profile · locked','Flow Omni قصير I2V من فريم H7 المعتمد، أو صورة مقفلة مع grade خفيف.',
+ 'H7 موجود REVIEW في Notion. راجع الأصل قبل التحريك.',
+ 'Three-quarter profile, locked camera. Donia stands at the approved window with no curtain. Natural daylight presses on her face from one side only.',
+ 'she is still behind the window, her breathing visibly slower and shoulders slightly lower; window, light direction and architecture unchanged',
+ 'One human gesture only: her breath slows. Hair, glass and tears do not all move at once.'],
+['H08','شظايا الضوء','0:34.564','0:40.264','I laughed on the surface / drowned in deep','A','','gen',
+ 'تفصيل زجاج النافذة وقطرات على حافته. دنيا ما تظهر.',
+ 'انعكاس بارد صغير يهبط لأسفل الزجاج بفعل المطر فقط.',
+ 'البيئة تؤدي عكس الصورة الغنائية بدون تمثيل سقوط أو غرق حرفي.',
+ '85mm · static · locked','Runway Gen-4.5 أو Flow Omni 1.2 لمشهد قصير.',
+ 'لقطة جديدة مقترحة. تجنّب اختراع ماء داخل البيت.',
+ 'Static close detail of the same window glass with rain droplets gathered along its edge. No person in frame. Cool exterior light. No water inside the room.',
+ 'one small cool reflection has travelled down to the lower part of the glass, carried by the rain only; droplets and frame otherwise unchanged',
+ 'A single cool reflection slides down the glass with the rain. Camera fully still.'],
+['H09','ما زلت واقفة','0:40.264','0:46.964','Every time I try to rise / I rise again','B','tbd','gen',
+ 'لقطة منخفضة من الأرض لظل دنيا وخط الدرج. الوجه ما يظهر.',
+ 'انتقال وزن طبيعي للقدم الأمامية. الوجه يبقى خارج الكادر.',
+ 'فعل انتقال وزن واحد مع الحفاظ على القدمين والقماش.',
+ '50mm low · fixed','Kling 4.0 start/end إذا الفعلان في مكان واحد، أو cut بين صورتين.',
+ 'مقترح وصل. لا تكرر السقوط والنهوض حرفياً.',
+ 'Low fixed camera near the floor. Donia\'s shadow and lower body with the line of the staircase behind. Her face is out of frame.',
+ 'her weight has shifted naturally onto the front foot; both feet keep full floor contact, fabric hangs consistently, face still out of frame',
+ 'One natural weight transfer onto the front foot. Feet stay planted. No fall, no dramatic rise.'],
+['H10','جواب أول / طريق البرج','0:46.964','0:55.904','Get up / Who are you?!  (0:52.744)','B','tbd','gen',
+ 'دنيا واقفة في مكانها المحدد قرب بداية الدرج، وضوء البرج في العمق.',
+ 'الكادر الأوسع يكشف صعود السلم واتجاه الحركة نحو الطابق الأول.',
+ 'قطع من جسد ثابت إلى معماري مستقل. ما نطلب صعود كامل داخل لقطة وحدة.',
+ '35mm wide + 50mm insert','Blender / Higgsfield cinema environment مع التقاط ثابت للشخصية.',
+ 'البداية والجسر الدرامي بين H7 والسلم مقترح، مو اعتماد لملف جديد.',
+ 'Donia stands still at her marked position near the foot of the staircase, seen from behind, the light of the tower deep in the background.',
+ 'a wider frame of the same place reveals the staircase rising and the direction toward the first floor; Donia has not climbed',
+ 'Hold on her still body. The reveal of the staircase is a separate wider frame joined by a cut, not a climb inside one clip.'],
+
+['T01','البرج يظهر، لا يهدد','0:55.904','1:02.564','I am the world and I\'ll get through','A','','gen',
+ 'واجهة البرج الأصلي من مستوى منخفض. الضباب يخلّي العمود ينقرأ، بدون تغيير معمار البرج.',
+ 'الكاميرا وصلت مستوى أعلى قليلاً مع بقاء نفس عدد الأعمدة والخطوط.',
+ 'رفع محوري قصير جداً أو cut في الارتفاع. مو تمدد برج مولّد.',
+ '24–35mm · architecturally registered','Blender camera pass أو Higgsfield 4.0 environment.',
+ 'خطأ أساسي: لا تستبدل البرج ببناية ثانية من شيت الشهرة.',
+ 'Low wide view of the original tower facade exactly as in the tower reference. Light fog lets the vertical column read. Same number of columns and lines as the reference.',
+ 'the camera is slightly higher on the same vertical axis; identical count of columns and lines, no new facade growth',
+ 'A very short vertical rise on one axis. The tower does not stretch or grow.'],
+['T02','نافذة تتحول إلى مطر','1:02.564','1:10.364','I am the wound and I\'ll heal it too','A','','gen',
+ 'خارج المطار: أسفلت مبلول، انعكاسات دافئة موزونة، وبرج المراقبة في العمق.',
+ 'على الأسفلت يظهر أثر حركة سيارة خدمة وحدة، وبعدين المطر يمحي انعكاسها طبيعياً.',
+ 'بيئة فقط. حركة مركبة واقعية عابرة، والوجه غير حاضر.',
+ '40mm · tripod near apron edge','Runway Gen-4.5 أو Higgsfield Cinema Studio 4.0.',
+ 'لا تحط سيارة مسافرين في ساحة الطائرات بدون منطق.',
+ 'Tripod at the edge of an airport apron at blue hour. Wet asphalt with balanced warm reflections, the control tower deep in the background. No people.',
+ 'the trace of one airport service vehicle having passed is visible on the wet asphalt, its reflection already being erased by the rain',
+ 'One realistic airport service vehicle passes. Its reflection fades naturally in the rain. Camera still.'],
+['T03','الإيقاع القرمزي الأول','1:10.364','1:16.364','…swim to land (مدّ الجملة)','A','','gen',
+ 'طريق المطار المبلل بنفس الساعة الزرقاء. ما في خط قرمزي جاهز على الأرض.',
+ 'انعكاس مصباح خلفي أحمر لسيارة خدمة يمتد قليلاً على البلل وبعدين يتلاشى.',
+ 'حركة وحدة من اليسار لليمين. الأثر الأحمر يتركّب بعد التصوير إذا اهتز في التوليد.',
+ '50mm low to ground · static','Runway 4.5 للمركبة، و Resolve/Fusion للانعكاس القرمزي.',
+ 'لا أثر ليزري ممتد، ولا عدة خطوط حمراء.',
+ {s:'ONE 16:9 realistic locked-off cinematic exterior on a wet airport service road at blue hour. Camera height 45cm, 50mm full frame, level horizon. Empty asphalt foreground with natural reflections from sparse amber airport lights. A small airport service vehicle is entering from screen-left at medium distance. No passengers, no street-racing look, no neon. One consistent airport architecture and overcast sky.',
+  e:'Keep the exact same camera and roadway. The service vehicle has passed toward screen-right and is almost out of frame; its red rear lamp has produced a very faint, short physically realistic reflected streak on the wet road, falling away with distance. Preserve building positions and ground texture. The shot is not a car advertisement.',
+  m:'The service vehicle crosses steadily from left to right. Wet asphalt reflections track the moving rear lamps naturally, without a laser trail. The camera is fully motionless. Add the precise crimson accent as a separate subtle reflection pass in compositing if the generated reflection shifts or flickers. No motion of the buildings or runway.'}],
+['T04','الهبوط في الجسر','1:16.364','1:20.164','قفل المقطع وتهيئة 1:20.164','A','','reuse',
+ 'الماسورة U والجسر الزجاجي فارغين، الطائرة عند موضعها الأول، ومسار الممر يمتد يميناً.',
+ 'العمارة تظل ثابتة، وحضور دنيا يظهر في الكادر التالي فقط. قطرات المطر تتحرك.',
+ 'Cut-in إلى D01 مع ثبات اتجاه الطائرة يساراً.',
+ '35mm · source camera locked','استخدم صورة الممر الموجودة + حركة بيئية فقط.',
+ 'قاعدة ملزمة: الماسورة الأصلية، الدرابزين الأصلي، الطائرة الأصلية.',
+ 'Use the attached approved jet-bridge image as the frame. The U-shaped rail and the glass bridge are empty, the aircraft at its first position, the corridor path extending to the right. Rain on the glass.',
+ 'identical architecture, rail, balustrade and aircraft; only the raindrops have moved',
+ 'Environmental motion only: rain on the glass. Architecture, rail and aircraft do not change.'],
+
+['D01','انتظار قابل للكسر','1:20.164','1:22.364','My heart called the ache a warm safe home','B','dep','gen',
+ 'دنيا بلبس المغادرة المعتمد، مستندة بساعديها على ماسورة U الأصلية ويداها متشابكتان. الطائرة على يمين زجاج المنظر.',
+ 'نفس وقفتها، والطائرة انتقلت يساراً. ضوء أحمر/أبيض خافت مرّ مرة وحدة على الزجاج.',
+ 'تنفس واقعي للجسد فقط. الطائرة والمطر وحدهم يتحركون.',
+ '35mm · wide · locked','Kling 4.0 start/end أو Higgsfield 4.0 (4 ثواني مقصوصة).',
+ 'الماسورة 100×35cm وتبعد 100cm عن الزجاج، والساعدان مستقران. راجع التماس.',
+ 'Wide locked frame on the approved jet bridge. Donia leans with both forearms resting on the original U-shaped rail, hands clasped. The rail stands about 1 m from the glass. The aircraft is visible on the right side of the window. Rain on the glass.',
+ 'her stance is identical; the aircraft has moved toward the left of the window; a faint red/white light has passed once across the glass',
+ 'She only breathes. The aircraft drifts left and the rain moves. Forearms stay in contact with the rail.'],
+['D02','الشيء الذي يبتعد','1:22.364','1:23.764','I bury my tears in my pillow alone','B','dep','gen',
+ 'منظر جزئي للطائرة عبر الزجاج الماطر. كتف دنيا خارج التركيز بالمقدمة، بلا وجه ولا أصابع.',
+ 'الطائرة أبعد يساراً، وقطرة مي تعبر بقعة حادة في الزجاج.',
+ 'إلغاء فرك الإبهام القديم. فاصل بيئي قوي بلا مشاكل يد.',
+ '85mm · insert · static','Runway Gen-4.5 من صورة البداية، 2–4 ثواني ثم قص.',
+ 'لا تغيّر حجم الطائرة نسبةً للبرج أو الجسر.',
+ 'Static insert through the rain-covered glass: a partial view of the aircraft. Donia\'s shoulder is out of focus in the near foreground; no face and no fingers in frame.',
+ 'the aircraft is further to the left at the same scale relative to the bridge; one water drop crosses a sharp patch of the glass',
+ 'The aircraft recedes to the left. One drop runs across the glass. No hand action.'],
+['D03','العين تتوقف أولاً','1:23.764','1:27.264','I sell them a smile / I buy the pain','C','dep','gen',
+ 'بروفايل دقيق لوجه دنيا. عيناها على الطائرة خارج الكادر والفم محايد.',
+ 'العين توقفت عن التتبع ونزلت قليلاً. الرقبة والذقن في وضع شبه مطابق.',
+ 'حركة عين وحدة + نفَس. مو بكاء ولا تعبير غضب قاسٍ.',
+ '85mm · face close · locked','Kling 4.0 image-to-video بعد اعتماد كادرين للوجه.',
+ 'أي تبدل في الفك أو البكلة = رفض، مهما كانت الصورة حلوة.',
+ 'Close exact profile of Donia\'s face, locked camera. Her eyes follow the aircraft off-frame, mouth neutral. Hair clip exactly as in the face sheet.',
+ 'her eye has stopped tracking and lowered slightly; neck, chin, jawline and hair clip in a near-identical position',
+ 'One eye movement and one breath. No crying, no hard anger. Jaw and hair clip must not change.'],
+['D04','قرار ترك الاستناد','1:27.264','1:32.064','Lock  (1:30.164 بحسب الـ cue، والـ onset يحتاج فحص سمعي)','B','dep','gen',
+ 'دنيا 3/4 خلفي عند الماسورة. الساعدان مستقران على سطحها قبل الكلمة.',
+ 'الجذع مستقيم والساعدان غير متكئين. اليد اليمنى آخر شي يترك الأنبوب، والطائرة خرجت يساراً.',
+ 'نختبر فصل الفعل لقبل/بعد مع cut على صوت القفل. ما نطلب انزلاق أصابع معقد على 4.8 ثانية.',
+ '50mm · same camera · stable','Kling 4.0 بكادرين، أو تعديلين يوصلهم القطع.',
+ 'الكاميرا ما تدور، ومسكة الماسورة ما تنعاد.',
+ 'Three-quarter rear view of Donia at the U-shaped rail, stable camera. Both forearms rest on the top of the rail. The aircraft is near the left edge of the window.',
+ 'her torso is upright and the forearms no longer lean; the right hand is the last point still touching the rail; the aircraft has left the window on the left',
+ 'She straightens and lets go of the rail, right hand last. No camera rotation. No re-grip.'],
+['D05','من الماسورة إلى المصعد','1:32.064','1:36.564','Every time I fall, I rise again','B','dep','gen',
+ 'لقطة استلام قرب المصعد: دنيا من الخلف بمنتصف مشيتها القصيرة، وضلفة المصعد في عمق اليمين.',
+ 'توصل جنب لوحة الزر وتضغط مرة وحدة بآخر اللقطة. قدماها توقف على أرض ثابتة.',
+ 'الانتقال المكاني يتم بقطع يخفي الـ18 متر، مو بمشية مستحيلة في 4 خطوات.',
+ '35–40mm · static receiving shot','Kling 4.0 لمشية قصيرة، أو inserts منفصلة للمشي والزر.',
+ 'اتجاه المشي ليمين الشاشة، وحركة الكعب والحذاء متطابقة.',
+ 'Static receiving shot near the elevator. Donia from behind, mid-stride in a short walk toward screen-right; the elevator door leaf deep on the right.',
+ 'she has arrived beside the call-button panel and presses it once; both feet stopped with solid floor contact; same shoes and heel',
+ 'A short walk to screen-right ending in one button press. Feet stop cleanly.'],
+['D06','الحلم أهداها سفراً','1:36.564','1:39.704','Get up!  (حوالي 1:38.31) · القطع على Who are you 1:39.704','B','dep','comp',
+ 'باب المصعد مغلق تقريباً. دنيا ساكنة 3/4 خلفية يسار الصورة.',
+ 'الضلف مفتوحة بما يكفي لتكشف حقيبة سفر واقفة يمين داخل المصعد، مقبضها U مرفوع وتذكرة طيران مربوطة فيه. دنيا تبدأ خطوة صغيرة.',
+ 'افصل تحريك الأبواب عن توليد التذكرة. الباب تحرير أو overlay، والتذكرة ثابتة.',
+ '50mm · locked composition','تركيب طبقتين: فتح الباب + الحقيبة ثابتة. I2V قصير للفريم إذا لزم.',
+ 'اسم دنيا على التذكرة يتركّب كجرافيك بعد الإنتاج. لا تترك كتابة مولّدة.',
+ {s:'Create ONE photorealistic 16:9 cinematic START film still for the established I AM THE WORLD airport jet-bridge elevator. Preserve the source architecture, elevator location, blue slate exterior light, restrained amber fixtures, and Donia\'s exact approved departure outfit and identity. Camera 50mm full-frame, tripod, three-quarter rear perspective from behind Donia. The elevator doors are still almost closed; Donia stands naturally, shoulders relaxed, hands by her sides. Keep the exact original frame geometry and camera axis. The suitcase is still hidden inside, not visible in this START frame. No airport redesign, no additional people, no new handrails, no artificial glow.',
+  e:'Edit the approved START frame into its matching END state. Preserve camera position, elevator wall, doors, Donia\'s exact identity and approved clothes, light direction and architecture. Open the existing elevator doors only enough to show ONE restrained travel suitcase standing upright at frame-right INSIDE the elevator, with its telescopic U-shaped handle extended. Attach one real boarding-pass paper to the handle. Donia has initiated one modest forward step. Preserve physical floor contact and accurate door perspective. The boarding pass will receive readable name/type separately in post-production; keep printed details neutral.',
+  m:'On an entirely locked 50mm camera, the elevator doors open steadily over the clip. The suitcase inside remains completely motionless. Donia begins just one natural forward step after the bag becomes visible. Preserve the original elevator geometry and camera height. Trim the action on the music cue; deliver native video without generated music.'}],
+
+['F01','هيبة العالم / الهيكل','1:39.704','1:46.064','Who are you?!','A','','gen',
+ 'واجهة البرج الأصلي من أسفل بخطوط رأسية مضبوطة. لا وجه ولا فستان.',
+ 'الطابق الثاني ينكشف بحركة كاميرا صاعدة محدودة. السما محايدة، وما تنمو واجهة جديدة.',
+ 'حركة رأسية وحدة ثم cut على ضوء الشهرة.',
+ '24mm · vertical locked geometry','Blender camera rig أو Higgsfield Studio 4.0 world pass.',
+ 'لا تستعمل شيت البرج البديل كما هو. حافظ على الأصل.',
+ 'Very wide view looking up the original tower facade, verticals held straight. No person, no dress. Neutral sky.',
+ 'a limited upward move reveals the second floor of the same facade; neutral sky, no new facade grows',
+ 'One vertical camera move. Geometry stays registered.'],
+['F02','أرى صورتي','1:46.064','1:52.944','I am the world and I\'ll get through','B','fame','gen',
+ 'داخل استوديو الشهرة المعتمد. دنيا بالأسود الساتان والبوليرو، صغيرة قرب شاشة/انعكاس مقترح.',
+ 'كادر أقرب يبيّن وجهها الحقيقي وحافة الصورة العملاقة على سطح مضبوط. موقع الشاشة ثابت.',
+ 'انزلاق كاميرا قصير من خلف عمود. لا تبديل لبس، ولا انعكاس يخلق بنت ثانية.',
+ '35mm ثم 50mm بالقطع، مو morph','أعد استخدام بيئة الشهرة المقفلة. تركيب الشاشة اختبار مو بديل.',
+ 'شاشة R1 تطوير REVIEW. حافظ على لوك الشهرة المقفل.',
+ 'Inside the approved Fame studio (white studio, black glass wall). Donia is small in frame near a large flat screen surface that shows her portrait.',
+ 'a closer frame shows her real face and the edge of the giant image on its flat surface; the screen position is unchanged; there is only one physical Donia',
+ 'A short camera slide from behind a column. No outfit change. The reflection never becomes a second woman.'],
+['F03','صورة أكبر من صاحبتها','1:52.944','1:57.564','I am the wound and I\'ll heal it too','C','fame','comp',
+ 'دنيا الحقيقية بحجم إنساني في الثلث الأيمن، وصورة كبيرة لوجهها على الشاشة يساراً.',
+ 'الصورة الكبيرة تكمل أداءها المصوّر، ودنيا تنظر لها مرة وحدة. الكاميرا ثابتة.',
+ 'ركّب الفيديو داخل الشاشة من صورة سبق التحقق منها. ما نولّد شخصيتين منفصلتين.',
+ '50–65mm · 3/4 side · static','After Effects/Fusion screen composite + كليب الوجه الموجود.',
+ 'الأفضل الاعتماد على الاستوديو المقفل إذا فشلت الجغرافيا الجديدة.',
+ 'Static three-quarter side frame in the approved Fame studio. The real Donia at human scale in the right third; a large flat image of her face on the screen at left, clearly a media surface.',
+ 'the real Donia has turned her eyes to the large image once; camera, screen and studio unchanged',
+ 'She looks at the screen once. The screen content is composited separately.'],
+['F04','المدينة تعزف','1:57.564','2:03.264','I fell / I stood','A','','gen',
+ 'واجهة زجاجية من عالم الشهرة، أضواء مركبات بعيدة، وثلاث طبقات عمق.',
+ 'يكتمل مرور خط ضوء عاكس على واجهة الزجاج وبعدين الحركة تخفت، بدون ما يتغير المبنى.',
+ 'الفاصل الوحيد العالي الحركة في الشهرة: مركبة وحدة + انعكاس + مقدمة ثابتة.',
+ '35mm · wide stationary + parallax','Runway Gen-4.5 world-only مع طبقات بصرية بالتركيب.',
+ 'مدينة الشيت مرجع مزاج، مو انتقال جغرافي حرفي لشارع.',
+ 'Wide stationary view of a glass facade from the Fame world with three depth layers and distant vehicle lights. No person.',
+ 'one reflected line of light has completed its pass across the glass and the motion is fading; the building is unchanged',
+ 'One vehicle, one reflection, a still foreground. The building never changes.'],
+['F05','خطوة خارج الضوء','2:03.264','2:10.164','I drowned / swim to land، ثم الجسر','B','fame','gen',
+ 'نفس كادر الاستوديو: دنيا على حافة بقعة ضوء، صورتها على الشاشة تغني، وجسدها متوازن.',
+ 'دنيا خطت خطوة جانبية طبيعية برّا البقعة. البقعة تبقى فارغة والصورة مستمرة، وهي واضحة بضوء الشاشة المرتد.',
+ 'نقل وزن + خطوة وحدة + سكون طويل بعد الحركة. هذا أثر الطابق الثاني.',
+ '50mm · wide static · marked feet','Kling 4.0 start/end بثلاث keyframes بعد قفل الصورة، أو double plate مركّب.',
+ 'حركة دراسة R1 غير معتمدة بعد. قيّمها أول بلوحة صور ومونتاج صوت.',
+ {s:'Photorealistic 16:9 film still. Use the approved Fame studio architecture and the locked black satin slip dress and matte bolero for Donia. Match her approved face and hair accessory. Fixed 50mm full-frame camera. The real Donia stands naturally beside the edge of one narrow, physically plausible studio spotlight on the floor. Her recorded portrait appears on the architectural screen only as a flat media surface, never as a second physical person. Compose generous negative space at the spotlight; reflect dim screen light onto Donia\'s face. Preserve the exact studio geometry from the locked reference.',
+  e:'Edit only Donia\'s pose and position from the matching START frame: one natural sideways step into the dim edge of the studio while her original spotlight now illuminates an empty floor. Preserve her face, hairstyle, black satin and bolero, screen image, reflections, camera framing, aperture, glass geometry and positions of all lighting sources. She remains visible in soft bounced screen light. No arm pose, no smile, no new props.',
+  m:'A single small weight transfer precedes one sideways step; her satin settles naturally as she stops. The spotlight remains in the same position throughout; her screen image continues playing independently. Locked tripod throughout. Hold the EMPTY spotlight for at least one readable beat after she has stepped out. Make no other changes.'}],
+
+['L00','لم أعد أريد أعلى','2:10.164','2:17.164','I don\'t dream of rising higher / place to rest','B','fame','comp',
+ 'بسطة السلم قبل عالم الحب، ويبين جزء من الصعود فوق مستوى عينها. دنيا من الخلف بلبس الشهرة.',
+ 'عيناها تتجه للمخرج الأفقي بمستوى البسطة، مو للأعلى.',
+ 'كادر تأسيسي ثابت يحمل المعنى. لا توقف نهائي للصعود بعد.',
+ '35mm · moderate wide · camera held','بيئة مقفلة / صورة ثابتة مع حركة 2D.',
+ 'حذارِ تخلّي قرار الطابق الرابع يصير هسه. هذا تمهيد فقط.',
+ 'Held moderate-wide frame on the stair landing before the Love world. Part of the upward staircase is visible above her eye level. Donia from behind.',
+ 'her head is turned toward the horizontal exit at landing level, not upward; she has not stopped climbing for good',
+ 'Camera held. Only her attention turns toward the level exit.'],
+['L01','الصمت يسبق الحب','2:17.164','2:23.664','putting the world on mute / silence fills my chest','B','love','comp',
+ 'ممر انتقال من المعمار الداكن لساعة زرقاء ودفء مصباح. دنيا صغيرة عند عتبة العالم الثالث.',
+ 'الضوء العسلي يستقر في غرفة الحب وتختفي ضوضاء الحركة. فصل جديد يبدأ بالقطع.',
+ 'لا تبديل أزياء بحركة وحدة. كادر النهاية بإطلالة الحب ivory crepe المقفلة.',
+ '40mm · fixed axis pair','زوج صور ثابتة + matched cut بين عالمي الملابس.',
+ 'الانتقال الأبيض بالقماش/الضوء محفوظ كمنهج، ويحتاج قفل هندسة.',
+ 'Fixed-axis frame of a transition corridor from dark architecture toward blue-hour light and the warmth of one lamp. Donia is small at the threshold of the Love room.',
+ 'second still on the same axis: honey lamp light settled in the approved Love room, Donia in the Love look; this is a separate frame joined by a cut, not a morph',
+ 'No wardrobe change inside one clip. Deliver two stills on one axis and cut between them.'],
+['L02','الفستان والفضاء','2:23.664','2:29.864','If I regret it / I\'d rather be free','B','love','gen',
+ 'عالم الحب المعتمد: كريب عاجي، ضوء عسلي بمصباح، وكرسي مقابل فارغ في العمق.',
+ 'دنيا تدخل قليلاً في المجال وتهدأ جنب الكرسي. اتساق القماش والقدمين أهم من التعبير.',
+ 'ممكن مشي خطوة وحدة مع cut استقبال. راقب الدبلة حسب الحالة المعتمدة.',
+ '35mm · intimate wide · static','Higgsfield Studio 4.0 image I2V أو Kling 4.0 short keyframe.',
+ 'حافظ على الكرسي والمطر والدبلة 2mm وعالم v4 LOCKED.',
+ 'Static intimate wide frame of the approved Love room at blue hour: rain outside, one warm lamp, an empty chair facing in the depth. Donia at the edge of the space.',
+ 'she has moved one step into the space and settled beside the empty chair; fabric drape and both feet physically consistent; the 2 mm matte champagne ring as in the approved state',
+ 'One step, then stillness beside the chair. The chair stays empty.'],
+['L03','يا دنيا / المكان الفارغ','2:29.864','2:35.564','Oh world ×2','A','','gen',
+ 'المقعد الفارغ في بؤرة أمامية، وجزء بسيط من دنيا خارج التركيز بطرف الإطار.',
+ 'قطرة مطر خلف المقعد تكمل مسارها. نور المصباح الدافئ ما يتغير، والمقعد فارغ.',
+ 'فاصل شعري بلا وجه يسمح للجملة الطويلة تستقر.',
+ '65mm · selective focus · still','Runway Gen-4.5 لحركة مطر صغيرة، أو صورة ثابتة + مطر متحرك مركّب.',
+ 'لا خلق لشخص محبوب ولا كرسي إضافي.',
+ 'Selective focus on the empty chair in the foreground of the approved Love room. A small out-of-focus part of Donia at the edge of frame, no face. Rain behind the chair, warm lamp light.',
+ 'one raindrop behind the chair has completed its path; lamp light unchanged; the chair is still empty',
+ 'Only the rain moves. No second person, no second chair.'],
+['L04','حب بقدر ما يحتمل القلب','2:35.564','2:42.964','go easy on me / Love me… not too long','C','love','comp',
+ 'وجه دنيا في بروفايل رقيق مع جزء المقعد في العمق. يدها منخفضة، والدبلة تظهر فقط إذا كانت ضمن الحدث المقفل.',
+ 'المقعد يبقى فارغ. الدبلة مفصولة عن يدها في insert مستقل أو تسقط بقطع دقيق، وملامحها تظل هادئة.',
+ 'ننتج الخاتم والثوب والوجه كعناصر مستقلة. نمنع سقوط دبلة مع تغيّر 5 أصابع.',
+ '85mm portrait + 100mm ring insert','F3 المقفل الموجود + تركيب سقوط الدبلة أو فصل آمن.',
+ 'توقيت سقوط الدبلة داخل النافذة مقترح ويحتاج مطابقة اللوحة المعتمدة.',
+ 'Soft profile portrait of Donia in the approved Love room, part of the empty chair in the depth. Her hand is low and mostly out of frame.',
+ 'same portrait, features calm; the chair is still empty; the ring is handled in a separate macro insert, not in this frame',
+ 'Face stays calm. The ring drop is a separate insert joined by a cut.'],
+
+['E01','Enough / قرار عدم الصعود','2:42.964','2:47.264','Enough ×4 ثم Who are you?!','B','post','comp',
+ 'دنيا على البسطة الرابعة. الدرج يصعد قدامها ومخرج الباب الذهبي معلوم بوضوح، والشال لسه على كتفيها.',
+ 'ثقلها انتقل من اتجاه السلم للباب وتركت الدرابزين. ما صعدت الدرجة التالية.',
+ 'أربع نبضات تنقسم بالمونتاج: نظرة / فراغ / إفلات / توجّه. مو أربع حركات معقدة بفيديو واحد.',
+ '35mm wide + 50mm insert · tripod','Blender architecture + كليبين insert للجسم.',
+ 'لا دوران كاميرا، ولا تخلّي البرج ينهار.',
+ 'Tripod wide frame on the fourth-floor landing. The staircase continues upward in front of Donia and the original golden door exit is clearly readable. A black shawl rests on her shoulders, hair tied.',
+ 'her weight has shifted from the stair direction toward the door and her hand has left the balustrade; she has not climbed the next step',
+ 'Deliver separate short beats: a look, an empty frame, the hand releasing the rail, the turn. No camera rotation.'],
+['E02','سقوط القالب','2:47.264','2:51.524','فاصل موسيقي بعد Enough','B','post','comp',
+ 'الشال الأسود مستقر على كتفي دنيا بالوضعية المعتمدة، والشعر مربوط مثل قبل.',
+ 'الشال صار على الأرض بنفس الموضع. شعرها محرر والقرمزي الداخلي مقروء، والملابس العاجية ما تبدلت.',
+ 'ثلاث مراحل منفصلة: ابتعاد النسيج، سقوطه على الأرض، لقطتها بعد التحول. مونتاج مو morph.',
+ '50mm torso / 85mm cloth / 35mm final','3 كليبات قصيرة + cloth plate مركّب من مرجع قماش حقيقي.',
+ 'لا تقلب البكلة ولا تبدّل الفستان بالسحر.',
+ 'Torso frame on the fourth-floor landing. The black shawl sits on Donia\'s shoulders in the approved position, hair tied as before.',
+ 'the shawl now lies on the floor at the same spot; her hair is released and the crimson lining is readable; the ivory clothes are unchanged',
+ 'Three separate short clips: the cloth leaving the shoulders, the cloth landing, her after. Cut between them.'],
+['E03','عتبة الذهب','2:51.524','2:56.324','تهيئة I got through عند 2:56.324','B','post','gen',
+ 'الباب الذهبي الأصلي مغلق ودنيا على مسافة خطوة، الكاميرا خلف كتفها. الضلفة والمقبض واضحين.',
+ 'الضلفة تنفتح باتجاه واحد ويد دنيا تمضي للداخل. ورا الباب جهة البيت مضاءة واقعياً.',
+ 'مطابقة محور الكاميرا وارتفاع المقبض بين جهتي الباب. القطع قبل أي تحول مستحيل.',
+ '50mm eye-level · OTS · lock geometry','Blender/photocomposite لفتح الباب، وكليبين منفصلين مع match cut.',
+ 'الباب نفسه ما ينعاد رسمه، ولا بوابة ذهب مشعة.',
+ {s:'Photorealistic 16:9 cinematic still based on the EXACT approved original golden door on the fourth-floor tower landing. No redesign of door proportions, hinge, handle, surrounding marble, stairs or ceiling. Donia is seen three-quarter from behind at the last landing, wearing the approved post-release ivory look, crimson accent retained. 50mm full-frame, camera at 1.40m, fixed axis. Door closed. The upper stair remains visibly open elsewhere in the architecture. Quiet natural champagne reflections, no magic portal, no haze bloom.',
+  e:'Edit the same approved frame. The same gold door is open at its established hinge and swing direction. Donia has advanced just enough that her torso begins to pass the threshold; hands and weight are physically credible. The warm room beyond is lit like an existing home interior, not a supernatural void. Preserve all original architecture and camera alignment. The next shot will be a separate reverse-side home frame with a match cut.',
+  m:'One measured door opening and one small forward movement. The camera is locked. End before the model must reconstruct the home through the door. Match the door angle and Donia\'s body velocity in the separately generated receiving shot; make the edit on the musical entrance at 02:56.324.'}],
+
+['R01','عودة الإنسان','2:56.324','3:03.764','I am the world and I got through / wound healed','B','post','gen',
+ 'نفس الباب الذهبي من الجهة الثانية وحافته على يسار الكادر. دنيا تدخل البيت المألوف.',
+ 'قدماها داخل البيت، الباب وراها خارج التركيز، والإضاءة ألين من البرج.',
+ 'تكمل خطوة E03 بالاتجاه والحجم فقط. ما في مولّد يفتح بابين هندسياً بنفس اللقطة.',
+ '50mm · matched axis · stationary','Runway/Flow short I2V من فريم البيت، مونتاج من مصدرين.',
+ 'البيت هو البيت المقفل، مو موقع جديد أفخم.',
+ 'Stationary frame from inside the approved home, on the matched axis of the previous shot. The same golden door seen from its other side, its edge at frame-left. Donia is entering.',
+ 'both her feet are inside the home; the door is behind her and out of focus; the light is softer than in the tower',
+ 'She completes the single step begun in the previous shot, same direction and scale.'],
+['R02','تثبيت القدم','3:03.764','3:10.524','I fell / I stood / drowned / swam','B','post','gen',
+ 'قدم دنيا على أرضية البيت الجافة جنب منطقة المطر. ما في حذاء يختفي بلا سبب.',
+ 'الوزن يستقر على القدم الثانية وطرف القماش يتحرك باختلاف طبيعي صغير.',
+ 'ركّز على ثقل الجسم ونقل الوزن. لا مشي طويل بالذكاء الاصطناعي.',
+ '65mm · lower-body · locked','Kling قصير start/end، أو مرجع مصوّر للحركة إذا توفر.',
+ 'تطابق الحذاء والإطلالة مع قرار ما بعد البسطة يحتاج المرجع النهائي.',
+ 'Locked lower-body frame. Donia\'s feet on the dry floor of the home beside the rain area. Shoes exactly as in the approved reference.',
+ 'her weight has settled onto the other foot; the hem of the fabric has shifted slightly; same shoes, full floor contact',
+ 'One weight shift. No long walk.'],
+['R03','It was always me / لست بحاجة لجمهور','3:10.524','3:16.584','It\'s me ×2 / It was always me','C','post','gen',
+ 'دنيا من منتصف الجسم ووجهها خارج المركز. إضاءة البيت على جانبها، وكتفاها غير متوترين.',
+ 'نظرتها تستقر جوّا البيت مو للعدسة. لا ابتسامة لحد هسه.',
+ 'سكون محسوب بعد الصعود، مع ضوء يتنفس وراها.',
+ '65mm · medium · locked','إعادة استخدام، أو Flow Omni بضوء وجه بالحد الأدنى.',
+ 'لا تستعجل قفلة السعادة بهذا الموضع.',
+ 'Locked medium frame, Donia from mid-body with her face off-centre. Home light falls on one side of her; shoulders relaxed.',
+ 'her gaze has settled on something inside the home, not the lens; no smile yet',
+ 'Stillness. Only the light behind her breathes slightly.'],
+['R04','الذين تركوا يديها','3:16.584','3:22.364','World, I raised them… / they flew','B','post','gen',
+ 'تفصيل يد دنيا مرتاحة قرب حافة كرسي أو درابزين منزلي ثابت، وضوء النهار يدخل.',
+ 'راحة اليد تتحول للأعلى قليلاً لتلتقط ضوء حقيقي، واليد الثانية تبقى ساكنة.',
+ 'كف طبيعي من أداء مرجعي إذا أمكن. الأولوية لفعل إنساني صغير.',
+ '85mm · hand insert · still','Runway Act-Two لو فيه لقطة مرجعية نظيفة، أو إيماءة يد ثابتة مركّبة.',
+ 'لا أشخاص يطيرون، ولا أصابع إضافية.',
+ 'Hand insert. Donia\'s hand rests near the edge of a home chair or fixed balustrade, daylight entering. Five natural fingers.',
+ 'her palm has turned slightly upward to catch real daylight; the other hand has not moved; five fingers',
+ 'The palm turns up a little. Nothing else.'],
+['R05','تترك السماء مفتوحة','3:22.364','3:28.764','…holding sky','A','','gen',
+ 'منظر السما من نافذة البيت، مي على الحافة، وظل معماري رقيق.',
+ 'غيم خفيف يبتعد ويكشف بقعة ضوء أوسع. لا حركة كاميرا غير مبررة.',
+ 'بيئة بلا إنسان. مساحة تتلحن على مد الصوت المكرر.',
+ '40mm · fixed · medium-deep focus','Runway Gen-4.5 cloud-only + grade.',
+ 'لا شمس ضخمة مركّبة ولا ألوان غروب حادة.',
+ 'Fixed view of the sky through the window of the home, water along the sill, a thin architectural shadow. No person. Soft natural daylight, no dramatic sunset.',
+ 'a light cloud has moved away, revealing a wider patch of light; no giant sun, no saturated sunset colours',
+ 'A thin cloud drifts off. Camera fixed.'],
+['R06','لا تتحمل العار','3:28.764','3:35.904','I am not the one who should feel ashamed / no shame on my hands','C','post','gen',
+ 'منظر متوسط لدنيا جنب النافذة. اليدان قريبتان من الجسم وما تبحثان عن حماية.',
+ 'تقف باستقامة مريحة وكتفاها بحالة ثبات بدل الدفاع. الوجه مكشوف طبيعياً.',
+ 'هدوء داخلي فقط عند نهاية الجملة. الكاميرا ما تحاكمها.',
+ '50mm · 3/4 · dolly in 8cm مقيّد جداً','Kling 4.0 short static I2V، أو صورة ثابتة إذا الإحساس فيها أقوى.',
+ 'ممنوع ابتسامة أو غضب تمثيلي.',
+ 'Three-quarter medium frame of Donia beside the home window. Her hands are close to her body, not shielding herself.',
+ 'she stands comfortably upright, shoulders steady rather than defensive, face naturally open; no smile, no anger',
+ 'A very restrained 8 cm push-in. She only steadies.'],
+['R07','الحكم الأخير على الألم','3:35.904','3:42.044','The shame belongs to the ones I saved!','C','post','gen',
+ 'بروفايل دنيا جنب الضوء. الظل يغطي جزء من خلفيتها، مو وجهها.',
+ 'عيناها ثابتتان والخلفية تستقبل الضوء بدل إعلان انتصار. تتنفس مع نهاية السطر.',
+ 'احتفظ بالصورة على الصوت المرتفع. لا تقطع على كل لفظة.',
+ '85mm portrait · locked','الكلوز الموجود إذا أمكن، أو تكملة قصيرة على Flow Omni.',
+ 'افصل المواجهة عن المصالحة. لا إعلان غضب مبالغ فيه.',
+ 'Locked profile portrait of Donia beside the light. Shadow covers part of the background, never her face.',
+ 'her eyes are steady; the background has received more light; she exhales at the end of the line; no exaggerated anger',
+ 'Hold the frame through the loud line. One breath at the end.'],
+['R08','تجلس حين تختار','3:42.044','3:48.424','I am the world and I got through','B','post','comp',
+ 'الكرسي المنزلي بمكانه قرب حافة مطر خفيف، ودنيا واقفة وراه 3/4.',
+ 'دنيا تجلس مرتاحة. الساقان والأذرع في اتزان، لا سقوط ولا تصلب.',
+ 'الأفضل فصل ما قبل الجلوس عن ما بعده بقطع على حركة، لأن الجلوس كامل خطر توليد.',
+ '40mm wide + 65mm receiving','لقطتين يطابقهم المونتير. لا تراهن على معجزة بلقطة وحدة.',
+ 'المقعد المنزلي مو بالضرورة نفس كرسي الحب مادياً. القافية شكلية ومعنوية.',
+ 'Wide frame in the approved home. The home chair stands near the edge of light rain; Donia stands three-quarter behind it.',
+ 'separate receiving frame: Donia is seated and at ease, legs and arms balanced, no collapse and no stiffness',
+ 'Two shots matched in the edit: before sitting, and already seated. Do not generate the full sit in one clip.'],
+['R09','The sky is me','3:48.424','3:54.504','Fly if you want / The sky is me','C','post','gen',
+ 'دنيا جالسة في مرجع النهاية: مطر خفيف، ضوء شمس ناعم بالضباب، ووجهها نحو نافذة السما.',
+ 'نظرتها ترتفع قليلاً بدون رفع راس كبير، والسما برّا تصير أصفى.',
+ 'التغيّر في العين والسما. لا إفراط كاميرا.',
+ '85mm · close-to-medium · static','Runway Act-Two فقط بأداء مرجعي معتمد، وغير هيك Flow Omni قصير.',
+ 'حافظ على الدموع الطبيعية تحت المطر، بلا تضاعف قطرات اصطناعية.',
+ 'Static close-to-medium frame. Donia seated in the approved ending location: light rain, soft sun through mist, her face toward the sky window.',
+ 'her gaze has lifted slightly without a big head movement; the sky outside is clearer; natural tears under the rain not multiplied',
+ 'The change is in her eyes and in the sky. Camera static.'],
+['R10','It was always me / أخيراً نفسها','3:54.504','4:05.604','It was always me  (sustained)','C','post','gen',
+ 'كلوز وجه بدون ابتسامة جاهزة. مسام طبيعية وتعب قديم لسه خفيف.',
+ 'بس عند نهاية مدى الجملة تبين بداية الغمازة وارتخاء عضلات الفم والعينين.',
+ 'امتداد أداء على صورتين أو ثلاث صور هوية. ما نخلق ابتسامة 11 ثانية دفعة وحدة.',
+ '85mm portrait · locked','Runway Act-Two لتعبير دقيق، أو كليبين Flow قصار وقطع.',
+ 'لو تبدلت العين أو الفك: اعتمد فريم ثابت وتحريك ضوء بدل وجه مزيف.',
+ {s:'One realistic 16:9 close cinematic portrait of the LOCKED Donia face, faithful eyelids, jaw, nose, lip width, hairline and natural skin texture. She is seated in the approved ending location, soft misty daylight and light rain behind her. 85mm full-frame lens, camera at eye height, no beauty lighting or glamour retouch. Her face is quiet with a neutral mouth and relaxed lower eyelids; no direct eye contact with the camera.',
+  e:'Edit the approved START portrait without changing facial structure, hair, gaze or the camera. Only the very small emotion changes: softening around the eyes, a tiny asymmetric smile begins at one corner, the established dimple just becomes visible. Keep natural pores, no teeth, no laugh, no synthetic tears, no change in background lighting. The expression must feel earned after a long silent thought.',
+  m:'The camera stays entirely motionless. Donia breathes gently while her mouth remains neutral for most of the time. Near the end, her eyes soften and a small unforced smile appears, revealing the existing dimple. No head turn and no other gesture. Prefer an authentic performance-driving reference if possible; otherwise keep a still frame and cut between approved states.'}],
+['R11','الغمازة / التسليم','4:05.604','4:08.564','It was always me  (final)','C','post','reuse',
+ 'قرب على وجه دنيا. ابتسامة صغيرة بدأت، وقطرات مطر متفرقة في العمق.',
+ 'نفس الابتسامة تستقر. ما تتسع أكثر من اللازم، والعين ما تختفي تحت تنعيم.',
+ 'لا حركة كاميرا. نترك الجمهور يلتقط المعنى.',
+ '85–100mm · locked','الكلوز المعتمد: صورة ثابتة أو micro I2V.',
+ 'هذي آخر ثانية غنائية موثقة. ما نكررها بعد النهاية.',
+ 'Locked close portrait continuous with the approved END of the previous shot: the small smile has just begun, scattered raindrops in the depth.',
+ 'the same small smile has settled without widening; eyes still fully readable, natural skin, no smoothing',
+ 'No camera move. The smile only settles.'],
+['R12','الكارت الذي يحفظها','4:08.564','4:16.200','Outro instrumental / decay','A','','comp',
+ 'آخر كادر لدنيا في البيت والسما وراها، مع تهيئة fade طبيعي متدرج.',
+ 'كارت أبيض/أسود أنيق: «أنا الدنيا… ولسه هنا… LIINE24 ORIGINALS». الأسطر تتراكم وما تختفي عند ظهور التالية.',
+ 'ما نضيف لقطة برج فضي/ذهب تربك الرسالة. صوت الماستر لحد النهاية.',
+ 'بدون عدسة · typography graphic','Resolve/Fusion فقط. لا موديل توليدي.',
+ 'الهجمات الآلية حوالي 04:09.336 / 09.742 / 10.160 مرشحة، مو beat-locked.','','','']
+];
+
+const sec = t => { const [m,s] = t.split(':'); return +m*60 + parseFloat(s); };
+const SHOTS = RAW.map((r,i) => ({n:i+1,id:r[0],ch:r[0][0],ar:r[1],t0:r[2],t1:r[3],dur:+(sec(r[3])-sec(r[2])).toFixed(2),
+  ly:r[4],cat:r[5],look:r[6],mode:r[7],s:r[8],e:r[9],m:r[10],lens:r[11],tool:r[12],warn:r[13],
+  verb:typeof r[14]==='object'?r[14]:null,ps:typeof r[14]==='string'?r[14]:'',pe:r[15]||'',pm:r[16]||''}));
+const byId = Object.fromEntries(SHOTS.map(s=>[s.id.toLowerCase(),s]));
+
+function prompts(s){
+  if(s.verb) return {src:'v',s:s.verb.s,e:s.verb.e,m:s.verb.m};
+  if(!s.ps) return null;
+  const lk = s.look ? LOOK[s.look].en : '';
+  const who = s.cat==='A' ? 'No person in frame.'
+    : s.cat==='C' ? `Use the attached FACE_SHEET_LOCK as the only source for Donia's face, hair and hair accessory, and the attached WARDROBE_LOCK for her exact outfit (${lk}). Natural skin texture, no beauty retouch.`
+    : `Donia is small in frame or seen from behind; take her hair from the attached FACE_SHEET_LOCK and her exact outfit from the attached WARDROBE_LOCK (${lk}). Do not invent a readable face.`;
+  const keep = s.cat==='A' ? '' : " Donia's identity, hair and outfit,";
+  return {src:'t',
+    s:`Create ONE photorealistic 16:9 cinematic film still for the music video I AM THE WORLD. ${who} Framing: ${s.lens.replace(/[؀-ۿ،]+/g,'').replace(/\s+/g,' ').trim()}. ${s.ps} Match the attached location reference exactly: architecture, materials and light direction. No on-screen text, no extra people, no glow, no particles, no redesign of any locked element.`,
+    e:`Edit the approved START frame into its matching END state. Preserve camera position and framing, architecture, materials, light direction,${keep} and everything not listed below. Change only this: ${s.pe}. No on-screen text, no new props, no other changes.`,
+    m:`${s.pm} Preserve the geometry of the location${s.cat==='A'?'':" and Donia's identity"} for the whole clip. About ${s.dur} seconds on screen; generate a little longer and trim on the music cue in the edit. Native video only: no generated music, voice or sound.`};
+}
+
+/* ---------- state ---------- */
+const KEY='pentagon-studio:iatw:v1';
+let store={};
+try{ store=JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){ store={}; }
+const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){} };
+const st=id=>store[id]||(store[id]={status:'none',sc:{},note:'',link:''});
+const STATUS={none:'لم تبدأ',trial:'تجربة',candidate:'مرشح للمراجعة',rejected:'مرفوض',approved:'معتمد من ربيع'};
+const RUBRIC=[['meaning','المعنى والبؤرة'],['face','الوجه والنسب',1],['ward','الملابس والإكسسوار',1],['place','المكان والهندسة'],['phys','الفيزياء والتشريح والتماس'],['light','الضوء واللون'],['match','تطابق البداية/النهاية والتوقيت']];
+const crit=s=>RUBRIC.filter(c=>!(c[2]&&s.cat==='A'));
+function avg(s){ const d=st(s.id),v=crit(s).map(c=>d.sc[c[0]]).filter(x=>x!=null); return v.length===crit(s).length? v.reduce((a,b)=>a+b,0)/v.length : null; }
+
+/* ---------- render ---------- */
+const $=q=>document.querySelector(q);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let cur=SHOTS[0];
+
+function renderChrome(){
+  $('#strip').innerHTML=SHOTS.map(s=>`<button role="tab" style="flex-grow:${s.dur};--ch:${CH[s.ch].c}" data-id="${s.id}" data-st="${st(s.id).status}" aria-current="${s===cur}" title="${s.id} · ${esc(s.ar)} · ${s.t0}" aria-label="${s.id} ${esc(s.ar)}"></button>`).join('');
+  $('#legend').innerHTML=Object.entries(CH).map(([k,c])=>`<span style="--ch:${c.c}">${c.ar}</span>`).join('');
+  let h='';
+  for(const [k,c] of Object.entries(CH)){
+    const ss=SHOTS.filter(s=>s.ch===k);
+    h+=`<h3><span>${c.ar}</span><span class="mono">${ss[0].t0.slice(0,4)}</span></h3>`+ss.map(s=>`<button data-id="${s.id}" aria-current="${s===cur}"><span class="id">${s.id}</span><span class="nm">${esc(s.ar)}</span><span class="dot" data-st="${st(s.id).status}"></span></button>`).join('');
+  }
+  $('#list').innerHTML=h;
+  const n=SHOTS.filter(s=>st(s.id).status==='approved').length;
+  $('#pCount').textContent=n; $('#pBar').style.width=(n/SHOTS.length*100)+'%';
+}
+
+function promptBlock(key,title,hint,text,src){
+  return `<article class="prompt"><header><b>${title}</b><span>${hint}</span><span class="src ${src==='v'?'v':''}">${src==='v'?'نص الدراسة حرفياً':'مصاغ من وصف الدراسة'}</span><button class="btn" data-copy="${key}">انسخ</button></header><pre id="p-${key}" tabindex="0">${esc(text)}</pre></article>`;
+}
+
+function renderRoom(){
+  const s=cur,d=st(s.id),c=CH[s.ch],p=prompts(s),i=SHOTS.indexOf(s);
+  const refs=[];
+  if(s.cat!=='A'){
+    refs.push([REF.face, s.cat==='C'?'مصدر الوجه والشعر الوحيد. إجباري بهذي اللقطة.':'للشعر وشكل الراس من الخلف. الوجه ما ينقرأ هنا.']);
+    refs.push([REF.ward, 'إطلالة: '+LOOK[s.look].ar+'. اقرأ المرجع نفسه قبل الوصف.']);
+  }
+  c.refs.forEach(k=>refs.push([REF[k],'مرجع المكان لهذا الفصل.']));
+  const refHtml=refs.map(([r,why])=>`<li><a class="nm" href="${r.url}" target="_blank" rel="noopener">${esc(r.nm)}</a><span class="why">${why}</span></li>`).join('')
+    +`<li><span class="nm" style="color:var(--mute)">LOCATION</span><span class="why">${c.loc}. ${c.refs.length?'':'ما عندي رابط مباشر لأصل هذا المكان، ارفقه من أصولك المعتمدة.'}</span></li>`;
+  const a=avg(s);
+  $('#room').innerHTML=`
+  <div class="room-nav">
+    <button class="btn" id="prev" ${i===0?'disabled':''}>→ السابقة</button>
+    <select id="jump" aria-label="اختر غرفة">${SHOTS.map(x=>`<option value="${x.id}" ${x===s?'selected':''}>${String(x.n).padStart(2,'0')} · ${x.id} · ${esc(x.ar)}</option>`).join('')}</select>
+    <button class="btn" id="next" ${i===SHOTS.length-1?'disabled':''}>التالية ←</button>
+  </div>
+  <header class="head">
+    <span class="eyebrow">غرفة اللقطة ${String(s.n).padStart(2,'0')} · ${s.id} · ${c.ar}</span>
+    <h2>${esc(s.ar)}</h2>
+    <p class="tc"><b class="mono">${s.t0} → ${s.t1}</b> · <span class="mono">${s.dur.toFixed(2)}s</span></p>
+    <p class="lyric">${esc(s.ly)}</p>
+    <div class="chips"><span class="chip">${CAT[s.cat]}</span><span class="chip ${MODE[s.mode][1]}">${MODE[s.mode][0]}</span><span class="chip">${STATUS[d.status]}</span></div>
+  </header>
+
+  <section class="sec"><h3>اللقطة</h3>
+    <dl class="spec" style="margin:0">
+      <div><dt>START</dt><dd>${esc(s.s)}</dd></div>
+      <div><dt>END</dt><dd>${esc(s.e)}</dd></div>
+      <div><dt>MOTION / EDIT</dt><dd>${esc(s.m)}</dd></div>
+    </dl>
+    <dl class="kv">
+      <div><dt>LENS / FRAME</dt><dd class="ltr">${esc(s.lens)}</dd></div>
+      <div><dt>أداة الدراسة (اقتراح، مو اعتماد)</dt><dd>${esc(s.tool)}</dd></div>
+    </dl>
+    <p class="caution"><b>حذر:</b> ${esc(s.warn)}</p>
+  </section>
+
+  <section class="sec"><h3>المراجع المطلوبة لهذي اللقطة فقط</h3><ul class="refs">${refHtml}</ul></section>
+
+  <section class="sec"><h3>البرومبتات <small>الصور على Google Flow بموديل Nano Banana Pro. تأكد من اسم الموديل الفعلي قبل التوليد.</small></h3>
+    ${p ? promptBlock('s','START · IMAGE','ارفق المراجع فوق مع البرومبت',p.s,p.src)
+        + promptBlock('e','END · IMAGE EDIT','تعديل على فريم البداية بعد اعتماده',p.e,p.src)
+        + promptBlock('m','MOTION · VIDEO','موديل الفيديو يتحدد وقت التنفيذ من واجهة Flow',p.m,p.src)
+      : `<p class="notice" style="margin:0"><b>ما في توليد بهذي الغرفة.</b> ${esc(s.tool)}</p>`}
+    ${s.mode!=='gen'&&p?`<p class="mute" style="font-size:.86rem">الدراسة ترشّح هنا «${MODE[s.mode][0]}» قبل أي توليد جديد. البرومبتات موجودة للاختبار إذا قررت تولّد.</p>`:''}
+  </section>
+
+  <section class="sec"><h3>المراجعة والقفل <small>الهدف 9.8 / 10. الرقم يطلع من تقييمك للمعايير تحت، مو من المولّد.</small></h3>
+    <div class="review">
+      <div class="states" role="radiogroup" aria-label="حالة اللقطة">${Object.entries(STATUS).map(([k,v])=>`<label><input type="radio" name="status" id="st-${k}" value="${k}" ${d.status===k?'checked':''}>${v}</label>`).join('')}</div>
+      <div class="rubric">${crit(s).map(([k,l])=>`<label for="sc-${k}"><span>${l}</span><output id="o-${k}">${d.sc[k]??'—'}</output><input type="range" id="sc-${k}" data-k="${k}" min="0" max="10" step="0.1" value="${d.sc[k]??0}"></label>`).join('')}</div>
+      <div class="score"><span class="n mono ${a!=null&&a>=9.8?'hit':''}" id="avg">${a==null?'—':a.toFixed(2)}</span><span class="mute" id="avgTxt">${a==null?'قيّم كل المعايير عشان يطلع المعدل.':a>=9.8?'وصلت الهدف.':'تحت الهدف 9.8. سمِّ العيب وغيّر مدخل، لا تكرر نفس البرومبت.'}</span></div>
+      <label class="field" for="link">رابط الأصل (Flow أو Drive)<input id="link" type="url" dir="ltr" placeholder="https://" value="${esc(d.link)}"></label>
+      <label class="field" for="note">ملاحظات: العيب، شو تغيّر، شو بقي مفتوح<textarea id="note">${esc(d.note)}</textarea></label>
+      <div class="row"><button class="btn btn-gold" id="copyLog">انسخ سطر التحديث لملف الحالة</button><span class="toast" id="toast" role="status"></span></div>
+      <details><summary>بوابات القبول قبل أي 1080p / 4K</summary>
+        <ul class="gates">
+          <li><b>A</b>قراءة صامتة: المشاهد يفهم الفعل بدون شرح.</li>
+          <li><b>B</b>الهوية: فحص فريم بفريم للملامح والشعر والبكلة والفك. أي تبدل = رفض أو قطع.</li>
+          <li><b>C</b>الفيزياء: تماس القدم بالأرض واليد بالماسورة، ومفصلة الباب، وثبات الخلفية.</li>
+          <li><b>D</b>الموسيقى: علامات من الـ SRT ثم فحص سمعي على الموجة. لا ضربة جديدة على الماستر.</li>
+          <li><b>E</b>المكان: لكل موقع لقطة تأسيس وحدة صالحة. إذا تبدلت الواجهة ما في ترقيع بالمونتاج.</li>
+          <li><b>F</b>الاقتصاد: 2–3 توليدات كحد أقصى للقطة الخطرة، وبعدها افحص البرومبت والفريم.</li>
+          <li><b>G</b>الصوت: اسكات صوت المولّد واستعمال FINAL v44 وحده.</li>
+          <li><b>H</b>9.8: ما تنمنح إلا بعد مشاهدة الفيلم كامل مرتين، مرة صامت ومرة بالصوت.</li>
+        </ul>
+      </details>
+    </div>
+  </section>`;
+}
+
+function go(id,push){
+  const s=byId[String(id).toLowerCase()]; if(!s) return;
+  cur=s; renderChrome(); renderRoom();
+  if(push){ try{ history.replaceState(null,'','#'+s.id.toLowerCase()); }catch(e){ location.hash=s.id.toLowerCase(); } window.scrollTo({top:0}); }
+}
+function flash(t){ const el=$('#toast'); if(!el) return; el.textContent=t; setTimeout(()=>{ if(el.textContent===t) el.textContent=''; },2200); }
+function copy(text,btn,pre){
+  const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent='تم النسخ'; setTimeout(()=>btn.textContent=o,1500); } };
+  const fallback=()=>{ if(pre){ const r=document.createRange(); r.selectNodeContents(pre); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); } if(btn){ btn.textContent='حدّدته لك، انسخه يدوي'; } };
+  try{ navigator.clipboard.writeText(text).then(done,fallback); }catch(e){ fallback(); }
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.id) return go(b.dataset.id,true);
+  if(b.id==='prev') return go(SHOTS[SHOTS.indexOf(cur)-1].id,true);
+  if(b.id==='next') return go(SHOTS[SHOTS.indexOf(cur)+1].id,true);
+  if(b.dataset.copy){ const pre=$('#p-'+b.dataset.copy); return copy(pre.textContent,b,pre); }
+  if(b.id==='copyLog'){
+    const d=st(cur.id),a=avg(cur),today=new Date().toISOString().slice(0,10);
+    const line=`${today} — I AM THE WORLD / ${cur.id} ${cur.ar} (${cur.t0}–${cur.t1}) — القرار: ${STATUS[d.status]}${a!=null?` (تقييم ${a.toFixed(2)}/10)`:''} — المصدر: مراجعة ربيع في غرفة اللقطة — حالة الاعتماد: ${d.status==='approved'?'معتمد':'غير معتمد'} — رابط الأصل: ${d.link||'لا يوجد'} — ما استُبدل: — — ما بقي مفتوحاً: ${d.note||'—'} — الخطوة التالية: —`;
+    copy(line,b,null); flash('انسخه والصقه في LIINE24_CURRENT_STATE.md');
+  }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='jump') return go(t.value,true);
+  if(t.name==='status'){ st(cur.id).status=t.value; save(); renderChrome(); const ch=document.querySelectorAll('.head .chip'); if(ch[2]) ch[2].textContent=STATUS[t.value]; }
+});
+document.addEventListener('input',e=>{
+  const t=e.target,d=st(cur.id);
+  if(t.dataset.k){ d.sc[t.dataset.k]=+t.value; $('#o-'+t.dataset.k).textContent=(+t.value).toFixed(1); const a=avg(cur),n=$('#avg');
+    n.textContent=a==null?'—':a.toFixed(2); n.classList.toggle('hit',a!=null&&a>=9.8);
+    $('#avgTxt').textContent=a==null?'قيّم كل المعايير عشان يطلع المعدل.':a>=9.8?'وصلت الهدف.':'تحت الهدف 9.8. سمِّ العيب وغيّر مدخل، لا تكرر نفس البرومبت.'; save(); }
+  if(t.id==='note'){ d.note=t.value; save(); }
+  if(t.id==='link'){ d.link=t.value; save(); }
+});
+addEventListener('hashchange',()=>go(location.hash.slice(1)||'h01',false));
+go(location.hash.slice(1)||'h01',false);
+</script>
+</body>
+</html>
