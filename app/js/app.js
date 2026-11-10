@@ -236,7 +236,7 @@ function editor(doc) {
     <div class="row">
       ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<div class="namewrap"><input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}"><button type="button" class="lkbtn" data-lk="party" tabindex="-1" title="Lookup (F2)">⌕</button></div></label>` : ''}
       <label class="f">Date<input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
-      <label class="f">Reference no. (optional)<input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
+      <label class="f"><span>Reference no.</span> <span class="opt">(optional)</span><input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
       ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" data-flow value="${esc(doc.salesman || '')}"></label>` : ''}
     </div>
     <div id="partyInfo" class="muted" style="margin:12px 0 0"></div>
@@ -707,6 +707,8 @@ function wireLines(doc, arm, parties = []) {
 
   // Phone composer: one capsule above the keyboard that feeds the next line.
   // Enter: item → price → qty → bonus → line added, back to item.
+  // on phones the lines table lives inside the composer card, like the text area of a chat app
+  if (window.matchMedia('(max-width: 860px)').matches) $('#composer').prepend($('#lines').closest('.tablewrap'));
   const C = { item: $('#cItem'), price: $('#cPrice'), qty: $('#cQty'), bonus: $('#cBonus'), name: $('#cName'), nums: $('#cNums') };
   let cPicked = null;
   const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; };
@@ -728,7 +730,7 @@ function wireLines(doc, arm, parties = []) {
     setItem(tr, cPicked);
     $('[data-k=price]', tr).value = C.price.value; $('[data-k=qty]', tr).value = C.qty.value; $('[data-k=bonus]', tr).value = C.bonus.value;
     renumber(); recalc(); cReset(); C.item.focus();
-    tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const box = tr.closest('.tablewrap'); box.scrollTop = box.scrollHeight;
   };
   C.item.addEventListener('keydown', (e) => {
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); cResolve(); }

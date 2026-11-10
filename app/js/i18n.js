@@ -39,7 +39,7 @@ const AR = {
   'Accounts receivable': 'ذمم الزبائن', 'Accounts payable': 'ذمم الموردين', 'VAT': 'ضريبة القيمة المضافة', 'Opening balances / equity': 'أرصدة افتتاحية / حقوق ملكية',
   'Sales returns': 'مردودات المبيعات', 'Sales discounts (credit notes)': 'خصومات (إشعارات دائنة)', 'Other income (debit notes)': 'إيرادات أخرى (إشعارات مدينة)', 'Cost of goods sold': 'كلفة البضاعة المباعة',
   // editor
-  'Customer': 'الزبون', 'Supplier': 'المورد', 'Reference no. (optional)': 'رقم السند (اختياري)', 'Salesman': 'المندوب', 'Notes': 'ملاحظات',
+  'Customer': 'الزبون', 'Supplier': 'المورد', 'Reference no. (optional)': 'رقم السند (اختياري)', 'Reference no.': 'رقم السند', '(optional)': '(اختياري)', 'Salesman': 'المندوب', 'Notes': 'ملاحظات',
   'Type code or name': 'اكتب الرقم أو الاسم', 'Code or first letters': 'الرقم أو أول حروف', 'Item name': 'اسم الصنف',
   'Save draft': 'حفظ مسودة', 'Post': 'ترحيل', 'Print & post': 'طباعة وترحيل', 'Print draft': 'طباعة مسودة', 'Smart entry (AI / paste)': 'إدخال ذكي (ذكاء اصطناعي / لصق)',
   '+ Line': '+ سطر', 'Invoice discount (₪)': 'خصم على الفاتورة (₪)', 'Lines': 'عدد الأسطر', 'Total qty / bonus': 'مجموع الكمية / البونص', 'Subtotal': 'المجموع قبل الخصم',
