@@ -9,6 +9,9 @@
 //   { "op": "settings", "values": { "companyNameAr": "...", "contacts": "..." } }
 //   { "op": "import", "file": "/path/prepared.json" }                 items, parties, one invoice draft
 //   { "op": "draft", "doc": { "type": "SI", "partyCode": "1001", "date": "2026-11-10", "lines": [...] } }
+//   { "op": "edit", "ref": "last" | "<docId>", "lines": [{ "itemCode": "1001", "price": 9, "disc": 10 }] }
+//                                                                       change lines of a saved draft (by item code)
+//   { "op": "items", "set": [{ "code": "1001", "buyPrice": 9 }] }     change item definitions (by code)
 //   { "op": "post", "ref": "last" | "<docId>" | "<number>" }           post a saved draft
 //   { "op": "print", "ref": "last" | "<docId>" | "<number>", "name": "file.pdf" }
 //   { "op": "report", "route": "#/balances", "name": "balances.pdf" }  print any report screen
@@ -74,6 +77,24 @@ const say = (o) => console.log(JSON.stringify(o));
           return rec.id;
         }, o.doc);
         say({ op: 'draft', type: o.doc.type, id: last });
+      } else if (o.op === 'edit') {
+        const id = await find(o.ref || 'last');
+        const r = await dbx(async (db, [id, ch]) => {
+          const d = (await db.all('docs')).find((x) => x.id === id); if (!d) throw new Error('draft not found');
+          const items = await db.all('items'); const byCode = Object.fromEntries(items.map((i) => [i.code, i.id]));
+          let n = 0; const miss = [];
+          for (const c of ch) { const iid = byCode[String(c.itemCode)]; const ls = d.lines.filter((l) => l.itemId === iid); if (!ls.length) { miss.push(c.itemCode); continue; }
+            for (const l of ls) { for (const [k, v] of Object.entries(c)) if (k !== 'itemCode') l[k] = v; n++; } }
+          await db.saveDraft(d, 'Claude'); return { changed: n, missing: miss };
+        }, [id, o.lines]);
+        last = id; say({ op: 'edit', id, ...r });
+      } else if (o.op === 'items') {
+        const r = await dbx(async (db, set) => {
+          const items = await db.all('items'); let n = 0; const miss = [];
+          for (const c of set) { const it = items.find((i) => i.code === String(c.code)); if (!it) { miss.push(c.code); continue; } const { code, ...v } = c; await db.saveMaster('items', { ...it, ...v }, 'Claude'); n++; }
+          return { changed: n, missing: miss };
+        }, o.set);
+        say({ op: 'items', ...r });
       } else if (o.op === 'post') {
         const id = await find(o.ref || 'last');
         const r = await dbx(async (db, id) => { const s = await db.getSettings(); const d = await db.post(id, 'Claude', s); return { number: d.number, totalC: d.totalC }; }, id);

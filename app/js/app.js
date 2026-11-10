@@ -548,7 +548,7 @@ function editor(doc) {
   finish.addEventListener('keydown', (e) => {
     if (e.target !== finish) return;
     if (e.key === 'Enter' || e.code === 'KeyS') { e.preventDefault(); e.stopPropagation(); saveDraftNow(); }
-    else if (e.code === 'KeyP') { e.preventDefault(); e.stopPropagation(); printAndPost(); }
+    else if (e.code === 'KeyP' && !window.matchMedia('(max-width: 860px)').matches) { e.preventDefault(); e.stopPropagation(); printAndPost(); }
   });
   pageKeys = (e) => {
     if (document.querySelector('dialog[open]')) return;
@@ -1031,7 +1031,10 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
     }
     if (k === 'name') {
       if (isEmpty(tr)) {
-        // empty line: drop it and go to saving
+        // phone: the empty line is where you write, and the buttons finish; Enter stays here
+        // (an armed finish bar would take the next letter typed as a shortcut)
+        if (phoneGrid) return;
+        // computer: drop the empty line and go to saving
         if (tbody.children.length > 1) { tr.remove(); renumber(); recalc(); }
         return arm();
       }
@@ -1228,7 +1231,7 @@ async function printDoc(d, reason = '', copies = 1) {
     ${label === 'DRAFT' ? '<div class="wm">مسودة</div>' : ''}
     ${letterhead()}
     <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
-        <div class="tno">${L('No.', 'الرقم')}${C} <b dir="ltr">${esc(d.number || (A ? 'مسودة' : 'DRAFT'))}</b> · ${L('Date', 'التاريخ')}${C} <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}${C} <b>${esc(d.reference)}</b>` : ''}</div></div>
+        <div class="tno">${L('No.', 'الرقم')}${C} <b dir="ltr">${esc(d.number || (A ? 'مسودة' : 'DRAFT'))}</b> · ${L('Date', 'التاريخ')}${C} <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}${C} <b><bdi>${esc(d.reference)}</bdi></b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
       ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}${C} <b><span dir="ltr">${esc(p.code)}</span> — <bdi>${esc(p.name)}</bdi></b>${[p.address, p.region ? regionName(p.region) : ''].filter(Boolean).length ? ` — ${L('Address', 'العنوان')}${C} <b><bdi>${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</bdi></b>` : ''}</div>
       <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', (t.lines && opt.pricesIncludeVat ? L('All amounts in NIS, VAT included', 'جميع المبالغ بالشيكل، الأسعار تشمل ض.ق.م') : L('All amounts in NIS', 'جميع المبالغ بالشيكل'))].filter(Boolean).join(' · ')}</div>` : ''}</div>
