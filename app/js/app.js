@@ -65,6 +65,7 @@ async function render() {
   document.body.classList.remove('menu-open');
   const qType = name === 'new' ? args[0] : new URLSearchParams(hash.split('?')[1] || '').get('type');
   const tab = name === 'dashboard' ? 'home'
+    : name === 'invoices' ? 'inv' : name === 'vouchers' ? 'vch'
     : (name === 'docs' || name === 'new') ? (GROUPS.vch.includes(qType) ? 'vch' : 'inv')
     : ['reports', 'statement', 'sales', 'stock', 'tb'].includes(name) ? 'rep'
     : ['dirs', 'customers', 'suppliers', 'items', 'accounts'].includes(name) ? 'dir' : '';
@@ -157,6 +158,8 @@ async function partyBalanceC(partyId) {
 }
 
 // ---------- dashboard ----------
+// which home sections are open is a per-device convenience
+const homeOpen = () => { try { return JSON.parse(localStorage.getItem('homeOpen') || '["inv"]'); } catch { return ['inv']; } };
 routes.dashboard = async () => {
   const tb = trialBalance(await ledger());
   const healthy = tb.balanced && !sequenceGaps(S.docs.filter((d) => d.number)).length;
@@ -167,32 +170,47 @@ routes.dashboard = async () => {
     <div class="homehead"><div><h1 dir="auto">${esc(S.settings.companyName)}</h1>
       <p class="date">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p></div>
       <a href="#/integrity" class="pill ${healthy ? 'ok' : 'bad'}">${healthy ? 'Balanced' : 'Check'}</a></div>
-    <div class="hero">
-      <a class="bigcard" href="#/new/SI"><span class="bico">${ic('plus')}</span><b>New sales invoice</b></a>
-      <a class="bigcard alt" href="#/new/RV"><span class="bico">${ic('in')}</span><b>Receipt voucher</b></a>
-    </div>
-    <div class="tiles">
-      ${tile('#/new/SR', 'undo', 'Sales return')}${tile('#/new/PI', 'cart', 'Purchase invoice')}${tile('#/new/PV', 'out', 'Payment voucher')}${tile('#/statement', 'list', 'Account statement')}
-      ${tile('#/items', 'box', 'Items')}${tile('#/customers', 'users', 'Customers')}${tile('#/reports', 'bars', 'Reports')}${tile('#/import', 'spark', 'AI import')}
-    </div>
+    <div class="homemap">${MAP.map((sec) => `<details class="hsec" data-k="${sec.k}" ${homeOpen().includes(sec.k) ? 'open' : ''}>
+      <summary><span class="tico">${ic(sec.icon)}</span><b class="grow">${sec.title}</b><span class="hchev">${ic('chev')}</span></summary>
+      <div class="hbody">${mapGroups(sec)}</div></details>`).join('')}</div>
     <div class="listhead"><h2>Recent documents</h2><a class="btn small" href="#/docs?type=SI">All</a></div>
     ${docTable(recent)}
     ${S.items.length ? '' : `<div class="note" style="margin-top:20px">Start here: add items and customers in <a href="#/items">Items</a> and <a href="#/customers">Customers</a>, or import them from Excel in <a href="#/import">Import</a>.</div>`}`;
+  $$('.hsec').forEach((d) => d.addEventListener('toggle', () => { try { localStorage.setItem('homeOpen', JSON.stringify($$('.hsec[open]').map((x) => x.dataset.k))); } catch { /* private mode: fine */ } }));
 };
 
 // one hub screen for a group of links (Reports, Directories)
+// The program's map (Rabee, Nov 2026). Each section is groups of entries; a line separates groups.
+// entry: [route, icon, label, newType?] — no route means not built yet ("Soon").
+const MAP = [
+  { k: 'inv', title: 'Invoices', icon: 'doc', groups: [
+    [['#/docs?type=SI', 'doc', 'Sales invoices', 'SI'], ['#/docs?type=SR', 'undo', 'Sales returns', 'SR']],
+    [['#/docs?type=PI', 'cart', 'Purchase invoices', 'PI'], ['#/docs?type=PR', 'undo', 'Purchase returns', 'PR']],
+    [['#/docs?type=CN', 'minus', 'Credit notes', 'CN'], ['#/docs?type=DN', 'pluscircle', 'Debit notes', 'DN']]] },
+  { k: 'vch', title: 'Vouchers', icon: 'wallet', groups: [
+    [['#/docs?type=RV', 'in', 'Receipt vouchers', 'RV']], [['#/docs?type=PV', 'out', 'Payment vouchers', 'PV']], [['', 'journal', 'Journal vouchers']]] },
+  { k: 'dir', title: 'Definitions', icon: 'book', groups: [
+    [['#/customers', 'users', 'Customers directory'], ['#/suppliers', 'truck', 'Suppliers directory']], [['#/items', 'box', 'Items']], [['', 'users', 'Employees']], [['', 'pin', 'Regions']], [['#/accounts', 'book', 'Accounts setup']]] },
+  { k: 'rep', title: 'Reports', icon: 'bars', groups: [
+    [['#/statement', 'list', 'Account statement']],
+    [['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer']],
+    [['#/sales?kind=purchases&by=item', 'cart', 'Purchases by item'], ['#/sales?kind=purchases&by=customer', 'truck', 'Purchases by supplier']],
+    [['#/stock', 'box', 'Inventory'], ['#/tb', 'layers', 'Trial balance']]] },
+];
+const mapEntry = ([href, icon, label, nt]) => (href
+  ? `<div class="hrow"><a class="hgo" href="${href}"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span></a>${nt ? `<a class="hnew" href="#/new/${nt}" title="New" aria-label="New">${ic('plus')}</a>` : ic('chev')}</div>`
+  : `<span class="hrow off"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span><em>Soon</em></span>`);
+const mapGroups = (sec) => sec.groups.map((g) => `<div class="hgrp">${g.map(mapEntry).join('')}</div>`).join('');
 function hub(title, rows) {
   $('#main').innerHTML = `<h1>${title}</h1><div class="hublist">${rows.map(([href, icon, label]) => href
     ? `<a class="hrow" href="${href}"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span>${ic('chev')}</a>`
     : `<span class="hrow off"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span><em>Soon</em></span>`).join('')}</div>`;
 }
-routes.reports = async () => hub('Reports', [
-  ['#/statement', 'list', 'Account statement'], ['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer'],
-  ['#/sales?kind=purchases&by=item', 'cart', 'Purchases by item'], ['#/sales?kind=purchases&by=customer', 'truck', 'Purchases by supplier'],
-  ['#/stock', 'box', 'Inventory'], ['#/tb', 'layers', 'Trial balance']]);
-routes.dirs = async () => hub('Directories', [
-  ['#/customers', 'users', 'Customers'], ['#/suppliers', 'truck', 'Suppliers'], ['#/items', 'box', 'Items'], ['#/accounts', 'book', 'Chart of accounts'],
-  ['', 'users', 'Employees'], ['', 'pin', 'Regions']]);
+const sectionPage = (k) => { const sec = MAP.find((x) => x.k === k); $('#main').innerHTML = `<h1>${sec.title}</h1><div class="hublist grouped">${mapGroups(sec)}</div>`; };
+routes.reports = async () => sectionPage('rep');
+routes.dirs = async () => sectionPage('dir');
+routes.invoices = async () => sectionPage('inv');
+routes.vouchers = async () => sectionPage('vch');
 routes.accounts = async () => {
   const tb = trialBalance(await ledger());
   const bal = Object.fromEntries(tb.rows.map((r) => [r.account, r.balDebitC - r.balCreditC]));

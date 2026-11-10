@@ -23,16 +23,31 @@
       <nav>
         <a href="#/dashboard" data-k="dashboard">Home</a>
         <div class="navgroup">Invoices</div>
-        <a href="#/docs?type=SI" data-k="docs?type=SI">Sales invoice</a>
-        <a href="#/docs?type=SR" data-k="docs?type=SR">Sales return</a>
-        <a href="#/docs?type=PI" data-k="docs?type=PI">Purchase invoice</a>
-        <a href="#/docs?type=PR" data-k="docs?type=PR">Purchase return</a>
-        <a href="#/docs?type=CN" data-k="docs?type=CN">Credit note</a>
-        <a href="#/docs?type=DN" data-k="docs?type=DN">Debit note</a>
+        <a href="#/docs?type=SI" data-k="docs?type=SI">Sales invoices</a>
+        <a href="#/docs?type=SR" data-k="docs?type=SR">Sales returns</a>
+        <hr class="navsep">
+        <a href="#/docs?type=PI" data-k="docs?type=PI">Purchase invoices</a>
+        <a href="#/docs?type=PR" data-k="docs?type=PR">Purchase returns</a>
+        <hr class="navsep">
+        <a href="#/docs?type=CN" data-k="docs?type=CN">Credit notes</a>
+        <a href="#/docs?type=DN" data-k="docs?type=DN">Debit notes</a>
         <div class="navgroup">Vouchers</div>
-        <a href="#/docs?type=RV" data-k="docs?type=RV">Receipt voucher</a>
-        <a href="#/docs?type=PV" data-k="docs?type=PV">Payment voucher</a>
-        <span class="soon"><span>Journal voucher</span> <em>Soon</em></span>
+        <a href="#/docs?type=RV" data-k="docs?type=RV">Receipt vouchers</a>
+        <hr class="navsep">
+        <a href="#/docs?type=PV" data-k="docs?type=PV">Payment vouchers</a>
+        <hr class="navsep">
+        <span class="soon"><span>Journal vouchers</span> <em>Soon</em></span>
+        <div class="navgroup">Definitions</div>
+        <a href="#/customers" data-k="customers">Customers directory</a>
+        <a href="#/suppliers" data-k="suppliers">Suppliers directory</a>
+        <hr class="navsep">
+        <a href="#/items" data-k="items">Items</a>
+        <hr class="navsep">
+        <span class="soon"><span>Employees</span> <em>Soon</em></span>
+        <hr class="navsep">
+        <span class="soon"><span>Regions</span> <em>Soon</em></span>
+        <hr class="navsep">
+        <a href="#/accounts" data-k="accounts">Accounts setup</a>
         <div class="navgroup">Reports</div>
         <a href="#/statement" data-k="statement">Account statement</a>
         <a href="#/sales?kind=sales&by=item" data-k="sales?kind=sales&by=item">Sales by item</a>
@@ -41,13 +56,6 @@
         <a href="#/sales?kind=purchases&by=customer" data-k="sales?kind=purchases&by=customer">Purchases by supplier</a>
         <a href="#/stock" data-k="stock">Inventory</a>
         <a href="#/tb" data-k="tb">Trial balance</a>
-        <div class="navgroup">Directories</div>
-        <a href="#/customers" data-k="customers">Customers</a>
-        <a href="#/suppliers" data-k="suppliers">Suppliers</a>
-        <a href="#/items" data-k="items">Items</a>
-        <a href="#/accounts" data-k="accounts">Chart of accounts</a>
-        <span class="soon"><span>Employees</span> <em>Soon</em></span>
-        <span class="soon"><span>Regions</span> <em>Soon</em></span>
         <div class="navgroup">System</div>
         <a href="#/import" data-k="import">Import · Excel · AI</a>
         <a href="#/backup" data-k="backup">Backup</a>
@@ -61,10 +69,10 @@
   </div>
   <nav id="tabs">
     <a href="#/dashboard" data-tab="home"><i data-ic="home"></i><span>Home</span></a>
-    <a href="#/docs?type=SI" data-tab="inv"><i data-ic="doc"></i><span>Invoices</span></a>
-    <a href="#/docs?type=RV" data-tab="vch"><i data-ic="wallet"></i><span>Vouchers</span></a>
+    <a href="#/invoices" data-tab="inv"><i data-ic="doc"></i><span>Invoices</span></a>
+    <a href="#/vouchers" data-tab="vch"><i data-ic="wallet"></i><span>Vouchers</span></a>
     <a href="#/reports" data-tab="rep"><i data-ic="bars"></i><span>Reports</span></a>
-    <a href="#/dirs" data-tab="dir"><i data-ic="book"></i><span>Directories</span></a>
+    <a href="#/dirs" data-tab="dir"><i data-ic="book"></i><span>Definitions</span></a>
   </nav>
   <div id="printArea"></div>
   <div id="toast" role="status" aria-live="polite"></div>
