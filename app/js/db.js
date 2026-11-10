@@ -50,7 +50,7 @@ export async function getSettings() {
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return {
     companyName: 'My Company', companyNameAr: '', taxNo: '', address: '', phone: '',
-    vatRate: 16, pricesIncludeVat: true, fontScale: 'normal', adminPin: '', branch: '', copiesInvoice: 2, copiesVoucher: 2,
+    vatRate: 16, pricesIncludeVat: true, roundTotals: true, fontScale: 'normal', adminPin: '', branch: '', copiesInvoice: 2, copiesVoucher: 2,
     ...s,
   };
 }
@@ -134,7 +134,7 @@ export async function post(docId, user, settings, { allowBackdate = false, backd
     backdated: !!backdated, backdateReason: backdated ? backdateReason : '',
     totalC: totals.totalC, vatC: totals.vatC || 0, netC: totals.netC ?? totals.totalC,
     qtyTotal: totals.qtyTotal || 0, bonusTotal: totals.bonusTotal || 0,
-    settingsAtPost: { vatRate: settings.vatRate, pricesIncludeVat: settings.pricesIncludeVat },
+    settingsAtPost: { vatRate: settings.vatRate, pricesIncludeVat: settings.pricesIncludeVat, roundTotals: settings.roundTotals ?? true },
   };
   docs.put(rec);
   tx.objectStore('seqs').put({ series, next: seq.next + 1, lastDate: doc.date > seq.lastDate ? doc.date : seq.lastDate });

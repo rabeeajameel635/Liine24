@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
-  computeTotals, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
+  computeTotals, docTotalsOpts, round1, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
@@ -13,6 +13,9 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (c) => fmt(fromCents(c || 0));
+// invoice amounts under the rounding rule show one decimal (31,600.0), others keep agorot
+const amt = (c, r) => (r ? fmt(fromCents(c || 0), 1) : money(c));
+const pricef = (v, r) => fmt(Number(v) || 0, r ? 1 : 3);
 const today = () => new Date().toISOString().slice(0, 10);
 const isAdmin = () => S.role === 'admin';
 const itemById = (id) => S.items.find((i) => i.id === id);
@@ -172,7 +175,7 @@ function docTable(docs) {
 }
 function draftTotalC(d) {
   if (!DOC_TYPES[d.type].lines) return toCents(d.amount);
-  return computeTotals(d.lines || [], { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount }).totalC;
+  return computeTotals(d.lines || [], docTotalsOpts(d, S.settings)).totalC;
 }
 
 // ---------- documents ----------
@@ -250,6 +253,7 @@ function editor(doc) {
       <div class="wcard wsum" id="totals">
         ${t.lines ? `<div class="sr"><span>Items total</span><b id="tSub">0.00</b></div>
         <div class="sr"><span>Invoice discount</span><input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" placeholder="0.00"></div>
+        <div class="sr" id="tRoundRow" hidden><span>Rounding</span><b id="tRound" dir="ltr"></b></div>
         <div class="sr"><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : ''}
         <div class="sr grand"><span>${t.lines ? 'Grand total' : 'Amount'}</span><b id="gTotal">0.00</b></div>
         <div class="wwords" id="tWords"></div></div>
@@ -278,7 +282,7 @@ function editor(doc) {
       d.lines = $$('#lines tbody tr').map((tr) => {
         const g = (k) => $(`[data-k="${k}"]`, tr).value.trim();
         const it = itemById(tr.dataset.item);
-        return { itemId: it?.id || '', itemText: g('code') || g('name'), qty: num(g('qty')), bonus: num(g('bonus')), price: num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: g('expiry') };
+        return { itemId: it?.id || '', itemText: g('code') || g('name'), qty: num(g('qty')), bonus: num(g('bonus')), price: R && g('price') !== '' ? round1(num(g('price'))) : num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: g('expiry') };
       }).filter((l) => l.itemId || l.itemText || l.qty || l.bonus);
       d.invoiceDiscount = num($('#invdisc').value);
     } else {
@@ -359,7 +363,7 @@ function editor(doc) {
     const d = readDoc(); const p = partyById(d.partyId);
     const head = [[T(t.name), d.number || T('Draft')], [T('Date'), d.date], ...(p ? [[T(partyKind === 'supplier' ? 'Supplier' : 'Customer'), `${p.code} — ${p.name}`]] : []), ...(d.reference ? [[T('Ref.'), d.reference]] : []), []];
     if (t.lines) {
-      const tot = computeTotals(d.lines, { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount });
+      const tot = computeTotals(d.lines, docTotalsOpts(d, S.settings));
       const body = tot.lines.map((l) => { const it = itemById(l.itemId) || {}; return [it.code, it.name, l.qty || 0, l.bonus || 0, Number(l.price) || 0, l.disc || 0, l.amountC / 100, l.batch, l.expiry]; });
       toExcel(`${d.number || doc.type + '-draft'}.xlsx`, [...head, ['Code', 'Item', 'Qty', 'Bonus', 'Price', 'Disc %', 'Amount', 'Batch', 'Expiry'].map(T), ...body, [],
         [T('Subtotal'), tot.subtotalC / 100], [T('Invoice discount'), tot.discC / 100], [T(`VAT ${S.settings.vatRate}%`), tot.vatC / 100], [T('Grand total'), tot.totalC / 100]]);
@@ -427,8 +431,9 @@ function editor(doc) {
     $('#balBefore').innerHTML = `<span>Before</span> ${money(balBase)}${p?.creditLimit ? ` · <span>Remaining</span> ${money(toCents(p.creditLimit) - balBase - sg * totalC)}` : ''}`;
     translate($('#balBefore'));
   };
+  const R = docTotalsOpts(doc, S.settings).roundTotals;
   const setTotal = (c) => {
-    totalC = c; $('#gTotal').textContent = money(c);
+    totalC = c; $('#gTotal').textContent = amt(c, R);
     $('#tWords').textContent = c > 0 ? amountInWords(fromCents(c)) : '';
     showBal();
   };
@@ -619,8 +624,8 @@ function findItem(text) {
 }
 function defaultPrice(item, type) {
   if (!item) return '';
-  if (['PI', 'PR', 'OS'].includes(type)) return item.buyPrice ?? '';
-  return item.pricePharmacist || item.pricePublic || '';
+  const v = ['PI', 'PR', 'OS'].includes(type) ? item.buyPrice ?? '' : item.pricePharmacist || item.pricePublic || '';
+  return v !== '' && docTotalsOpts({ type, lines: [] }, S.settings).roundTotals ? round1(v) : v;
 }
 
 function linesUI(doc) {
@@ -651,12 +656,14 @@ function wireLines(doc, arm, parties = [], setTotal = () => {}) {
   const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.ln', tr).textContent = i + 1));
   const recalc = () => {
     const lines = $$('tr', tbody).map((tr) => ({ qty: num($('[data-k=qty]', tr).value) || 0, bonus: num($('[data-k=bonus]', tr).value) || 0, price: num($('[data-k=price]', tr).value) || 0, disc: num($('[data-k=disc]', tr).value) || 0 }));
-    const tot = computeTotals(lines, { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: num($('#invdisc').value) || 0 });
-    $$('tr', tbody).forEach((tr, i) => { $('.amt', tr).textContent = tot.lines[i].amountC ? money(tot.lines[i].amountC) : ''; });
-    $('#tSub').textContent = money(tot.subtotalC);
+    const tot = computeTotals(lines, { ...docTotalsOpts(doc, S.settings), invoiceDiscount: num($('#invdisc').value) || 0 });
+    const R = docTotalsOpts(doc, S.settings).roundTotals;
+    $$('tr', tbody).forEach((tr, i) => { $('.amt', tr).textContent = tot.lines[i].amountC ? amt(tot.lines[i].amountC, R) : ''; });
+    $('#tSub').textContent = amt(tot.subtotalC, R);
+    $('#tRoundRow').hidden = !tot.roundC; $('#tRound').textContent = tot.roundC ? `${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), R)}` : '';
     $('#tVat').textContent = money(tot.vatC);
     const n = $$('tr', tbody).filter((tr) => tr.dataset.item).length;
-    $('#gStats').innerHTML = n ? `${n} <span>${n === 1 ? 'item' : 'items'}</span> · <span>Qty</span> ${fmt(tot.qtyTotal, 0)} · <span>Bonus</span> ${fmt(tot.bonusTotal, 0)}${tot.discC ? ` · <span>Invoice discount</span> −${money(tot.discC)}` : ''}` : '';
+    $('#gStats').innerHTML = n ? `${n} <span>${n === 1 ? 'item' : 'items'}</span> · <span>Qty</span> ${fmt(tot.qtyTotal, 0)} · <span>Bonus</span> ${fmt(tot.bonusTotal, 0)}${tot.discC ? ` · <span>Invoice discount</span> −${amt(tot.discC, R)}` : ''}` : '';
     translate($('#gStats'));
     setTotal(tot.totalC);
     showOh();
@@ -693,6 +700,7 @@ function wireLines(doc, arm, parties = [], setTotal = () => {}) {
     if (k === 'name') { const it = S.items.find((i) => i.name === e.target.value && i.active !== false); if (it) setItem(tr, it); }
     recalc();
   });
+  tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'price' && docTotalsOpts(doc, S.settings).roundTotals && e.target.value.trim() !== '') { e.target.value = round1(num(e.target.value)); recalc(); } });
   tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined) { e.target.closest('tr').remove(); if (!tbody.children.length) addRow(); renumber(); recalc(); } });
   const pick = async (tr, filter) => {
     const it = await lookupItem(filter, doc.type);
@@ -807,18 +815,19 @@ async function viewDoc(d) {
   const t = DOC_TYPES[d.type];
   const p = partyById(d.partyId);
   const prints = await db.byIndex('printlog', 'docId', d.id);
-  const tot = t.lines ? computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? S.settings.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount }) : null;
+  const tot = t.lines ? computeTotals(d.lines, docTotalsOpts(d, S.settings)) : null;
+  const R = t.lines && docTotalsOpts(d, S.settings).roundTotals;
   $('#main').innerHTML = `
     <h1><span>${t.name}</span> <span dir="ltr">${esc(d.number)}</span> <span class="pill ${d.status}">${d.status}</span>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</h1>
     <p class="sub">${esc(d.date)} · ${esc(partyLabel(p))}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
     ${d.status === 'voided' ? `<div class="note bad">Voided by ${esc(d.voidedBy)} on ${esc(d.voidedAt?.slice(0, 10))}: ${esc(d.voidReason)}. A reversing entry was posted; the number stays used.</div>` : ''}
     ${t.lines ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Code</th><th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead><tbody>
-      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${fmt(l.price || 0, 3)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${money(l.amountC)}</td></tr>`; }).join('')}
-      </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${fmt(tot.qtyTotal, 0)}</td><td class="n">${fmt(tot.bonusTotal, 0)}</td><td></td><td></td><td class="n">${money(tot.subtotalC)}</td></tr></tfoot></table></div>
+      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${pricef(l.price, R)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${amt(l.amountC, R)}</td></tr>`; }).join('')}
+      </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${fmt(tot.qtyTotal, 0)}</td><td class="n">${fmt(tot.bonusTotal, 0)}</td><td></td><td></td><td class="n">${amt(tot.subtotalC, R)}</td></tr></tfoot></table></div>
       <div class="row" style="margin-top:14px"><div class="totals card">
-        ${tot.discC ? `<div><span>Invoice discount</span><span>−${money(tot.discC)}</span></div>` : ''}
+        ${tot.discC ? `<div><span>Invoice discount</span><span>−${amt(tot.discC, R)}</span></div>` : ''}${tot.roundC ? `<div><span>Rounding</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), R)}</span></div>` : ''}
         <div><span>Net</span><span>${money(tot.netC)}</span></div><div><span>VAT</span><span>${money(tot.vatC)}</span></div>
-        <div class="grand"><span>Total ₪</span><span>${money(tot.totalC)}</span></div><div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div></div></div>`
+        <div class="grand"><span>Total ₪</span><span>${amt(tot.totalC, R)}</span></div><div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div></div></div>`
     : `<div class="card" style="margin-top:16px"><div class="kpi"><div class="label">Amount</div><div class="value">${money(d.totalC)} ₪</div></div>
         <p class="words">${esc(amountInWords(fromCents(d.totalC)))}</p>
         ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${ACCOUNTS[d.cashAccount]?.name || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
@@ -862,7 +871,7 @@ async function printDoc(d, reason = '', copies = 1) {
   const t = DOC_TYPES[d.type];
   const p = partyById(d.partyId) || {};
   const s = S.settings;
-  const opt = { vatRate: d.settingsAtPost?.vatRate ?? s.vatRate, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? s.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount };
+  const opt = docTotalsOpts(d, s);
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
   const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
   const ar = { SI: 'فاتورة ضريبية', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
@@ -883,12 +892,13 @@ async function printDoc(d, reason = '', copies = 1) {
       <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', L('All amounts in NIS', 'جميع المبالغ بالشيكل') + (t.lines && opt.pricesIncludeVat ? L(', VAT included', '، الأسعار تشمل ض.ق.م') : '')].filter(Boolean).join(' · ')}</div>` : ''}</div>
     ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
       ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch || '—')}</span> · ${L('Exp.', 'انتهاء')} <span dir="ltr">${esc(l.expiry || '—')}</span></div>` : ''}</td>
-        <td class="c">${fmt(l.qty || 0, 0)}</td><td class="c">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="c">${fmt(l.price || 0, 3)}</td><td class="c">${l.disc ? l.disc + '%' : ''}</td><td class="n"><b>${money(l.amountC)}</b></td></tr>`; }).join('')}
+        <td class="c">${fmt(l.qty || 0, 0)}</td><td class="c">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="c">${pricef(l.price, opt.roundTotals)}</td><td class="c">${l.disc ? l.disc + '%' : ''}</td><td class="n"><b>${amt(l.amountC, opt.roundTotals)}</b></td></tr>`; }).join('')}
       </tbody></table>
       <div class="tot"><div class="sum"><div><span>${L('Lines', 'عدد الأصناف')} ${tot.lines.length} · ${L('Total qty', 'مجموع الكمية')} ${fmt(tot.qtyTotal, 0)} · ${L('Total bonus', 'مجموع البونص')} ${fmt(tot.bonusTotal, 0)}</span><span></span></div>
-          ${tot.discC ? `<div><span>${L('Invoice discount', 'خصم على الفاتورة')}</span><span>−${money(tot.discC)}</span></div>` : ''}
+          <div><span>${L('Items total', 'المجموع')}</span><span>${amt(tot.subtotalC, opt.roundTotals)}</span></div>
+          ${tot.discC ? `<div><span>${L('Invoice discount', 'خصم على الفاتورة')}</span><span>−${amt(tot.discC, opt.roundTotals)}</span></div>` : ''}${tot.roundC ? `<div><span>${L('Rounding', 'تقريب')}</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), opt.roundTotals)}</span></div>` : ''}
           <div><span>${L('Net before VAT', 'الصافي قبل الضريبة')}</span><span>${money(tot.netC)}</span></div><div><span>${L('VAT', 'الضريبة')} ${opt.vatRate}%</span><span>${money(tot.vatC)}</span></div></div>
-        <div class="g"><span>${L('Total (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`
+        <div class="g"><span>${L('Total (NIS)', 'المبلغ (شيكل)')}</span><span>${amt(tot.totalC, opt.roundTotals)}</span></div></div>`
     : `${d.method ? `<table><tbody><tr><td>${L('Method', 'طريقة الدفع')}</td><td><b>${esc(T(PAY_METHODS[d.method] || ''))}</b></td></tr>${d.chequeNo ? `<tr><td>${L('Cheque', 'شيك')}</td><td><b><span dir="ltr">${esc(d.chequeNo)}</span> · <span dir="auto">${esc(d.chequeBank)}</span> · <span dir="ltr">${esc(d.dueDate)}</span></b></td></tr>` : ''}</tbody></table>` : ''}
        <div class="tot"><div class="g"><span>${L('Amount (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`}
     <div class="wbox"><div class="wl">${L('Amount in words', 'المبلغ كتابةً')}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(tot.totalC)))}</div>${d.notes ? `<div class="nt" dir="auto">${esc(d.notes)}</div>` : ''}</div>
@@ -1078,7 +1088,7 @@ routes.sales = async () => {
   const agg = {};
   for (const d of docs) {
     const sign = d.type === plus ? 1 : -1;
-    const tot = computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? 16, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? true, invoiceDiscount: d.invoiceDiscount });
+    const tot = computeTotals(d.lines, docTotalsOpts(d, { vatRate: 16, pricesIncludeVat: true, roundTotals: false }));
     const factor = tot.subtotalC ? tot.totalC / tot.subtotalC : 0;
     const p = partyById(d.partyId) || {};
     for (const l of tot.lines) {

@@ -117,3 +117,32 @@ test('numeric codes start at 1001 and skip typed non-numeric codes', async () =>
   assert.equal(nextNumericCode([]), '1001');
   assert.equal(nextNumericCode(['1001', '1007', 'ABC', '07100x']), '1008');
 });
+
+test('rounding rule: one decimal per line, total to the shekel, half goes down', async () => {
+  const { computeTotals, buildPosting, docTotalsOpts, roundShekelHalfDown, round1, isBalanced } = await import('../js/core.js');
+  assert.equal(roundShekelHalfDown(30060), 30100);
+  assert.equal(roundShekelHalfDown(30040), 30000);
+  assert.equal(roundShekelHalfDown(30050), 30000);
+  assert.equal(roundShekelHalfDown(30051), 30100);
+  assert.equal(round1(27.492), 27.5); assert.equal(round1(18.25), 18.3); assert.equal(round1(12.5), 12.5);
+  const lines = [{ itemId: 'a', qty: 3, price: 33.4 }, { itemId: 'b', qty: 1, price: 0.25 }];
+  const t = computeTotals(lines, { vatRate: 16, pricesIncludeVat: true, roundTotals: true });
+  assert.equal(t.lines[0].amountC, 10020);          // 100.2
+  assert.equal(t.lines[1].amountC, 30);             // 0.25 → 0.3
+  assert.equal(t.subtotalC, 10050);
+  assert.equal(t.totalC, 10000);                    // 100.5 → 100
+  assert.equal(t.roundC, -50);
+  assert.equal(t.vatC + t.netC, t.totalC);          // VAT taken from the rounded total
+  // posted with the rule: the entry balances with no rounding account
+  const doc = { type: 'SI', partyId: 'p', lines, invoiceDiscount: 0 };
+  const { entries } = buildPosting(doc, { settings: { vatRate: 16, pricesIncludeVat: true, roundTotals: true }, items: { a: {}, b: {} } });
+  assert.ok(isBalanced(entries));
+  assert.equal(entries.find((e) => e.account === '1200').debitC, 10000);
+  // a document posted before the rule keeps its printed numbers
+  const old = { type: 'SI', lines, settingsAtPost: { vatRate: 16, pricesIncludeVat: true } };
+  assert.equal(docTotalsOpts(old, { roundTotals: true }).roundTotals, false);
+  assert.equal(computeTotals(lines, docTotalsOpts(old, {})).totalC, 10045);
+  // vouchers and opening stock never round
+  assert.equal(docTotalsOpts({ type: 'OS', lines: [] }, { roundTotals: true }).roundTotals, false);
+  assert.equal(docTotalsOpts({ type: 'RV' }, { roundTotals: true }).roundTotals, false);
+});

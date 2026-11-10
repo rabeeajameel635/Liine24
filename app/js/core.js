@@ -56,34 +56,50 @@ export function fmt(x, digits = 2) {
 // ---------- totals ----------
 // lines: [{ qty, bonus, price, disc }]  disc = percent on the line
 // pricesIncludeVat: prices on lines already include VAT (Gaza pharma default)
-export function computeTotals(lines, { vatRate = 16, pricesIncludeVat = true, invoiceDiscount = 0 } = {}) {
+// Rounding rule (Rabee, Nov 2026): price and line amount to one decimal; the grand total to the
+// nearest shekel, with exactly half going down (300.5 → 300, 300.6 → 301). VAT and net are taken
+// from the rounded total, so the entry stays balanced and needs no rounding account.
+export const round1 = (x) => Math.round(Math.round((Number(x) || 0) * 1000) / 100) / 10;
+export const roundShekelHalfDown = (c) => { const r = ((c % 100) + 100) % 100; return r > 50 ? c - r + 100 : c - r; };
+// the totals options a document uses: posted documents keep the rule they were posted with
+export function docTotalsOpts(doc, settings = {}) {
+  const snap = doc.settingsAtPost;
+  const src = snap || settings;
+  const roundTotals = doc.type !== 'OS' && !!DOC_TYPES[doc.type]?.lines && (snap ? !!snap.roundTotals : (settings.roundTotals ?? true));
+  return { vatRate: src.vatRate ?? 16, pricesIncludeVat: src.pricesIncludeVat ?? true, invoiceDiscount: doc.invoiceDiscount || 0, roundTotals };
+}
+
+export function computeTotals(lines, { vatRate = 16, pricesIncludeVat = true, invoiceDiscount = 0, roundTotals = false } = {}) {
   const out = lines.map((l) => {
     const qty = Number(l.qty) || 0;
     const price = Number(l.price) || 0;
     const disc = Math.min(100, Math.max(0, Number(l.disc) || 0));
-    const amountC = Math.round(qty * price * (1 - disc / 100) * 100);
+    const v = qty * price * (1 - disc / 100);
+    const amountC = roundTotals ? Math.round(Math.round(v * 1000) / 100) * 10 : Math.round(v * 100);
     return { ...l, amountC };
   });
   const subtotalC = out.reduce((s, l) => s + l.amountC, 0);
   const discC = Math.min(subtotalC, Math.max(0, toCents(invoiceDiscount)));
   const grossC = subtotalC - discC;
   const r = (Number(vatRate) || 0) / 100;
-  let netC, vatC, totalC;
+  let netC, vatC, totalC, roundC = 0;
   if (pricesIncludeVat) {
-    vatC = Math.round((grossC * r) / (1 + r));
-    netC = grossC - vatC;
-    totalC = grossC;
+    totalC = roundTotals ? roundShekelHalfDown(grossC) : grossC;
+    roundC = totalC - grossC;
+    vatC = Math.round((totalC * r) / (1 + r));
+    netC = totalC - vatC;
   } else {
     netC = grossC;
     vatC = Math.round(netC * r);
     totalC = netC + vatC;
+    if (roundTotals) { const t = roundShekelHalfDown(totalC); roundC = t - totalC; netC += roundC; totalC = t; }
   }
   // net value of each line after invoice discount and VAT, used for stock cost on purchases
   const factor = subtotalC ? netC / subtotalC : 0;
   out.forEach((l) => { l.netC = Math.round(l.amountC * factor); });
   const qtyTotal = out.reduce((s, l) => s + (Number(l.qty) || 0), 0);
   const bonusTotal = out.reduce((s, l) => s + (Number(l.bonus) || 0), 0);
-  return { lines: out, subtotalC, discC, grossC, netC, vatC, totalC, qtyTotal, bonusTotal };
+  return { lines: out, subtotalC, discC, grossC, roundC, netC, vatC, totalC, qtyTotal, bonusTotal };
 }
 
 // ---------- average cost ----------
@@ -114,11 +130,7 @@ export function buildPosting(doc, { moves = [], items = {}, settings = {} } = {}
   const p = doc.partyId || null;
 
   if (t.lines) {
-    const tot = computeTotals(doc.lines, {
-      vatRate: settings.vatRate ?? 16,
-      pricesIncludeVat: settings.pricesIncludeVat ?? true,
-      invoiceDiscount: doc.invoiceDiscount || 0,
-    });
+    const tot = computeTotals(doc.lines, docTotalsOpts(doc, settings));
     const r = (settings.vatRate ?? 16) / 100;
     let costC = 0;
     for (const l of tot.lines) {
