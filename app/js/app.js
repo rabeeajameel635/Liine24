@@ -920,26 +920,34 @@ async function printDoc(d, reason = '', copies = 1) {
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
   const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
   const ar = { SI: 'فاتورة ضريبية', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
-  const page = ({ label, copyNo }) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">
+  // Print layout: company head with a monogram, grey title block, black table head, zebra rows,
+  // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
+  const A = getLang() === 'ar';
+  const L = (en, a) => (A ? a : en);
+  const mono = (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
+  const page = ({ label, copyNo }, idx) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="${A ? 'rtl' : 'ltr'}">
     ${label === 'DRAFT' ? '<div class="wm">مسودة</div>' : ''}
-    <div class="ph"><div><div class="co" dir="auto">${esc(s.companyName)}</div>${s.companyNameAr ? `<div dir="rtl">${esc(s.companyNameAr)}</div>` : ''}
-      <div>${esc(s.address)} ${s.phone ? '· ' + esc(s.phone) : ''}</div>${s.taxNo ? `<div>Licensed dealer no. / رقم المشتغل: ${esc(s.taxNo)}</div>` : ''}</div>
-      <div class="title"><div class="t1">${t.name} · ${ar}</div><div style="font-size:13pt"><b>${esc(d.number || 'DRAFT')}</b></div><div>${esc(d.date)}</div><div class="stamp">${stamp}</div></div></div>
-    ${t.party !== 'none' ? `<div class="party"><div><b>${p.kind === 'supplier' ? 'Supplier · المورد' : 'Customer · الزبون'}:</b> <span dir="auto">${esc(p.code)} — ${esc(p.name)}</span></div>
-      <div><b>Ref.</b> ${esc(d.reference || '—')}</div><div dir="auto">${esc(p.address || '')} ${p.region ? '· ' + REGIONS[p.region] : ''}</div><div>${p.taxNo ? 'Tax no. ' + esc(p.taxNo) : ''} ${d.salesman ? '· Salesman ' + esc(d.salesman) : ''}</div></div>` : ''}
-    ${t.lines ? `<table><thead><tr><th>Code</th><th>Item · البيان</th><th class="n">Qty · كمية</th><th class="n">Bonus · بونص</th><th class="n">Price · سعر</th><th class="n">Disc · خصم</th><th class="n">Amount · المجموع</th></tr></thead><tbody>
-      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">Batch ${esc(l.batch || '—')} · Exp. ${esc(l.expiry || '—')}</div>` : ''}</td>
-        <td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${fmt(l.price || 0, 3)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${money(l.amountC)}</td></tr>`; }).join('')}
+    <div class="ph"><div><div class="co" dir="auto">${esc(A && s.companyNameAr ? s.companyNameAr : s.companyName)}</div>${s.companyNameAr && !A ? `<div dir="rtl">${esc(s.companyNameAr)}</div>` : ''}
+      <div class="cosub">${[s.address, s.phone].filter(Boolean).map(esc).join(' — ')}</div>${s.taxNo ? `<div class="cosub">${L('Licensed dealer no.', 'رقم المشتغل')}: ${esc(s.taxNo)}</div>` : ''}</div>
+      ${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>
+    <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
+        <div class="tno">${L('No.', 'الرقم')}: <b dir="ltr">${esc(d.number || L('DRAFT', 'مسودة'))}</b> · ${L('Date', 'التاريخ')}: <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}: <b>${esc(d.reference)}</b>` : ''}</div></div>
+        <div class="stamp">${stamp}</div></div>
+      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}: <b dir="auto">${esc(p.code)} — ${esc(p.name)}</b>${p.address || p.region ? ` — ${L('Address', 'العنوان')}: <b dir="auto">${esc([p.address, p.region ? T(REGIONS[p.region]) : ''].filter(Boolean).join(' · '))}</b>` : ''}</div>
+      <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', L('All amounts in NIS', 'جميع المبالغ بالشيكل') + (t.lines && opt.pricesIncludeVat ? L(', VAT included', '، الأسعار تشمل ض.ق.م') : '')].filter(Boolean).join(' · ')}</div>` : ''}</div>
+    ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
+      ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch || '—')}</span> · ${L('Exp.', 'انتهاء')} <span dir="ltr">${esc(l.expiry || '—')}</span></div>` : ''}</td>
+        <td class="c">${fmt(l.qty || 0, 0)}</td><td class="c">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="c">${fmt(l.price || 0, 3)}</td><td class="c">${l.disc ? l.disc + '%' : ''}</td><td class="n"><b>${money(l.amountC)}</b></td></tr>`; }).join('')}
       </tbody></table>
-      <div class="foot"><div><div>Lines ${tot.lines.length} · Total qty ${fmt(tot.qtyTotal, 0)} · Total bonus ${fmt(tot.bonusTotal, 0)}</div>
-        <div class="words" dir="rtl">${esc(amountInWords(fromCents(tot.totalC)))}</div>${d.notes ? `<div dir="auto">Notes: ${esc(d.notes)}</div>` : ''}</div>
-        <div class="sum">${tot.discC ? `<div><span>Invoice discount</span><span>−${money(tot.discC)}</span></div>` : ''}
-          <div><span>Net · الصافي قبل الضريبة</span><span>${money(tot.netC)}</span></div><div><span>VAT ${opt.vatRate}% · الضريبة</span><span>${money(tot.vatC)}</span></div>
-          <div class="g"><span>Total ₪ · المجموع</span><span>${money(tot.totalC)}</span></div></div></div>`
-    : `<div style="font-size:14pt;margin:16px 0"><b>Amount · المبلغ: ${money(tot.totalC)} ₪</b></div><div class="words" dir="rtl">${esc(amountInWords(fromCents(tot.totalC)))}</div>
-       ${d.method ? `<p>${PAY_METHODS[d.method] || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} · ${esc(d.chequeBank)} · due ${esc(d.dueDate)}` : ''}</p>` : ''}${d.notes ? `<p dir="auto">${esc(d.notes)}</p>` : ''}`}
-    <div class="sign"><span>Received by · المستلم</span><span>Signature · التوقيع</span></div>
-    <div class="meta"><span>Printed by ${esc(S.user)} · ${new Date().toLocaleString('en-GB')}</span><span>${esc(stamp)}</span></div>
+      <div class="tot"><div class="sum"><div><span>${L('Lines', 'عدد الأصناف')} ${tot.lines.length} · ${L('Total qty', 'مجموع الكمية')} ${fmt(tot.qtyTotal, 0)} · ${L('Total bonus', 'مجموع البونص')} ${fmt(tot.bonusTotal, 0)}</span><span></span></div>
+          ${tot.discC ? `<div><span>${L('Invoice discount', 'خصم على الفاتورة')}</span><span>−${money(tot.discC)}</span></div>` : ''}
+          <div><span>${L('Net before VAT', 'الصافي قبل الضريبة')}</span><span>${money(tot.netC)}</span></div><div><span>${L('VAT', 'الضريبة')} ${opt.vatRate}%</span><span>${money(tot.vatC)}</span></div></div>
+        <div class="g"><span>${L('Total (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`
+    : `${d.method ? `<table><tbody><tr><td>${L('Method', 'طريقة الدفع')}</td><td><b>${esc(T(PAY_METHODS[d.method] || ''))}</b></td></tr>${d.chequeNo ? `<tr><td>${L('Cheque', 'شيك')}</td><td><b><span dir="ltr">${esc(d.chequeNo)}</span> · <span dir="auto">${esc(d.chequeBank)}</span> · <span dir="ltr">${esc(d.dueDate)}</span></b></td></tr>` : ''}</tbody></table>` : ''}
+       <div class="tot"><div class="g"><span>${L('Amount (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`}
+    <div class="wbox"><div class="wl">${L('Amount in words', 'المبلغ كتابةً')}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(tot.totalC)))}</div>${d.notes ? `<div class="nt" dir="auto">${esc(d.notes)}</div>` : ''}</div>
+    <div class="sign"><span>${L('Signature', 'التوقيع')}</span><span>${L('Received by', 'المستلم')}</span></div>
+    <div class="meta"><span>${L('Printed by', 'طُبعت بواسطة')} <span dir="auto">${esc(S.user)}</span> · <span dir="ltr">${new Date().toLocaleString('en-GB')}</span> · ${esc(stamp)}</span><span dir="ltr">${String(idx + 1).padStart(2, '0')} / ${String(pages.length).padStart(2, '0')}</span></div>
   </div>`; };
   $('#printArea').innerHTML = pages.map(page).join('');
   document.body.classList.add('printing');

@@ -152,27 +152,41 @@ dialog::backdrop { background: rgba(32,33,36,.32); }
   body.printing #printArea { display: block; }
   .doc-print.page + .doc-print.page { break-before: page; }
 }
-.doc-print { font-size: 11.5pt; color: #000; position: relative; }
-.doc-print .ph { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
-.doc-print .co { font-size: 15pt; font-weight: 700; }
-.doc-print .title { text-align: end; }
-.doc-print .title .t1 { font-size: 15pt; font-weight: 700; }
-.doc-print .stamp { display: inline-block; border: 2px solid #000; padding: 2px 10px; font-weight: 800; letter-spacing: .1em; margin-top: 4px; }
-.doc-print .party { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; font-size: 10.5pt; }
+.doc-print { font-size: 11pt; color: #000; position: relative; }
+.doc-print .ph { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 3px; }
+.doc-print .co { font-size: 20pt; font-weight: 800; line-height: 1.2; }
+.doc-print .cosub { color: #555; font-size: 10pt; margin-top: 2px; }
+.doc-print .mono { border: 2px solid #000; padding: 3px; flex: none; }
+.doc-print .mono span { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid #000; font-weight: 800; font-size: 13pt; letter-spacing: .08em; }
+.doc-print .tb { background: #f1f1f1; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 12px 14px; margin: 0 0 12px; }
+.doc-print .tbh { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.doc-print .t1 { font-size: 19pt; font-weight: 800; line-height: 1.2; }
+.doc-print .tno { color: #333; font-size: 10.5pt; margin-top: 2px; } .doc-print .tno b { font-variant-numeric: tabular-nums; }
+.doc-print .stamp { border: 2px solid #000; padding: 2px 10px; font-weight: 800; letter-spacing: .06em; background: #fff; white-space: nowrap; font-size: 10pt; }
+.doc-print .pl { border-top: 1.5px solid #999; margin-top: 10px; padding-top: 8px; font-size: 11.5pt; }
+.doc-print .ps { color: #555; font-size: 9.5pt; margin-top: 3px; }
 .doc-print table { width: 100%; border-collapse: collapse; }
 .doc-print thead { display: table-header-group; }
-.doc-print th { border-top: 1px solid #000; border-bottom: 1px solid #000; font-size: 9.5pt; padding: 5px 4px; text-align: start; }
-.doc-print td { padding: 4px; border-bottom: 1px solid #ddd; font-size: 10.5pt; vertical-align: top; }
-.doc-print td.n, .doc-print th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-print th { background: #000; color: #fff; font-size: 10pt; font-weight: 700; padding: 7px 8px; text-align: start; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.doc-print td { padding: 8px; border-bottom: 1.5px solid #e4e4e4; font-size: 11pt; vertical-align: top; font-variant-numeric: tabular-nums; }
+.doc-print tbody tr:nth-child(even) td { background: #f1f1f1; }
+.doc-print .tb, .doc-print tbody tr:nth-child(even) td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.doc-print .c { text-align: center; }
+.doc-print td.n, .doc-print th.n { text-align: end; }
 .doc-print .batch { font-size: 8.5pt; color: #444; }
 .doc-print tr { page-break-inside: avoid; }
-.doc-print .foot { display: flex; justify-content: space-between; gap: 24px; margin-top: 12px; page-break-inside: avoid; }
-.doc-print .sum div { display: flex; justify-content: space-between; gap: 30px; padding: 2px 0; }
-.doc-print .sum .g { font-weight: 800; font-size: 13pt; border-top: 1px solid #000; padding-top: 4px; }
-.doc-print .words { color: #000; font-size: 10.5pt; }
-.doc-print .sign { margin-top: 26px; display: flex; justify-content: space-between; font-size: 10pt; }
-.doc-print .sign span { border-top: 1px solid #000; padding-top: 4px; min-width: 200px; display: inline-block; }
-.doc-print .meta { margin-top: 14px; font-size: 8.5pt; color: #444; display: flex; justify-content: space-between; }
+.doc-print .tot { border: 2px solid #000; margin-top: 14px; page-break-inside: avoid; }
+.doc-print .tot .sum { padding: 6px 14px 2px; font-size: 10pt; color: #333; }
+.doc-print .tot .sum div { display: flex; justify-content: space-between; gap: 30px; padding: 1px 0; font-variant-numeric: tabular-nums; }
+.doc-print .tot .g { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; font-weight: 800; font-size: 15pt; font-variant-numeric: tabular-nums; }
+.doc-print .tot .sum + .g { border-top: 1px solid #000; }
+.doc-print .wbox { border: 1.5px solid #999; padding: 8px 14px; margin-top: 10px; page-break-inside: avoid; }
+.doc-print .wl { color: #555; font-weight: 700; font-size: 9.5pt; }
+.doc-print .words { color: #000; font-size: 11.5pt; text-align: start; }
+.doc-print .nt { margin-top: 6px; font-size: 10pt; border-top: 1px dashed #bbb; padding-top: 5px; }
+.doc-print .sign { margin-top: 34px; display: flex; gap: 60px; font-size: 10.5pt; font-weight: 700; }
+.doc-print .sign span::after { content: ""; display: inline-block; width: 150px; border-bottom: 1.5px solid #000; margin-inline-start: 12px; vertical-align: -3px; }
+.doc-print .meta { margin-top: 18px; padding-top: 8px; border-top: 1.5px solid #000; font-size: 8.5pt; color: #555; display: flex; justify-content: space-between; }
 .doc-print .wm { position: absolute; top: 30%; inset-inline-start: 8%; font-size: 110pt; font-weight: 800; color: rgba(0,0,0,.09); transform: rotate(-30deg); pointer-events: none; }
 
 @media (max-width: 860px) {
