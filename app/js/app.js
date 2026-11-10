@@ -234,7 +234,7 @@ routes.doc = async (id) => {
 const STATUS_TABS = [
   ['draft', 'Saved', 'saved', (d) => d.status === 'draft'],
   ['posted', 'Posted', 'check', (d) => d.status === 'posted'],
-  ['voided', 'Voided', 'ban', (d) => d.status === 'voided'],
+  ['voided', 'Voided', 'ban', (d) => d.status === 'voided' || d.status === 'cancelled'],   // voided posted documents and cancelled drafts
   ['all', 'All', 'layers', () => true],
 ];
 routes.docs = async () => {
@@ -1115,7 +1115,7 @@ function itemForm(it, locked = false) {
     ${it.id ? `<label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.items.filter((x) => x.id !== it.id && x.active !== false).map((x) => `<option value="${x.id}" ${it.replacedBy === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></label>` : ''}
     <p class="muted" style="grid-column:1/-1;margin:0">${locked ? 'This item has movements: its name takes spelling fixes only. For a different name, set Active to No (it stays in every account and report) and add a new item.' : 'No movements yet, so the name can still be corrected freely.'}</p>
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
-  document.body.appendChild(dlg); dlg.showModal();
+  document.body.appendChild(dlg); translate(dlg); dlg.showModal();
   if (!it.id) $('[name=code]', dlg).value = nextNumericCode(S.items.map((i) => i.code));
   dlg.addEventListener('close', () => guard(async () => {
     if (dlg.returnValue !== 'save') return dlg.remove();
@@ -1173,7 +1173,7 @@ function partyForm(p, locked = false) {
       <label class="f">Replaced by (if inactive)<select name="replacedBy"><option value="">—</option>${S.parties.filter((x) => x.kind === p.kind && x.id !== p.id && x.active !== false).map((x) => `<option value="${x.id}" ${p.replacedBy === x.id ? 'selected' : ''}>${esc(partyLabel(x))}</option>`).join('')}</select></label>
       <p class="muted" style="grid-column:1/-1;margin:0">${locked ? `This ${p.kind} has movements: its name takes spelling fixes only. For a different name, set Active to No (it stays in every account and report) and add a new ${p.kind}.` : 'No movements yet, so the name can still be corrected freely.'}</p>` : ''}
     <div class="actions" style="grid-column:1/-1"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel">Cancel</button></div></form>`;
-  document.body.appendChild(dlg); dlg.showModal();
+  document.body.appendChild(dlg); translate(dlg); dlg.showModal();
   if (!p.id) $('[name=code]', dlg).value = nextNumericCode(S.parties.filter((x) => x.kind === p.kind).map((x) => x.code));
   dlg.addEventListener('close', () => guard(async () => {
     if (dlg.returnValue !== 'save') return dlg.remove();

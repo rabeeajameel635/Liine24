@@ -101,6 +101,9 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.screenshot({ path: `${OUT}/${lang}-7c-with-saved.png` });
     await p.locator('.chain a').first().tap(); await p.waitForTimeout(600);
     console.log(lang, 'chain statement → receipt, party filled:', await p.inputValue('#party'));
+    await p.goto(U + '?s=3#/items'); await p.waitForTimeout(500);
+    if (await p.locator('#add').count()) { await p.tap('#add'); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${lang}-11-item-form.png` });
+      console.log(lang, 'definition card is centered, 1 cm in:', JSON.stringify(await p.evaluate(() => { const r = document.querySelector('dialog[open]').getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(innerWidth - r.right) }; }))); }
     console.log(lang, 'errors:', errors.length ? errors : 'none');
     await ctx.close();
   }

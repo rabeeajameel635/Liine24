@@ -886,3 +886,42 @@ table.st tr.sdet td div { padding: 1px 0; }
   dialog.stsheet table.st td.sb { grid-area: sb; text-align: end; font-size: 15px; }
   dialog.stsheet table.st td.sr { display: none; }
 }
+/* ======================================================================
+   One definition / choice screen for everything (Rabee, Nov 2026):
+   a card in the middle of the screen, 1 cm in from each side, over the
+   document. Statement request, customer, supplier, item, region, lists,
+   inquiry cards and yes/no questions all use it.
+   ====================================================================== */
+dialog, dialog.lookup, dialog.ask, dialog.card-dlg {
+  position: fixed; inset: 0; margin: auto; height: fit-content;
+  width: min(640px, calc(100vw - 2cm)); max-width: calc(100vw - 2cm); max-height: calc(100dvh - 2cm);
+  overflow-y: auto; border: none; border-radius: 24px; padding: 22px 20px 18px;
+  background: #fff; color: var(--cl-ink, #1F1E1C);
+  box-shadow: 0 18px 60px rgba(31,30,28,.24); animation: cardin .18s ease-out;
+}
+dialog.lookup { width: min(860px, calc(100vw - 2cm)); }
+dialog.ask { width: min(380px, calc(100vw - 2cm)); }
+dialog::backdrop { background: rgba(31,30,28,.32); }
+dialog.lookup::before { display: none !important; content: none; }
+@keyframes cardin { from { transform: scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+dialog .lk-q { background: var(--cl-cream, #FAF9F5); border: 1px solid var(--cl-line, #E2DFD6); }
+dialog .lk-q:focus { border-color: var(--cl-ink, #1F1E1C); outline: none; }
+dialog.lookup .lk-list { background: var(--cl-grey, #EEEDE7); border-radius: 16px; padding: 4px 6px; }
+dialog.lookup .lk-list tbody td { background: #fff; }
+dialog.lookup tr.sel td { background: #FBEDE7 !important; color: var(--cl-ink, #1F1E1C); }
+dialog .actions .btn.ink, dialog .btn.primary { background: var(--cl-orange, #C96442); color: #fff; }
+@media (max-width: 860px) {
+  dialog, dialog.lookup, dialog.ask, dialog.card-dlg { inset: 0; top: 0; bottom: 0; margin: auto; width: calc(100vw - 2cm); max-width: calc(100vw - 2cm); height: fit-content; max-height: calc(100dvh - 2cm); border-radius: 22px; padding: 18px 14px 14px; animation: cardin .18s ease-out; }
+  dialog.lookup .lk-list { max-height: calc(100dvh - 2cm - 190px); background: transparent; padding: 0; }
+  dialog.lookup .lk-list tbody td { background: transparent; }
+  dialog.lookup tbody tr { padding: 9px 4px; }
+  dialog .lk-q { min-height: 46px; font-size: 16px; }
+  dialog h2 { font-size: 1.15em; }
+  .stopts .sog { grid-template-columns: 1fr; gap: 8px; }
+  .stopts .sog .f:not(.wide) { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; }
+  .stopts .sog input, .stopts .sog select { min-height: 42px; }
+  .stopts .seg2 button { min-height: 36px; }
+  .stopts .sobtn { margin-top: 14px; }
+  .stopts .sobtn .btn { min-height: 44px; }
+  .dlg-x { top: 12px; inset-inline-end: 12px; width: 32px; height: 32px; }
+}
