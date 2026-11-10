@@ -138,6 +138,11 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.goto(U + '?s=3#/items'); await p.waitForTimeout(500);
     if (await p.locator('#add').count()) { await p.tap('#add'); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${lang}-11-item-form.png` });
       console.log(lang, 'definition card is centered, 1 cm in:', JSON.stringify(await p.evaluate(() => { const r = document.querySelector('dialog[open]').getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(innerWidth - r.right) }; }))); }
+    await p.goto(U + '?s=4#/items'); await p.waitForTimeout(500); await p.locator('#tb tr').first().tap(); await p.waitForTimeout(500);
+    console.log(lang, 'definitions open the same item card:', await p.locator('dialog.card-dlg').count(), '| price button:', (await p.locator('dialog.card-dlg [data-v=quick]').textContent().catch(() => 'none')).trim());
+    await p.screenshot({ path: `${OUT}/${lang}-19-item-card-definitions.png` });
+    await p.goto(U + '?s=6#/customers'); await p.waitForTimeout(500); await p.locator('#tb tr[data-id]').first().tap(); await p.waitForTimeout(500);
+    console.log(lang, 'definitions open the same customer card:', await p.locator('dialog.card-dlg').count(), '|', (await p.textContent('dialog.card-dlg h2')).trim());
     console.log(lang, 'errors:', errors.length ? errors : 'none');
     await ctx.close();
   }

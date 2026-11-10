@@ -727,11 +727,11 @@ async function lookupItem(filter = '', type = 'SI', partyId = null) {
 // fields: [label, html] or [label, html, { k, v, type, options }] — the third part makes it editable.
 // Editable: names (spelling only once there are movements), contact details and list prices.
 // Never editable here: codes, balances, stock, posted numbers.
-function recordCard({ title, fields, sections = [], onSave = null, change = true, quick = null }) {
+function recordCard({ title, fields, sections = [], onSave = null, change = true, quick = null, note = '', edit = false }) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'lookup card-dlg';
-    let editing = false, only = null;   // only: the keys a quick edit shows (e.g. the sale price)
+    let editing = !!(edit && onSave), only = null;   // only: the keys a quick edit shows (e.g. the sale price)
     fields = fields.map(([k, v, ed]) => [k, v, ed || undefined]);
     const body = () => fields.filter(([, v, ed]) => (editing ? ed && (!only || only.includes(ed.k)) : v !== '' && v != null)).map(([k, v, ed]) => {
       if (!editing || !ed) return `<div><span>${esc(k)}</span><b dir="auto">${v}</b></div>`;
@@ -743,6 +743,7 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
     const draw = () => {
       dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0" dir="auto">${esc(title)}</h2>
         <div class="kv">${body()}</div>
+        ${editing && note && !only ? `<p class="muted" style="margin:10px 2px 0">${esc(note)}</p>` : ''}
         ${editing ? '' : sections.map(([h, html]) => `<h3>${esc(h)}</h3>${html}`).join('')}
         <div class="actions" style="margin-bottom:0">${editing
           ? '<button class="btn ink" data-v="save">Save</button><button class="btn" data-v="view">Cancel</button>'
@@ -776,6 +777,11 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
 }
 const saveFromCard = async (store, rec, vals) => {
   if (vals.name !== undefined && !vals.name) throw new Error('Name is required');
+  if (vals.active !== undefined) vals.active = vals.active !== 'false' && vals.active !== false;
+  if (store === 'parties' && vals.active === false && rec.active !== false) {
+    const bal = await partyBalanceC(rec.id);
+    if (bal !== 0 && !confirm(`${rec.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) throw new Error('Not changed');
+  }
   await db.saveMaster(store, { ...rec, ...vals }, S.user);
   await reload(); onMasters?.();
 };
@@ -794,7 +800,7 @@ async function partyCard(p, opts = {}) {
     fields: [
       ['Code', esc(p.code)], ['Account', `<span dir="ltr">${esc(acctCode(p.kind === 'supplier' ? '2100' : '1200'))} / ${esc(p.code)}</span>`], ['Name', esc(p.name), { k: 'name', v: p.name }],
       ['Region', esc(regionLabel(p.region)), p.kind === 'customer' ? { k: 'region', v: p.region || '', type: 'select', options: [['', '—'], ...regionsList().map((r) => [r.key, `${r.code} · ${T(r.name)}`])] } : null],
-      ['Type', esc(T(CUSTOMER_TYPES[p.type] || ''))],
+      ['Type', esc(T(CUSTOMER_TYPES[p.type] || '')), p.kind === 'customer' ? { k: 'type', v: p.type || '', type: 'select', options: Object.entries(CUSTOMER_TYPES).map(([k, v]) => [k, T(v)]) } : null],
       ['Phone', esc(p.phone || ''), { k: 'phone', v: p.phone }], ['Address', esc(p.address || ''), { k: 'address', v: p.address }],
       ['Tax / licensed dealer no.', esc(p.taxNo || ''), { k: 'taxNo', v: p.taxNo }], ['Guarantor', esc(p.guarantor || ''), p.kind === 'customer' ? { k: 'guarantor', v: p.guarantor } : null],
       ['Balance', `<span dir="ltr">${money(bal)}</span>`],
@@ -802,8 +808,12 @@ async function partyCard(p, opts = {}) {
       ['Last invoice', li ? `${esc(li.number)} · ${esc(li.date)} · ${money(li.totalC)}` : ''],
       ['Last payment', lr ? `${esc(lr.number)} · ${esc(lr.date)} · ${money(lr.totalC)}` : ''],
       ['Status', p.active === false ? esc(T('inactive')) : ''],
+      ['Active', '', { k: 'active', v: String(p.active !== false), type: 'select', options: [['true', T('Yes')], ['false', T('No')]] }],
+      ['Replaced by (if inactive)', p.replacedBy ? esc(partyLabel(partyById(p.replacedBy) || {})) : '', { k: 'replacedBy', v: p.replacedBy || '', type: 'select', options: [['', '—'], ...S.parties.filter((x) => x.kind === p.kind && x.id !== p.id && x.active !== false).map((x) => [x.id, partyLabel(x)])] }],
     ],
-    onSave: (vals) => saveFromCard('parties', p, vals), change: opts.change !== false,
+    note: (await db.hasMovements('parties', p.id)) ? `This ${p.kind} has movements: its name takes spelling fixes only. For a different name, set Active to No (it stays in every account and report) and add a new ${p.kind}.` : 'No movements yet, so the name can still be corrected freely.',
+    edit: !!opts.edit,
+    onSave: !isAdmin() ? null : (vals) => saveFromCard('parties', p, vals), change: opts.change !== false,
   });
 }
 
@@ -833,11 +843,16 @@ async function itemCard(it, partyId, type, opts = {}) {
       ['On hand', `<b>${fmt(onHand, 0)}</b>`],
       ['Last price to this customer', lastSaleHere ? `${pricef(lineOf(lastSaleHere).price, R(lastSaleHere))} · ${esc(lastSaleHere.date)}` : ''],
       ['Last purchase price', lastBuy ? `${pricef(lineOf(lastBuy).price, R(lastBuy))} · ${esc(lastBuy.date)}` : ''],
+      ['Status', it.active === false ? esc(T('inactive')) : ''],
+      ['Active', '', { k: 'active', v: String(it.active !== false), type: 'select', options: [['true', T('Yes')], ['false', T('No')]] }],
+      ['Replaced by (if inactive)', it.replacedBy ? esc(itemById(it.replacedBy)?.name || '') : '', { k: 'replacedBy', v: it.replacedBy || '', type: 'select', options: [['', '—'], ...S.items.filter((x) => x.id !== it.id && x.active !== false).map((x) => [x.id, `${x.code} — ${x.name}`])] }],
     ],
+    note: moves.length ? 'This item has movements: its name takes spelling fixes only. For a different name, set Active to No (it stays in every account and report) and add a new item.' : 'No movements yet, so the name can still be corrected freely.',
+    edit: !!opts.edit,
     sections: [['Batches in stock', miniTable(['Batch', 'Expiry', 'Qty'], lotRows)],
       ...(partyId ? [[`${partyById(partyId)?.kind === 'supplier' ? 'This supplier' : 'This customer'}: earlier prices`, miniTable(['Date', 'Number', 'Qty', 'Bonus', 'Price'], mine)]] : []),
       ['Last sales', miniTable(['Number', 'Customer', 'Qty', 'Bonus', 'Price'], recent)]],
-    onSave: (vals) => saveFromCard('items', it, vals), change: opts.change !== false,
+    onSave: !isAdmin() ? null : (vals) => saveFromCard('items', it, vals), change: opts.change !== false,
     quick: ['PI', 'PR', 'OS'].includes(type) ? { label: 'Edit buy price', keys: ['buyPrice'] } : { label: 'Edit sale price', keys: ['pricePharmacist', 'pricePublic'] },
   });
 }
@@ -1242,8 +1257,9 @@ routes.items = async () => {
       <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
   $('#add') && ($('#add').onclick = () => itemForm({}));
-  const openItem = (id) => (isAdmin() ? guard(async () => itemForm(itemById(id), await db.hasMovements('items', id))) : itemCard(itemById(id), null, 'SI', { change: false }));
-  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.edit); }));
+  // the same item card as in the invoice: one card per item, everywhere
+  const openItem = (id, edit = false) => guard(async () => { if ((await itemCard(itemById(id), null, 'SI', { change: false, edit })) === 'saved') render(); });
+  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.edit, true); }));
   $$('#tb tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openItem(tr.dataset.id); });
   $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openItem(vis[0].dataset.id); };
   $('#q').focus();
@@ -1296,8 +1312,9 @@ async function partiesPage(kind) {
   const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
   $('#add') && ($('#add').onclick = () => partyForm({ kind }));
-  const openParty = (id) => (isAdmin() ? guard(async () => partyForm(partyById(id), await db.hasMovements('parties', id))) : partyCard(partyById(id), { change: false }));
-  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openParty(b.dataset.edit); }));
+  // the same customer / supplier card as in the invoice
+  const openParty = (id, edit = false) => guard(async () => { if ((await partyCard(partyById(id), { change: false, edit })) === 'saved') render(); });
+  $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openParty(b.dataset.edit, true); }));
   $$('#tb tr a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
   $$('#tb tr[data-id]').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openParty(tr.dataset.id); });
   $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr[data-id]').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openParty(vis[0].dataset.id); };
