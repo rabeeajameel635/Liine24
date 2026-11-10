@@ -104,7 +104,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.goto(URL + '#/new/SI'); await page.waitForSelector('#party'); await page.waitForTimeout(200);
   let asked = 0; const countDialogs = (d) => { asked++; }; page.on('dialog', countDialogs);
   await page.keyboard.type('C-0100'); await key('Enter'); await key('F4'); await page.waitForTimeout(700);
-  console.log('  F4 saved:', (await page.textContent('.docbar .pill')).trim(), '| browser questions asked:', asked);
+  console.log('  F4 saved:', (await page.textContent('.whead .pill')).trim(), '| browser questions asked:', asked);
   page.off('dialog', countDialogs);
   await key('Escape'); await page.waitForTimeout(500);
   console.log('  Esc on unchanged saved draft →', await page.evaluate(() => location.hash));
@@ -147,7 +147,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   await page.locator('#lines tbody tr [data-k=code]').first().fill('1001'); await page.locator('#lines tbody tr [data-k=code]').first().dispatchEvent('input');
   await page.locator('#lines tbody tr [data-k=qty]').first().fill('3');
   await page.focus('#ref'); await page.keyboard.type('#'); await page.waitForTimeout(1200);
-  console.log('  # saved:', (await page.textContent('.docbar .pill')).trim());
+  console.log('  # saved:', (await page.textContent('.whead .pill')).trim());
   await page.focus('#ref'); await page.keyboard.type('€'); await page.waitForTimeout(1500);
   console.log('  € posted:', (await page.textContent('h1')).replace(/\s+/g, ' '));
 
@@ -256,7 +256,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  statuses shown:', await page.locator('#dl .pill').allTextContents());
   await page.locator('#dl .drow', { hasText: 'SI-26-000002' }).click(); await page.waitForSelector('#dup');
   await page.click('#dup'); await page.waitForTimeout(600);
-  console.log('  duplicate opens draft with lines:', await page.locator('#lines tbody tr').count(), '| bar:', (await page.textContent('#barParty')), (await page.textContent('#barTotal')));
+  console.log('  duplicate opens draft with lines:', await page.locator('#lines tbody tr').count(), '| bar:', (await page.inputValue('#party')), (await page.textContent('#gTotal')));
   await page.goto(URL + '#/dashboard'); await page.waitForTimeout(200);
 
   step('Arabic, right to left');

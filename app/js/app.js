@@ -226,66 +226,41 @@ function editor(doc) {
   const partyKind = t.party === 'supplier' ? 'supplier' : 'customer';
   const parties = S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && (p.active !== false || !t.lines));
   const itemsList = S.items.filter((i) => i.active !== false);
-  $('#main').innerHTML = `
-    <div class="docbar"><button class="iconbtn monly" id="eBack" tabindex="-1" title="Exit">${ic('chev')}</button>
-      <div><div class="dtitle"><span>${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
-      <div class="dparty" id="barParty" dir="auto">—</div><div class="dbal" id="barBal"></div></div>
-      <div class="dtotal"><span class="muted">Total ₪</span><b id="barTotal">0.00</b></div>
-      <button class="btn small" id="toNotes" tabindex="-1" title="Notes">${ic('journal')}<span>Notes</span></button></div>
-    <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
+  const phone = window.matchMedia('(max-width: 860px)').matches;
+  // One sheet laid out like the printed page:
+  //   top: party ——— region · date ——— (ref, salesman)
+  //   middle: the grey work grid, filled in its own rows
+  //   bottom: notes + approved balance | totals
+  //   last line: icon buttons in four groups (save · post · export · cancel)
+  $('#main').innerHTML = `<div class="ws">
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
-    <div class="row">
-      ${t.party !== 'none' ? `<label class="f grow">${partyKind === 'supplier' ? 'Supplier' : 'Customer'}<div class="namewrap"><input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}"><button type="button" class="lkbtn" data-lk="party" tabindex="-1" title="Lookup (F2)">⌕</button></div></label>` : ''}
-      <label class="f">Date<input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
-      <label class="f"><span>Reference no.</span> <span class="opt">(optional)</span><input id="ref" data-flow value="${esc(doc.reference || '')}"></label>
-      ${doc.type === 'SI' ? `<label class="f">Salesman<input id="salesman" data-flow value="${esc(doc.salesman || '')}"></label>` : ''}
-    </div>
-    <div id="partyInfo" class="muted" style="margin:12px 0 0"></div>
-    ${t.lines ? linesUI(doc) : voucherUI(doc)}
-    <label class="f" style="margin-top:20px">Notes<textarea id="notes" dir="auto" rows="3" style="min-height:96px">${esc(doc.notes || '')}</textarea></label>
-    <div class="dock">
-    ${t.lines ? `<div class="composer" id="composer">
-      <div class="cname" id="cName" hidden><b dir="auto"></b><button type="button" class="cx" id="cClear" tabindex="-1">×</button></div>
-      <div class="cmain">
-        <input id="cItem" dir="auto" placeholder="Code or item name" enterkeyhint="next" autocomplete="off">
-        <span class="cnums" id="cNums" hidden><label>Price<input id="cPrice" inputmode="decimal" enterkeyhint="next"></label><label>Qty<input id="cQty" inputmode="decimal" enterkeyhint="next"></label><label>B.<input id="cBonus" inputmode="decimal" enterkeyhint="done"></label></span>
-      </div>
-      <div class="crow">
-        <button type="button" class="cbtn" id="cLook" tabindex="-1" title="Lookup (F2)">${ic('search')}</button>
-        <span class="coh muted" id="cOh"></span>
-        <button type="button" class="cbtn send" id="cAdd" tabindex="-1" title="Add line">${ic('up')}</button>
-      </div></div>` : '<div class="composer" id="composer"></div>'}
-    <div class="finish" id="finish" tabindex="0">
-      <span class="grow hint"><kbd>F2</kbd> <kbd>@</kbd> <span>Lookup</span> · <kbd>F4</kbd> <kbd>#</kbd> <span>Save</span> · <kbd>F9</kbd> <kbd>€</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
-      <span class="symkeys"><kbd>@</kbd> <span>Lookup</span> · <kbd>#</kbd> <span>Save</span> · <kbd>€</kbd> <span>Print &amp; post</span></span>
-      <button class="btn" id="save">Save draft <kbd>F4</kbd></button>
-      <button class="btn ink" id="postprint">Print &amp; post <kbd>F9</kbd></button>
-      <button class="btn" id="post">Post</button>
-      <button class="btn" id="printdraft">Print draft</button>
-      ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
+    <header class="whead">
+      <div class="wl0"><button class="wback" id="eBack" tabindex="-1" title="Exit" aria-label="Exit">${ic('chev')}</button><span class="wtype">${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
+      ${t.party !== 'none' ? `<div class="wl"><label class="lf grow"><span>${partyKind === 'supplier' ? 'Supplier' : 'Customer'}</span><input id="party" data-flow list="dlParties" dir="auto" placeholder="Code, name, or Enter / F2 for the list" value="${esc(partyLabel(partyById(doc.partyId)))}" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="party" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></label>
+        <label class="lf reg"><span>Region</span><output id="pRegion" dir="auto">—</output></label></div>` : ''}
+      <div class="wl"><label class="lf date"><span>Date</span><input id="date" data-flow type="date" value="${esc(doc.date)}"></label>
+        <label class="lf"><span>Ref.</span><input id="ref" data-flow value="${esc(doc.reference || '')}" enterkeyhint="next"></label>
+        ${doc.type === 'SI' ? `<label class="lf"><span>Salesman</span><input id="salesman" data-flow value="${esc(doc.salesman || '')}" enterkeyhint="next"></label>` : ''}</div>
+    </header>
+    <section class="wbody">${t.lines ? linesUI(doc) : voucherUI(doc)}</section>
+    <footer class="wfoot">
+      <div class="wcard wnote"><label class="wnl">Notes<textarea id="notes" dir="auto" rows="2">${esc(doc.notes || '')}</textarea></label>
+        ${t.party !== 'none' ? `<div class="wbal"><span class="wlbl">Approved balance</span><b id="balAfter">—</b><div class="wsub" id="balBefore"></div></div>` : ''}</div>
+      <div class="wcard wsum" id="totals">
+        ${t.lines ? `<div class="sr"><span>Items total</span><b id="tSub">0.00</b></div>
+        <div class="sr"><span>Invoice discount</span><input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" placeholder="0.00"></div>
+        <div class="sr"><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : ''}
+        <div class="sr grand"><span>${t.lines ? 'Grand total' : 'Amount'}</span><b id="gTotal">0.00</b></div>
+        <div class="wwords" id="tWords"></div></div>
+    </footer>
+    <div class="finish wbar" id="finish" tabindex="0">
+      <div class="g"><button class="rb" id="save" title="Save draft (F4)" aria-label="Save draft (F4)">${ic('disk')}</button><button class="rb" id="printdraft" title="Save & print draft" aria-label="Save & print draft">${ic('printer')}</button></div>
+      <div class="g"><button class="rb" id="post" title="Post" aria-label="Post">${ic('lock')}</button><button class="rb main" id="postprint" title="Post & print (F9)" aria-label="Post & print (F9)">${ic('printer')}</button></div>
+      <div class="g"><button class="rb" id="export" title="Export to Excel" aria-label="Export to Excel">${ic('in')}</button></div>
+      <div class="g"><button class="rb" id="cancelDoc" title="Cancel document" aria-label="Cancel document">${ic('x')}</button></div>
     </div></div>`;
   document.body.classList.add('editing');
-  const phone = window.matchMedia('(max-width: 860px)').matches;
-  const firstEntry = () => $('#lines tbody tr:not(.found) [data-k=code]') || $('#amount');
-  const openSheet = () => document.body.classList.add('sheet-open');
-  const closeSheet = () => document.body.classList.remove('sheet-open');
-  if (phone) {
-    const sh = document.createElement('div'); sh.className = 'psheet'; sh.id = 'psheet';
-    sh.append($('#main > .row'), $('#partyInfo'));
-    if (t.lines) sh.append($('#invdisc').closest('.row')); else $('#composer').append($('#amount').closest('.row'), $('#amtWords'));
-    sh.append($('#notes').closest('label'));
-    sh.insertAdjacentHTML('beforeend', '<button type="button" class="grab" id="grab" tabindex="-1" aria-label="Close"></button>');
-    const bk = document.createElement('div'); bk.className = 'pback'; bk.onclick = closeSheet;
-    $('#main').append(bk, sh);
-    $('#grab', sh).onclick = closeSheet;
-    // pull the top bar down to open, push the sheet up to close
-    const drag = (el, fn) => { let y0 = null; el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true }); el.addEventListener('touchmove', (e) => { if (y0 !== null) { const dy = e.touches[0].clientY - y0; if (Math.abs(dy) > 28) { fn(dy); y0 = null; } } }, { passive: true }); };
-    drag($('.docbar'), (dy) => dy > 0 && openSheet());
-    drag(sh, (dy) => dy < 0 && sh.scrollTop <= 0 && closeSheet());
-    $('.docbar > div:nth-of-type(1)').onclick = openSheet;
-    document.documentElement.style.setProperty('--bar', $('.docbar').offsetHeight + 'px');
-  }
 
   // exact code or label wins; a name search picks only when exactly one record matches
   const findParty = (v, report = false) => {
@@ -370,7 +345,27 @@ function editor(doc) {
   guardEditor = { isDirty, leave };
   const back = () => { if (isDirty()) leave().then((ok) => ok && backToPlace()); else backToPlace(); };
   $('#postprint').onclick = printAndPost;
-  $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); });
+  $('#printdraft').onclick = () => guard(async () => { const r = await save(false); await printDoc(r); go('#/doc/' + r.id); });
+  // cancel: a saved draft becomes "cancelled" (kept in the records); a new one is simply dropped
+  $('#cancelDoc').onclick = () => guard(async () => {
+    if (doc.id) {
+      if (!confirm(T('Cancel this draft? It stays in the records as cancelled.'))) return;
+      await db.cancelDraft(doc.id, S.user); toast('Draft cancelled');
+    } else if (isDirty() && !confirm(T('Discard this new document?'))) return;
+    guardEditor = null; backToPlace();
+  });
+  // export: the document as it stands, to Excel
+  $('#export').onclick = () => guard(async () => {
+    const d = readDoc(); const p = partyById(d.partyId);
+    const head = [[T(t.name), d.number || T('Draft')], [T('Date'), d.date], ...(p ? [[T(partyKind === 'supplier' ? 'Supplier' : 'Customer'), `${p.code} — ${p.name}`]] : []), ...(d.reference ? [[T('Ref.'), d.reference]] : []), []];
+    if (t.lines) {
+      const tot = computeTotals(d.lines, { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: d.invoiceDiscount });
+      const body = tot.lines.map((l) => { const it = itemById(l.itemId) || {}; return [it.code, it.name, l.qty || 0, l.bonus || 0, Number(l.price) || 0, l.disc || 0, l.amountC / 100, l.batch, l.expiry]; });
+      toExcel(`${d.number || doc.type + '-draft'}.xlsx`, [...head, ['Code', 'Item', 'Qty', 'Bonus', 'Price', 'Disc %', 'Amount', 'Batch', 'Expiry'].map(T), ...body, [],
+        [T('Subtotal'), tot.subtotalC / 100], [T('Invoice discount'), tot.discC / 100], [T(`VAT ${S.settings.vatRate}%`), tot.vatC / 100], [T('Grand total'), tot.totalC / 100]]);
+    } else toExcel(`${d.number || doc.type + '-draft'}.xlsx`, [...head, [T('Amount'), d.amount || 0], [T('Method'), T(PAY_METHODS[d.method] || '')], ...(d.chequeNo ? [['Cheque', d.chequeNo, d.chequeBank, d.dueDate]] : []), ...(d.notes ? [[T('Notes'), d.notes]] : [])]);
+    toast('Exported');
+  });
 
   // Enter walks the form: header fields, then lines, then the finish bar.
   const finish = $('#finish');
@@ -397,6 +392,7 @@ function editor(doc) {
     if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); printAndPost(); }
   };
 
+  const firstEntry = () => (t.lines ? ($('#lines tbody tr:not(.found) [data-k=code]') || $('#lines tbody tr [data-k=code]')) : $('#amount'));
   const header = $$('[data-flow]');
   header.forEach((el, i) => el.addEventListener('keydown', async (e) => {
     if (e.key === 'F2' && el.id === 'party') {
@@ -416,40 +412,41 @@ function editor(doc) {
       el.value = partyLabel(p); el.dispatchEvent(new Event('change'));
     }
     const next = header[i + 1];
-    if (next) next.focus();
-    else if (t.lines) ($('#cItem').offsetParent ? $('#cItem') : $('#lines tbody tr [data-k=code]')).focus();
-    else $('#amount').focus();
+    (next || firstEntry()).focus();
   }));
 
-  let balBase = null;
+  // approved balance: the party's balance before this document, and after it, live with every line
+  let balBase = null; let totalC = 0;
   const BAL_SIGN = { SI: 1, DN: 1, PI: 1, SR: -1, CN: -1, PR: -1, RV: -1, PV: -1 };
   const showBal = () => {
-    const el = $('#barBal'); if (!el) return;
-    if (balBase === null) { el.textContent = ''; return; }
-    const tot = Number($('#barTotal').dataset.c || 0), sg = BAL_SIGN[doc.type];
-    el.innerHTML = `<span>Balance</span> <b>${money(balBase)}</b>${sg && tot ? ` · <span>After</span> <b>${money(balBase + sg * tot)}</b>` : ''}`;
-    translate(el);
+    const a = $('#balAfter'); if (!a) return;
+    if (balBase === null) { a.textContent = '—'; $('#balBefore').textContent = ''; return; }
+    const sg = BAL_SIGN[doc.type] || 0;
+    a.textContent = money(balBase + sg * totalC);
+    const p = findParty($('#party').value);
+    $('#balBefore').innerHTML = `<span>Before</span> ${money(balBase)}${p?.creditLimit ? ` · <span>Remaining</span> ${money(toCents(p.creditLimit) - balBase - sg * totalC)}` : ''}`;
+    translate($('#balBefore'));
   };
-  $('#barTotal').addEventListener('total', showBal);
+  const setTotal = (c) => {
+    totalC = c; $('#gTotal').textContent = money(c);
+    $('#tWords').textContent = c > 0 ? amountInWords(fromCents(c)) : '';
+    showBal();
+  };
   if ($('#party')) {
     const info = async () => {
       const p = findParty($('#party').value);
-      $('#barParty').textContent = p ? partyLabel(p) : '—';
+      $('#pRegion').textContent = p?.region ? T(REGIONS[p.region]) : '—';
       balBase = null; showBal();
-      if (!p) { $('#partyInfo').textContent = ''; return; }
-      const bal = await partyBalanceC(p.id);
-      balBase = bal; showBal();
-      if (phone && document.activeElement === $('#party')) { closeSheet(); firstEntry()?.focus(); }
-      $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · <span>${esc(T(REGIONS[p.region]))}</span>` : ''}`;
-      translate($('#partyInfo'));
+      if (!p) return;
+      balBase = await partyBalanceC(p.id); showBal();
     };
     $('#party').addEventListener('change', info); info();
   }
-  if (t.lines) wireLines(doc, arm, parties);
+  if (t.lines) wireLines(doc, arm, parties, setTotal);
   else {
     const m = () => { const c = $('#method').value === 'cheque'; $$('.cheque').forEach((x) => (x.style.display = c ? '' : 'none')); if (c && $('#cashAccount').value === '1100') $('#cashAccount').value = '1120'; };
     $('#method').onchange = m; m();
-    const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; $('#barTotal').textContent = fmt(a || 0); $('#barTotal').dataset.c = toCents(a || 0); $('#barTotal').dispatchEvent(new Event('total')); };
+    const w = () => setTotal(toCents(num($('#amount').value) || 0));
     $('#amount').oninput = w; w();
     const vf = ['#amount', '#method', '#cashAccount', '#chequeNo', '#chequeBank', '#dueDate'].map((q) => $(q)).filter((x) => x && x.type !== 'hidden');
     vf.forEach((el) => el.addEventListener('keydown', (e) => {
@@ -468,20 +465,19 @@ function editor(doc) {
     if (!k || !e.inputType?.startsWith('insert') || e.target.tagName !== 'INPUT' || e.target.closest('dialog')) return;
     e.preventDefault();
     const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
-    if (k === 'F2' && (e.target.id === 'party' || e.target.id === 'cItem' || e.target.dataset.k === 'code' || e.target.dataset.k === 'name')) e.target.dispatchEvent(ev);
+    if (k === 'F2' && (e.target.id === 'party' || e.target.dataset.k === 'code' || e.target.dataset.k === 'name')) e.target.dispatchEvent(ev);
     else pageKeys && pageKeys(ev);
   };
-  // touch: the ⌕ buttons do what F2 does
+  // touch: the search buttons do what F2 does
   $('#main').onclick = (e) => {
     const b = e.target.closest('.lkbtn'); if (!b) return;
     const el = b.dataset.lk === 'party' ? $('#party') : $('[data-k=name]', b.closest('tr'));
     el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
   };
-  $('#toNotes').onclick = () => { if (phone) return document.body.classList.toggle('sheet-open'); $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   $('#eBack').onclick = back;
   setTimeout(() => {
     if (!phone) return ($('#party') || $('#date')).focus();
-    if ($('#party') && !findParty($('#party').value)) { openSheet(); $('#party').focus(); }
+    if ($('#party') && !findParty($('#party').value)) $('#party').focus();
     else if (!doc.id) firstEntry()?.focus();
   }, 50);
 }
@@ -632,29 +628,24 @@ function linesUI(doc) {
     const it = itemById(l.itemId);
     return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
       <td class="ln"></td>
-      <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
-      <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">⌕</button></div>
+      <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" enterkeyhint="next" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
+      <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></div>
         <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"><span class="oh"></span></div></td>
-      <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
-      <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:92px"></td>
-      <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:84px"></td>
-      <td class="num" data-label="Disc %"><input data-k="disc" inputmode="decimal" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
+      <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" enterkeyhint="next" value="${esc(l.price)}" style="width:104px"></td>
+      <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" enterkeyhint="next" value="${esc(l.qty)}" style="width:92px"></td>
+      <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" enterkeyhint="next" value="${esc(l.bonus)}" style="width:84px"></td>
+      <td class="num" data-label="Disc %"><input data-k="disc" inputmode="decimal" enterkeyhint="next" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
       <td class="n amt"></td>
       <td><button class="btn small" data-del tabindex="-1" title="Remove line from draft">×</button></td></tr>`;
   };
-  return `<div class="tablewrap" style="margin-top:24px"><table class="t lines" id="lines"><thead><tr>
+  return `<div class="tablewrap"><table class="t lines" id="lines"><thead><tr>
     <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th><th></th></tr></thead>
     <tbody>${(doc.lines.length ? doc.lines : [blankLine()]).map(row).join('')}</tbody></table></div>
-    <p class="hint" style="margin:12px 4px">Type the item code, or leave it empty and type the first letters of the name. <kbd>Enter</kbd> moves: code → name → price → qty → bonus → discount → next line. <kbd>Enter</kbd> on an empty line finishes. <kbd>F2</kbd> opens the item list.</p>
-    <div class="row" style="margin-top:8px;align-items:flex-start">
-      <div><button class="btn small" id="addline" tabindex="-1">+ Line</button>
-      <label class="f" style="margin-top:16px">Invoice discount (₪)<input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" style="width:180px"></label></div>
-      <div class="totals card" id="totals"></div>
-    </div>
+    <div class="gfoot"><span id="gStats"></span><span class="gact"><button class="btn small" id="addline" tabindex="-1">+ Line</button><button class="btn small" id="smart" tabindex="-1">${ic('spark')}<span>Smart entry (AI / paste)</span></button></span></div>
     <template id="rowTpl">${row(blankLine())}</template>`;
 }
 
-function wireLines(doc, arm, parties = []) {
+function wireLines(doc, arm, parties = [], setTotal = () => {}) {
   const tbody = $('#lines tbody');
   const ORDER = ['code', 'name', 'price', 'qty', 'bonus', 'disc'];
   const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.ln', tr).textContent = i + 1));
@@ -662,17 +653,12 @@ function wireLines(doc, arm, parties = []) {
     const lines = $$('tr', tbody).map((tr) => ({ qty: num($('[data-k=qty]', tr).value) || 0, bonus: num($('[data-k=bonus]', tr).value) || 0, price: num($('[data-k=price]', tr).value) || 0, disc: num($('[data-k=disc]', tr).value) || 0 }));
     const tot = computeTotals(lines, { vatRate: S.settings.vatRate, pricesIncludeVat: S.settings.pricesIncludeVat, invoiceDiscount: num($('#invdisc').value) || 0 });
     $$('tr', tbody).forEach((tr, i) => { $('.amt', tr).textContent = tot.lines[i].amountC ? money(tot.lines[i].amountC) : ''; });
-    $('#totals').innerHTML = `
-      <div><span>Lines</span><span>${$$('tr', tbody).filter((tr) => tr.dataset.item).length}</span></div>
-      <div><span>Total qty / bonus</span><span>${fmt(tot.qtyTotal, 0)} / ${fmt(tot.bonusTotal, 0)}</span></div>
-      <div><span>Subtotal</span><span>${money(tot.subtotalC)}</span></div>
-      ${tot.discC ? `<div><span>Invoice discount</span><span>−${money(tot.discC)}</span></div>` : ''}
-      <div><span>Net before VAT</span><span>${money(tot.netC)}</span></div>
-      <div><span>VAT ${S.settings.vatRate}%</span><span>${money(tot.vatC)}</span></div>
-      <div class="grand"><span>Total ₪</span><span>${money(tot.totalC)}</span></div>
-      <div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div>`;
-    translate($('#totals'));
-    $('#barTotal').textContent = money(tot.totalC); $('#barTotal').dataset.c = tot.totalC; $('#barTotal').dispatchEvent(new Event('total'));
+    $('#tSub').textContent = money(tot.subtotalC);
+    $('#tVat').textContent = money(tot.vatC);
+    const n = $$('tr', tbody).filter((tr) => tr.dataset.item).length;
+    $('#gStats').innerHTML = n ? `${n} <span>${n === 1 ? 'item' : 'items'}</span> · <span>Qty</span> ${fmt(tot.qtyTotal, 0)} · <span>Bonus</span> ${fmt(tot.bonusTotal, 0)}${tot.discC ? ` · <span>Invoice discount</span> −${money(tot.discC)}` : ''}` : '';
+    translate($('#gStats'));
+    setTotal(tot.totalC);
     showOh();
   };
   // stock on hand beside the expiry: on screen only, never printed
@@ -752,60 +738,20 @@ function wireLines(doc, arm, parties = []) {
   });
   $('#addline').onclick = () => { const tr = addRow(); $('[data-k=code]', tr).focus(); };
 
-  // Phone composer: one capsule above the keyboard that feeds the next line.
-  // Enter: item → price → qty → bonus → line added, back to item.
-  // Phone: the lines grid fills the screen under the top bar and you fill the line itself, like Bisan's grid.
-  // The slim bar above the keyboard has lookup (F2), save | print & post, and next (Enter).
-  const phone = window.matchMedia('(max-width: 860px)').matches;
-  if (phone) {
+  // Phone: you fill the line itself, like Bisan's grid; there is always one empty line to write on.
+  if (window.matchMedia('(max-width: 860px)').matches) {
     ORDER.pop();                                          // discount is not part of the Enter walk on phones
     if (!$$('tr', tbody).some((r) => isEmpty(r))) addRow();
-    let lastIn = null;
-    tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined && !$$('tr', tbody).some((r) => isEmpty(r))) addRow(); });   // always one empty line to write on
-    tbody.addEventListener('focusin', (e) => { if (e.target.dataset.k) { lastIn = e.target; e.target.closest('tr').scrollIntoView({ block: 'nearest' }); } });
-    const cur = () => (lastIn && tbody.contains(lastIn) ? lastIn : $('[data-k=code]', $$('tr', tbody).find((r) => isEmpty(r)) || addRow()));
-    const key = (k) => { const el = cur(); const t = k === 'F2' && !['code', 'name'].includes(el.dataset.k) ? $('[data-k=code]', el.closest('tr')) : el; t.focus(); t.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); };
-    setTimeout(() => { $('#cLook').onclick = () => key('F2'); $('#cAdd').onclick = () => key('Enter'); });
+    tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined && !$$('tr', tbody).some((r) => isEmpty(r))) addRow(); });
+    tbody.addEventListener('focusin', (e) => { if (e.target.dataset.k) e.target.closest('tr').scrollIntoView({ block: 'nearest' }); });
   }
-  const C = { item: $('#cItem'), price: $('#cPrice'), qty: $('#cQty'), bonus: $('#cBonus'), name: $('#cName'), nums: $('#cNums') };
-  let cPicked = null;
-  const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; $('#cOh').textContent = ''; };
-  const cPick = (it) => {
-    cPicked = it; $('b', C.name).textContent = `${it.code} — ${it.name}`; C.name.hidden = false; C.nums.hidden = false; C.item.hidden = true;
-    C.price.value = defaultPrice(it, doc.type); C.qty.focus();
-    $('#cOh').innerHTML = oh ? `<span>On hand</span> <b>${fmt(oh[it.id]?.qty || 0, 0)}</b>` : ''; translate($('#cOh'));
-  };
-  const cResolve = async () => {
-    const v = C.item.value.trim();
-    const act = S.items.filter((i) => i.active !== false);
-    const it = v ? (act.find((i) => i.code.toLowerCase() === v.toLowerCase()) || byName(v)) : null;
-    const got = it || (await lookupItem(v, doc.type));
-    if (got) cPick(got); else C.item.focus();
-  };
-  const cAdd = () => {
-    if (!cPicked) return cResolve();
-    if (!(num(C.qty.value) > 0) && !(num(C.bonus.value) > 0)) { C.qty.focus(); return; }
-    const tr = $$('tr', tbody).find((r) => isEmpty(r)) || addRow();
-    setItem(tr, cPicked);
-    $('[data-k=price]', tr).value = C.price.value; $('[data-k=qty]', tr).value = C.qty.value; $('[data-k=bonus]', tr).value = C.bonus.value;
-    renumber(); recalc(); cReset(); C.item.focus();
-    tr.scrollIntoView({ block: 'nearest' });
-  };
-  C.item.addEventListener('keydown', (e) => {
-    if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); cResolve(); }
-    else if (e.key === 'Enter') { e.preventDefault(); if (C.item.value.trim()) cResolve(); else arm(); }
-  });
-  [[C.qty, () => C.bonus.focus()], [C.price, () => C.qty.focus()], [C.bonus, cAdd]].forEach(([el, next]) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); next(); } }));
-  $('#cLook').onclick = async () => { const it = await lookupItem(cPicked ? '' : C.item.value.trim(), doc.type); if (it) cPick(it); };
-  $('#cAdd').onclick = cAdd;
-  $('#cClear').onclick = () => { cReset(); C.item.focus(); };
   $('#invdisc').oninput = recalc;
   renumber(); recalc();
 }
 
 function voucherUI(doc) {
-  return `<div class="row" style="margin-top:18px">
-    <label class="f">Amount (₪)<input id="amount" inputmode="decimal" value="${esc(doc.amount)}" style="width:180px;font-size:1.2em"></label>
+  return `<div class="row vrow">
+    <label class="f vamt">Amount (₪)<input id="amount" inputmode="decimal" value="${esc(doc.amount)}"></label>
     ${['RV', 'PV'].includes(doc.type) ? `
     <label class="f">Method<select id="method">${Object.entries(PAY_METHODS).map(([k, v]) => `<option value="${k}" ${doc.method === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <label class="f">Into / from<select id="cashAccount">${CASH_ACCOUNTS.map((a) => `<option value="${a}" ${doc.cashAccount === a ? 'selected' : ''}>${ACCOUNTS[a].name}</option>`).join('')}</select></label>
@@ -813,7 +759,7 @@ function voucherUI(doc) {
     <label class="f cheque">Bank<input id="chequeBank" value="${esc(doc.chequeBank || '')}"></label>
     <label class="f cheque">Due date<input id="dueDate" type="date" value="${esc(doc.dueDate || '')}"></label>`
     : `<input id="method" type="hidden" value=""><input id="cashAccount" type="hidden" value=""><input id="chequeNo" type="hidden"><input id="chequeBank" type="hidden"><input id="dueDate" type="hidden">`}
-  </div><div class="words" style="text-align:left;direction:rtl" id="amtWords"></div>`;
+  </div>`;
 }
 
 function smartEntry(doc, readDoc) {
