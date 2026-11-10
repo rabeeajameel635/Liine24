@@ -30,7 +30,7 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.tap('#newDoc'); await p.waitForTimeout(500);
     console.log(lang, 'menu closed after tap:', !(await p.evaluate(() => document.body.classList.contains('menu-open'))));
     await p.tap('.lkbtn[data-lk=party]'); await p.waitForTimeout(400);
-    console.log(lang, 'party list rows:', await p.locator('dialog.lookup tbody tr').count());
+    console.log(lang, 'party list rows:', await p.locator('dialog.lookup tbody tr').count()); await p.screenshot({ path: `${OUT}/${lang}-2c-party-list.png` });
     await p.locator('dialog.lookup tbody tr').first().tap(); await p.waitForTimeout(400);
     console.log(lang, 'party:', await p.inputValue('#party'), '| region:', await p.textContent('#pRegion'));
     // fill the line itself: the search button in the empty row opens the item list
@@ -49,6 +49,19 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.evaluate(() => window.scrollTo(0, 9999)); await p.waitForTimeout(150); await p.screenshot({ path: `${OUT}/${lang}-3c-bottom.png` });
     console.log(lang, 'buttons:', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#finish .rb')].map((b) => [b.id, Math.round(b.getBoundingClientRect().left)]))));
     await p.fill('#invdisc', '');
+    { // capsule → item card → Edit sale price: saved on the item, the line follows; then put it back
+      const rL = p.locator('#lines tbody tr.found').last();
+      const setSale = async (v) => { await rL.locator('[data-cap]').tap(); await p.waitForTimeout(200); await p.tap('dialog.lmenu [data-v=card]'); await p.waitForTimeout(250);
+        await p.tap('dialog.card-dlg [data-v=quick]'); await p.waitForTimeout(150);
+        const shown = await p.locator('dialog.card-dlg [data-ek]').evaluateAll((els) => els.map((e) => e.dataset.ek).join(','));
+        const el = p.locator('dialog.card-dlg [data-ek=pricePharmacist]'); const was = await el.inputValue();
+        if (v === 'shot') await p.screenshot({ path: `${OUT}/${lang}-3d-sale-price.png` });
+        await el.fill(v === 'shot' ? '13' : v); await p.tap('dialog.card-dlg [data-v=save]'); await p.waitForTimeout(400); return { shown, was }; };
+      const before = await rL.locator('[data-k=price]').inputValue();
+      const { shown, was } = await setSale('shot');
+      console.log(lang, 'sale price from the card: fields', shown, '| line', before, '→', await rL.locator('[data-k=price]').inputValue());
+      await setSale(was); console.log(lang, 'sale price put back, line:', await rL.locator('[data-k=price]').inputValue());
+    }
     for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-cap]').tap(); await p.waitForTimeout(250); await p.screenshot({ path: `${OUT}/${lang}-3b-line-menu.png` }); await p.tap('dialog.lmenu [data-v=delete]'); await p.waitForTimeout(150); }
     const r1 = p.locator('#lines tbody tr.found').first();
     await r1.locator('[data-k=expiry]').fill('2026-12');

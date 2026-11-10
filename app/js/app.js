@@ -674,7 +674,7 @@ function lookup({ title, headers, rows, filter = '', onHold }) {
     const dlg = document.createElement('dialog');
     dlg.className = 'lookup';
     dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">${esc(title)}</h2>
-      <input class="lk-q" placeholder="Search by code or name" dir="auto" value="${esc(filter)}">
+      <input class="lk-q" placeholder="Type a code or a name…" dir="auto" autocomplete="off" enterkeyhint="search" value="${esc(filter)}">
       <div class="lk-list"><table class="t"><thead><tr><th>Code</th><th>Name</th>${headers.map((h) => `<th class="n">${esc(h)}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
       <p class="hint" style="margin:10px 0 0"><kbd>↑</kbd> <kbd>↓</kbd> <span>move</span> · <kbd>Enter</kbd> <span>pick</span> · <kbd>Esc</kbd> <span>close</span>${onHold ? ' · <span>hold a row: its card</span>' : ''}</p>`;
     document.body.appendChild(dlg);
@@ -701,7 +701,8 @@ function lookup({ title, headers, rows, filter = '', onHold }) {
     if (onHold) holdable(tb, 'tr[data-i]', async (tr) => { const r = shown[Number(tr.dataset.i)]; if (!r) return; await onHold(r.id); all = getRows(); draw(); });
     $('[data-x]', dlg).onclick = () => end(null);
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
-    dlg.showModal(); draw(); q.focus(); q.select();
+    dlg.showModal(); draw();
+    if (!window.matchMedia('(max-width: 860px)').matches || filter) { q.focus(); q.select(); } else dlg.focus();
   });
 }
 async function lookupParty(list, filter = '') {
@@ -726,13 +727,13 @@ async function lookupItem(filter = '', type = 'SI', partyId = null) {
 // fields: [label, html] or [label, html, { k, v, type, options }] — the third part makes it editable.
 // Editable: names (spelling only once there are movements), contact details and list prices.
 // Never editable here: codes, balances, stock, posted numbers.
-function recordCard({ title, fields, sections = [], onSave = null, change = true }) {
+function recordCard({ title, fields, sections = [], onSave = null, change = true, quick = null }) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'lookup card-dlg';
-    let editing = false;
+    let editing = false, only = null;   // only: the keys a quick edit shows (e.g. the sale price)
     fields = fields.map(([k, v, ed]) => [k, v, ed || undefined]);
-    const body = () => fields.filter(([, v, ed]) => (editing && ed) || (v !== '' && v != null)).map(([k, v, ed]) => {
+    const body = () => fields.filter(([, v, ed]) => (editing ? ed && (!only || only.includes(ed.k)) : v !== '' && v != null)).map(([k, v, ed]) => {
       if (!editing || !ed) return `<div><span>${esc(k)}</span><b dir="auto">${v}</b></div>`;
       const inp = ed.type === 'select'
         ? `<select data-ek="${ed.k}">${ed.options.map(([o, l]) => `<option value="${esc(o)}" ${String(ed.v ?? '') === String(o) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
@@ -745,16 +746,17 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
         ${editing ? '' : sections.map(([h, html]) => `<h3>${esc(h)}</h3>${html}`).join('')}
         <div class="actions" style="margin-bottom:0">${editing
           ? '<button class="btn ink" data-v="save">Save</button><button class="btn" data-v="view">Cancel</button>'
-          : `${onSave ? '<button class="btn tonal" data-v="edit">Edit</button>' : ''}${change ? '<button class="btn tonal" data-v="list">Change <kbd>F2</kbd></button>' : ''}<button class="btn" data-v="close">Close <kbd>Esc</kbd></button>`}</div>`;
+          : `${onSave && quick ? `<button class="btn ink" data-v="quick">${esc(quick.label)}</button>` : ''}${onSave ? '<button class="btn tonal" data-v="edit">Edit</button>' : ''}${change ? '<button class="btn tonal" data-v="list">Change <kbd>F2</kbd></button>' : ''}<button class="btn" data-v="close">Close <kbd>Esc</kbd></button>`}</div>`;
       translate(dlg);
       $('[data-x]', dlg).onclick = () => end(null);
       $$('[data-v]', dlg).forEach((b) => (b.onclick = () => act(b.dataset.v)));
-      setTimeout(() => (editing ? $('[data-ek]', dlg) : $('[data-v=close]', dlg))?.focus(), 20);
+      setTimeout(() => (editing ? (only && $(`[data-ek=${only[0]}]`, dlg)) || $('[data-ek]', dlg) : $('[data-v=close]', dlg))?.focus(), 20);
     };
     const end = (v) => { dlg.remove(); resolve(v); };
     const act = async (v) => {
-      if (v === 'edit') { editing = true; draw(); return; }
-      if (v === 'view') { editing = false; draw(); return; }
+      if (v === 'edit') { editing = true; only = null; draw(); return; }
+      if (v === 'quick') { editing = true; only = quick.keys; draw(); return; }
+      if (v === 'view') { editing = false; only = null; draw(); return; }
       if (v === 'save') {
         const vals = {};
         $$('[data-ek]', dlg).forEach((el) => { const ed = fields.find((f) => f[2]?.k === el.dataset.ek)[2]; vals[ed.k] = ed.type === 'number' ? (el.value.trim() === '' ? '' : num(el.value)) : el.value.trim(); });
@@ -836,6 +838,7 @@ async function itemCard(it, partyId, type, opts = {}) {
       ...(partyId ? [[`${partyById(partyId)?.kind === 'supplier' ? 'This supplier' : 'This customer'}: earlier prices`, miniTable(['Date', 'Number', 'Qty', 'Bonus', 'Price'], mine)]] : []),
       ['Last sales', miniTable(['Number', 'Customer', 'Qty', 'Bonus', 'Price'], recent)]],
     onSave: (vals) => saveFromCard('items', it, vals), change: opts.change !== false,
+    quick: ['PI', 'PR', 'OS'].includes(type) ? { label: 'Edit buy price', keys: ['buyPrice'] } : { label: 'Edit sale price', keys: ['pricePharmacist', 'pricePublic'] },
   });
 }
 
@@ -957,13 +960,24 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
     recalc();
   });
   tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'price' && docTotalsOpts(doc, S.settings).roundTotals && e.target.value.trim() !== '') { e.target.value = round1(num(e.target.value)); recalc(); } });
+  // the item card from a line: its price edit is saved on the item (approved, in the audit log);
+  // a line still on the old price follows the new one
+  const cardFor = async (tr) => {
+    const it = itemById(tr.dataset.item); const before = defaultPrice(it, doc.type);
+    if ((await itemCard(it, getPid(), doc.type, { change: false })) !== 'saved') return;
+    const pr = $('[data-k=price]', tr), now = defaultPrice(itemById(tr.dataset.item), doc.type);
+    if (num(pr.value) === num(before) && num(now) !== num(before)) {
+      pr.value = now; pr.dispatchEvent(new Event('input', { bubbles: true })); pr.dispatchEvent(new Event('change', { bubbles: true }));
+      toast(T('Line price updated') + ': ' + now);
+    }
+  };
   tbody.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-cap]'); if (!b) return;
     const tr = b.closest('tr'); if (isEmpty(tr)) return;
     const it = itemById(tr.dataset.item);
     const v = await lineMenu(it, $('.lno', tr).textContent);
     if (v === 'change') return pick(tr, '');
-    if (v === 'card') { await itemCard(it, getPid(), doc.type, { change: false }); return; }
+    if (v === 'card') return cardFor(tr);
     if (v !== 'delete') return;
     tr.remove(); if (!tbody.children.length) addRow(); renumber(); recalc();
     if (phoneGrid && !$$('tr', tbody).some((r) => isEmpty(r))) addRow();
@@ -1055,7 +1069,7 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
     if (k === 'code' || k === 'name') return pick(tr, '');
     if (!tr.dataset.item) return;
     if (k === 'price') return lastPrice(tr);
-    await itemCard(itemById(tr.dataset.item), getPid(), doc.type, { change: false });
+    await cardFor(tr);
   });
 
   // Phone: you fill the line itself, like Bisan's grid; there is always one empty line to write on.

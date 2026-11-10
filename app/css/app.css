@@ -1171,3 +1171,7 @@ dialog.lmenu .lmb .btn.danger { color: #B3261E; }
   .wbody #lines .subline input[data-k=batch] { width: 46px !important; }
 }
 #pRegion { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* lists: no search box, you just type (Bisan); the typed letters show as a quiet line under the title */
+dialog.lookup .lk-q, dialog .lk-q, dialog .lk-q:focus { border: none; border-bottom: 1px solid transparent; background: transparent; border-radius: 0; min-height: 30px; height: 30px; padding: 0 2px; margin: -6px 0 8px; font-size: 15px; font-weight: 600; color: var(--cl-ink); box-shadow: none; outline: none; }
+dialog .lk-q::placeholder { color: #B9B6AE; font-weight: 400; font-size: 13px; }
+dialog .lk-q:not(:placeholder-shown) { border-bottom-color: var(--cl-orange); }
