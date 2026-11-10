@@ -1,6 +1,6 @@
 // Local database (IndexedDB). Phase 1 storage; Phase 3 mirrors the same records to the cloud.
 // There is intentionally NO delete function in this module. Posted records are append-only.
-import { buildPosting, reverse, seriesKey, formatNumber, isBalanced, SCHEMA_VERSION, computeTotals } from './core.js';
+import { buildPosting, reverse, seriesKey, formatNumber, isBalanced, SCHEMA_VERSION, computeTotals, isSpellingFix } from './core.js';
 
 const DB_NAME = 'ledger-app';
 const STORES = {
@@ -80,7 +80,7 @@ export async function saveMaster(store, obj, user) {
     const used = store === 'items'
       ? await req(tx.objectStore('stock').index('itemId').count(before.id))
       : await req(tx.objectStore('ledger').index('partyId').count(before.id));
-    if (used) { tx.abort(); throw new Error(`${before.code} already has movements, so its name is locked. Deactivate it and add a new one with the correct name.`); }
+    if (used && !isSpellingFix(before.name, obj.name)) { tx.abort(); throw new Error(`${before.code} already has movements: only a spelling fix of its name is allowed. For a different name, deactivate it and add a new one.`); }
   }
   const rec = { ...before, ...obj, id: obj.id || uid(), updatedAt: now(), createdAt: before?.createdAt || now() };
   tx.objectStore(store).put(rec);

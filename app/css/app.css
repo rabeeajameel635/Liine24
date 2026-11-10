@@ -819,3 +819,30 @@ dialog.ask .btn.ink { background: var(--cl-orange); color: #fff; }
   .whead { gap: 6px; }
 }
 @media (max-width: 860px) { .ws { gap: 9px; } }
+/* ---------- inquiry layers: long press ring, close button, bottom sheets, price sheet ---------- */
+.ws input, .ws output, dialog.lookup tbody tr { -webkit-touch-callout: none; }
+.holdring { position: fixed; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 3px solid rgba(201,100,66,.25); border-top-color: var(--cl-orange); pointer-events: none; z-index: 9999; animation: holdspin .39s linear forwards; }
+@keyframes holdspin { from { transform: rotate(0) scale(.6); opacity: .4; } to { transform: rotate(300deg) scale(1); opacity: 1; } }
+dialog.lookup { position: fixed; }
+.dlg-x { position: absolute; top: 14px; inset-inline-end: 14px; width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--cl-btn, #EAE8E2); color: var(--cl-ink, #1F1E1C); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; z-index: 2; }
+.dlg-x .ic { width: 16px; height: 16px; }
+dialog.lookup h2 { padding-inline-end: 44px; }
+dialog.card-dlg .kv .ed { display: flex; flex-direction: column; gap: 4px; }
+dialog.card-dlg .kv .ed input, dialog.card-dlg .kv .ed select { min-height: 40px; border-radius: 12px; font-weight: 600; }
+dialog.card-dlg .btn.ink { background: var(--cl-orange, #C96442); color: #fff; }
+.pricedlg .lp { display: flex; flex-direction: column; gap: 2px; background: var(--cl-cream, #FAF9F5); border: 1px solid var(--cl-line, #E2DFD6); border-radius: 16px; padding: 12px 14px; margin: 0 0 12px; }
+.pricedlg .lp span { color: var(--cl-muted, #75736C); font-size: .88em; }
+.pricedlg .lp b { font-size: 2em; font-weight: 800; letter-spacing: -.01em; }
+.pricedlg .lp small { color: var(--cl-muted, #75736C); }
+.pricedlg .lp.none { color: var(--cl-muted, #75736C); }
+.pricedlg .lpo { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.pricedlg .lpo .btn b { margin-inline-start: 6px; }
+@media (max-width: 860px) {
+  dialog.lookup, dialog.ask { inset: auto 0 0 0; top: auto; width: 100vw; max-width: 100vw; height: auto; max-height: 88dvh; margin: 0; border-radius: 26px 26px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; animation: sheetup .26s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -10px 40px rgba(31,30,28,.22); }
+  dialog.lookup::before { content: ""; display: block; width: 40px; height: 5px; border-radius: 3px; background: #DAD7CF; margin: -6px auto 10px; }
+  dialog.lookup .lk-list { max-height: 56dvh; }
+  dialog.lookup + dialog.lookup, dialog.card-dlg { max-height: 82dvh; }
+  .dlg-x { top: 12px; }
+}
+@keyframes sheetup { from { transform: translateY(40%); opacity: .4; } to { transform: none; opacity: 1; } }
+dialog.lookup h2 { padding-inline: 46px; }

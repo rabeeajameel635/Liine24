@@ -69,6 +69,18 @@ export function docTotalsOpts(doc, settings = {}) {
   return { vatRate: src.vatRate ?? 16, pricesIncludeVat: src.pricesIncludeVat ?? true, invoiceDiscount: doc.invoiceDiscount || 0, roundTotals };
 }
 
+// A name with movements may only get a spelling fix (Rabee, Nov 2026): a few letters, not a new name.
+export function isSpellingFix(a, b) {
+  const n = (x) => String(x || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  a = n(a); b = n(b); if (a === b) return true; if (!a || !b) return false;
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+  }
+  return d[b.length] <= Math.max(2, Math.floor(Math.max(a.length, b.length) * 0.2));
+}
+
 export function computeTotals(lines, { vatRate = 16, pricesIncludeVat = true, invoiceDiscount = 0, roundTotals = false } = {}) {
   const out = lines.map((l) => {
     const qty = Number(l.qty) || 0;

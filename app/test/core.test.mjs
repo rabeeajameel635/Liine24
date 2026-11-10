@@ -146,3 +146,12 @@ test('rounding rule: one decimal per line, total to the shekel, half goes down',
   assert.equal(docTotalsOpts({ type: 'OS', lines: [] }, { roundTotals: true }).roundTotals, false);
   assert.equal(docTotalsOpts({ type: 'RV' }, { roundTotals: true }).roundTotals, false);
 });
+
+test('names with movements take spelling fixes only', async () => {
+  const { isSpellingFix } = await import('../js/core.js');
+  assert.ok(isSpellingFix('PARACETAMOL 500MG 20T', 'PARACETAMOL 500 MG 20T'));
+  assert.ok(isSpellingFix('صيدلية الرحمه', 'صيدلية الرحمة'));
+  assert.ok(isSpellingFix('OMEPRAZOL 20MG', 'OMEPRAZOLE 20MG'));
+  assert.ok(!isSpellingFix('PARACETAMOL 500MG 20T', 'IBUPROFEN 400MG 20T'));
+  assert.ok(!isSpellingFix('صيدلية الشفاء', 'صيدلية النور'));
+});
