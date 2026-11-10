@@ -999,3 +999,20 @@ table.st tfoot td { font-size: 1.02em; }
 .lhprev .doc-print .ph { margin: 0; }
 .wbody #lines .subline .oh.short { opacity: 1; color: #B3261E; }
 .wbody #lines .subline .oh.short b { color: #B3261E; }
+table.acct input { min-height: 38px; border-radius: 10px; font-weight: 600; }
+table.acct td:first-child input { width: 96px; font-variant-numeric: tabular-nums; }
+@media (max-width: 860px) {
+  table.acct thead { display: none; }
+  table.acct tr { display: grid; grid-template-columns: 80px minmax(0, 1fr); grid-template-areas: "c n" "t u" "b b"; gap: 4px 8px; padding: 10px 6px; }
+  table.acct td { padding: 0 !important; background: transparent !important; }
+  table.acct td:nth-child(1) { grid-area: c; } table.acct td:nth-child(2) { grid-area: n; } table.acct td:nth-child(3) { grid-area: t; font-size: 12px; color: var(--muted); }
+  table.acct td:nth-child(4) { grid-area: u; font-size: 12px; } table.acct td:nth-child(5) { grid-area: b; text-align: start; font-size: 13px; }
+  table.acct td:first-child input { width: 76px; }
+}
+@media (max-width: 860px) {
+  table.acct, table.acct tbody { display: block; width: 100%; }
+  .tablewrap:has(table.acct) { overflow: hidden; padding: 4px 10px; }
+  table.acct tr { border-bottom: 1px solid var(--line); }
+  table.acct td:nth-child(2) input { width: 100%; min-width: 0; }
+  table.acct input { background: var(--surface); border: 1px solid transparent; padding: 0 10px; }
+}

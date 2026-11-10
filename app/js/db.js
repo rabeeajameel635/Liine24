@@ -57,7 +57,7 @@ export async function getSettings() {
 export async function setSetting(key, value, user) {
   const tx = db.transaction(['settings', 'audit'], 'readwrite');
   tx.objectStore('settings').put({ key, value });
-  tx.objectStore('audit').add({ at: now(), user, action: 'setting', ref: key, detail: key === 'adminPin' ? '***' : value });
+  tx.objectStore('audit').add({ at: now(), user, action: 'setting', ref: key, detail: key === 'adminPin' ? '***' : typeof value === 'object' ? JSON.stringify(value) : value });
   return done(tx);
 }
 

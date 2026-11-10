@@ -255,6 +255,16 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
     try { await db.saveMaster('items', { ...it, name: 'X' }, 'test'); return false; } catch (e) { return e.message; } });
   console.log('  used item rename refused:', !!refused);
 
+  step('accounts setup: own codes and names, unique, postings untouched');
+  await page.goto(URL + '#/accounts'); await page.waitForSelector('table.acct');
+  console.log('  codes shown:', (await page.locator('table.acct .ac').evaluateAll((els) => els.map((e) => e.value))).slice(0, 9).join(' '));
+  const tbBefore = await page.evaluate(async () => { const db = await import('./js/db.js'); return (await db.all('ledger')).length; });
+  await page.locator('tr[data-k="1110"] .ac').fill('100'); await page.click('#saveAc'); await page.waitForTimeout(400);
+  console.log('  duplicate code refused:', (await page.textContent('#toast')).slice(0, 40));
+  await page.locator('tr[data-k="1110"] .ac').fill('101'); await page.locator('tr[data-k="1100"] .an').fill('الصندوق الرئيسي'); await page.click('#saveAc'); await page.waitForTimeout(500);
+  await page.goto(URL + '#/tb'); await page.waitForTimeout(400);
+  console.log('  trial balance shows own codes:', (await page.locator('#main tbody td:first-child').allTextContents()).join(' '), '| ledger rows unchanged:', tbBefore === await page.evaluate(async () => { const db = await import('./js/db.js'); return (await db.all('ledger')).length; }));
+
   step('deactivate a pharmacy with a balance');
   await page.goto(URL + '#/customers'); await page.waitForSelector('[data-edit]');
   await page.locator('#tb tr', { hasText: 'C-0100' }).locator('[data-edit]').click(); await page.waitForSelector('dialog [name=active]');

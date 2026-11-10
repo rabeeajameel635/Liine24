@@ -184,3 +184,13 @@ test('a sale never stops at zero: stock goes below zero until the purchase arriv
   const buy = buildPosting({ type: 'PI', partyId: 's', lines: [{ itemId: 'a', qty: 10, price: 11.6 }] }, { items, settings });
   assert.equal(stockOnHand([...os.moves, ...sale.moves, ...buy.moves]).a.qty, 7);
 });
+
+test('account codes: Rabee\'s chart as default, codes digits-only and unique', async () => {
+  const { DEFAULT_ACCOUNT_CODES, checkAccountCodes } = await import('../js/core.js');
+  assert.equal(DEFAULT_ACCOUNT_CODES['1100'], '100'); assert.equal(DEFAULT_ACCOUNT_CODES['1110'], '101');
+  assert.equal(DEFAULT_ACCOUNT_CODES['5200'], '102'); assert.equal(DEFAULT_ACCOUNT_CODES['4100'], '103'); assert.equal(DEFAULT_ACCOUNT_CODES['1400'], '104');
+  assert.equal(DEFAULT_ACCOUNT_CODES['2100'], '1300'); assert.equal(DEFAULT_ACCOUNT_CODES['1200'], '2300'); assert.equal(DEFAULT_ACCOUNT_CODES['1250'], '3300');
+  assert.deepEqual(checkAccountCodes(DEFAULT_ACCOUNT_CODES), []);
+  assert.equal(checkAccountCodes({ ...DEFAULT_ACCOUNT_CODES, '1110': '100' }).length, 1);
+  assert.equal(checkAccountCodes({ ...DEFAULT_ACCOUNT_CODES, '1110': 'B1' }).length, 1);
+});

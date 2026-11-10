@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
-  computeTotals, docTotalsOpts, round1, draftEntries, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
+  computeTotals, docTotalsOpts, round1, draftEntries, DEFAULT_ACCOUNT_CODES, checkAccountCodes, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
@@ -13,6 +13,9 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (c) => fmt(fromCents(c || 0));
+// the account as people know it: their own code and name (Accounts setup), over the fixed internal key
+const acctCode = (k) => String((S.settings.accountCodes || {})[k] || DEFAULT_ACCOUNT_CODES[k] || k);
+const acctName = (k) => (S.settings.accountNames || {})[k] || T(ACCOUNTS[k]?.name || k);
 // invoice amounts under the rounding rule show one decimal (31,600.0), others keep agorot
 const amt = (c, r) => (r ? fmt(fromCents(c || 0), 1) : money(c));
 const pricef = (v, r) => fmt(Number(v) || 0, r ? 1 : 3);
@@ -221,10 +224,24 @@ routes.system = async () => sectionPage('sys');
 routes.accounts = async () => {
   const tb = trialBalance(await ledger());
   const bal = Object.fromEntries(tb.rows.map((r) => [r.account, r.balDebitC - r.balCreditC]));
-  $('#main').innerHTML = `<h1>Chart of accounts</h1><p class="sub">Fixed chart in this version. Balances come from posted entries only.</p>
-    <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Type</th><th class="n">Balance</th></tr></thead><tbody>
-    ${Object.entries(ACCOUNTS).map(([k, a]) => `<tr><td><b>${k}</b></td><td>${a.name}</td><td>${a.type}</td><td class="n">${money(bal[k] || 0)}</td></tr>`).join('')}</tbody></table></div>`;
+  const USED = { '1100': 'Receipt and payment vouchers (cash)', '1110': 'Receipt and payment vouchers (bank)', '1120': 'Cheques received', '1200': 'Customers: sales, returns, receipts, notes',
+    '2100': 'Suppliers: purchases, returns, payments', '1300': 'Stock value', '2200': 'VAT on invoices', '3100': 'Opening balances', '4100': 'Sales invoices', '4110': 'Sales returns',
+    '4120': 'Credit notes', '4200': 'Debit notes', '5100': 'Cost of what was sold', '5200': 'Journal vouchers (soon)', '1400': 'Journal vouchers (soon)', '1250': 'Journal vouchers (soon)' };
+  const order = Object.keys(ACCOUNTS).sort((a, b) => Number(acctCode(a)) - Number(acctCode(b)));
+  const ro = isAdmin() ? '' : 'readonly';
+  $('#main').innerHTML = `<h1>Accounts setup</h1><p class="sub">Your own code and name for each account. Postings keep their fixed link, so changing a code or a name never changes a number.</p>
+    <div class="tablewrap"><table class="t acct"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Used by</th><th class="n">Balance</th></tr></thead><tbody>
+    ${order.map((k) => `<tr data-k="${k}"><td><input class="ac" inputmode="numeric" dir="ltr" value="${esc(acctCode(k))}" ${ro}></td><td><input class="an" dir="auto" value="${esc(acctName(k))}" ${ro}></td><td>${esc(T(ACCOUNTS[k].type))}</td><td class="muted">${esc(T(USED[k] || ''))}</td><td class="n">${money(bal[k] || 0)}</td></tr>`).join('')}</tbody></table></div>
+    ${isAdmin() ? '<div class="actions"><button class="btn primary" id="saveAc">Save accounts</button></div>' : '<p class="muted">Switch to admin to change codes and names.</p>'}`;
+  $('#saveAc') && ($('#saveAc').onclick = () => guard(async () => {
+    const codes = {}, names = {};
+    $$('tr[data-k]').forEach((tr) => { const k = tr.dataset.k; codes[k] = $('.ac', tr).value.trim(); const n = $('.an', tr).value.trim(); if (n && n !== T(ACCOUNTS[k].name)) names[k] = n; });
+    const errs = checkAccountCodes(codes); if (errs.length) throw new Error(errs.join('\n'));
+    await db.setSetting('accountCodes', codes, S.user); await db.setSetting('accountNames', names, S.user);
+    await reload(); toast('Saved'); render();
+  }));
 };
+
 
 // documents as soft list rows (same on phone and desktop)
 function docTable(docs) {
@@ -979,7 +996,7 @@ function voucherUI(doc) {
     <label class="f vamt">Amount (₪)<input id="amount" inputmode="decimal" value="${esc(doc.amount)}"></label>
     ${['RV', 'PV'].includes(doc.type) ? `
     <label class="f">Method<select id="method">${Object.entries(PAY_METHODS).map(([k, v]) => `<option value="${k}" ${doc.method === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <label class="f">Into / from<select id="cashAccount">${CASH_ACCOUNTS.map((a) => `<option value="${a}" ${doc.cashAccount === a ? 'selected' : ''}>${ACCOUNTS[a].name}</option>`).join('')}</select></label>
+    <label class="f">Into / from<select id="cashAccount">${CASH_ACCOUNTS.map((a) => `<option value="${a}" ${doc.cashAccount === a ? 'selected' : ''}>${esc(acctCode(a))} · ${esc(acctName(a))}</option>`).join('')}</select></label>
     <label class="f cheque">Cheque no.<input id="chequeNo" value="${esc(doc.chequeNo || '')}"></label>
     <label class="f cheque">Bank<input id="chequeBank" value="${esc(doc.chequeBank || '')}"></label>
     <label class="f cheque">Due date<input id="dueDate" type="date" value="${esc(doc.dueDate || '')}"></label>`
@@ -1047,7 +1064,7 @@ async function viewDoc(d) {
         <div class="grand"><span>Total ₪</span><span>${amt(tot.totalC, R)}</span></div><div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div></div></div>`
     : `<div class="card" style="margin-top:16px"><div class="kpi"><div class="label">Amount</div><div class="value">${money(d.totalC)} ₪</div></div>
         <p class="words">${esc(amountInWords(fromCents(d.totalC)))}</p>
-        ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${ACCOUNTS[d.cashAccount]?.name || ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
+        ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${d.cashAccount ? `${esc(acctCode(d.cashAccount))} ${esc(acctName(d.cashAccount))}` : ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
     ${d.notes ? `<p dir="auto">${esc(d.notes)}</p>` : ''}
     <div class="actions">
       <button class="btn ink" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'} <kbd>F9</kbd></button>
@@ -1376,7 +1393,7 @@ routes.tb = async () => {
   const tb = trialBalance(await ledger());
   $('#main').innerHTML = `<h1>Trial balance</h1><p class="sub">Built only from posted entries. ${tb.balanced ? '<span class="pill ok">Balanced</span>' : '<span class="pill bad">Not balanced</span>'}</p>
     <div class="tablewrap"><table class="t"><thead><tr><th>Account</th><th>Name</th><th class="n">Total debit</th><th class="n">Total credit</th><th class="n">Debit balance</th><th class="n">Credit balance</th></tr></thead><tbody>
-    ${tb.rows.map((r) => `<tr><td>${r.account}</td><td>${esc(r.name)}</td><td class="n">${money(r.debitC)}</td><td class="n">${money(r.creditC)}</td><td class="n">${r.balDebitC ? money(r.balDebitC) : ''}</td><td class="n">${r.balCreditC ? money(r.balCreditC) : ''}</td></tr>`).join('')}
+    ${[...tb.rows].sort((x, y) => Number(acctCode(x.account)) - Number(acctCode(y.account))).map((r) => `<tr><td dir="ltr">${esc(acctCode(r.account))}</td><td>${esc(acctName(r.account))}</td><td class="n">${money(r.debitC)}</td><td class="n">${money(r.creditC)}</td><td class="n">${r.balDebitC ? money(r.balDebitC) : ''}</td><td class="n">${r.balCreditC ? money(r.balCreditC) : ''}</td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${money(tb.totalDebitC)}</td><td class="n">${money(tb.totalCreditC)}</td></tr></tfoot></table></div>
     <div class="actions"><button class="btn" id="pr">Print / PDF</button></div>`;
   $('#pr').onclick = () => printHtml(`<h2>Trial balance · ميزان المراجعة</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);

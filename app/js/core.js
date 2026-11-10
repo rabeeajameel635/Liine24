@@ -20,7 +20,27 @@ export const ACCOUNTS = {
   '4120': { name: 'Sales discounts (credit notes)', type: 'income' },
   '4200': { name: 'Other income (debit notes)', type: 'income' },
   '5100': { name: 'Cost of goods sold', type: 'expense' },
+  '1250': { name: 'Employee advances', type: 'asset' },
+  '1400': { name: 'Company assets', type: 'asset' },
+  '5200': { name: 'Expenses and salaries', type: 'expense' },
 };
+// The keys above are the fixed internal link every posting uses; they never change.
+// What people see is their own account code (Rabee's chart, Nov 2026), editable in Accounts setup.
+export const DEFAULT_ACCOUNT_CODES = {
+  '1100': '100', '1110': '101', '5200': '102', '4100': '103', '1400': '104',
+  '2100': '1300', '1200': '2300', '1250': '3300',
+  '1120': '105', '1300': '106', '2200': '2400', '3100': '3100', '4110': '4110', '4120': '4120', '4200': '4200', '5100': '5100',
+};
+// codes must be filled in, digits only, and unique
+export function checkAccountCodes(codes) {
+  const errors = []; const seen = {};
+  for (const k of Object.keys(ACCOUNTS)) {
+    const c = String(codes[k] ?? '').trim();
+    if (!/^\d{1,8}$/.test(c)) { errors.push(`${ACCOUNTS[k].name}: code must be digits`); continue; }
+    if (seen[c]) errors.push(`${c} is used twice (${seen[c]} and ${ACCOUNTS[k].name})`); else seen[c] = ACCOUNTS[k].name;
+  }
+  return errors;
+}
 
 export const CASH_ACCOUNTS = ['1100', '1110', '1120'];
 
