@@ -49,7 +49,7 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.evaluate(() => window.scrollTo(0, 9999)); await p.waitForTimeout(150); await p.screenshot({ path: `${OUT}/${lang}-3c-bottom.png` });
     console.log(lang, 'buttons:', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#finish .rb')].map((b) => [b.id, Math.round(b.getBoundingClientRect().left)]))));
     await p.fill('#invdisc', '');
-    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-del]').tap(); await p.waitForTimeout(200); await p.tap('dialog.ask [data-v=yes]'); await p.waitForTimeout(150); }
+    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-cap]').tap(); await p.waitForTimeout(250); await p.screenshot({ path: `${OUT}/${lang}-3b-line-menu.png` }); await p.tap('dialog.lmenu [data-v=delete]'); await p.waitForTimeout(150); }
     const r1 = p.locator('#lines tbody tr.found').first();
     await r1.locator('[data-k=expiry]').fill('2026-12');
     console.log(lang, 'lines:', await p.locator('#lines tbody tr.found').count(), '| first:', await r1.locator('[data-k=code]').inputValue(), await r1.locator('[data-k=name]').inputValue(), '| total:', await p.textContent('#gTotal'));
@@ -82,7 +82,7 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.screenshot({ path: `${OUT}/${lang}-8-last-price.png` });
     await p.tap('dialog.pricedlg .actions [data-p]'); await p.waitForTimeout(300);
     console.log(lang, 'approved price:', await fr.locator('[data-k=price]').inputValue());
-    await hold(fr.locator('[data-k=code]'));
+    await hold(fr.locator('[data-k=name]'));
     console.log(lang, 'hold code → list rows:', await p.locator('dialog.lookup tbody tr').count());
     await hold(p.locator('dialog.lookup tbody tr').nth(1)); await p.waitForTimeout(300);
     console.log(lang, 'hold row → card over the list:', await p.locator('dialog[open]').count(), '|', (await p.textContent('dialog.card-dlg h2')).trim());

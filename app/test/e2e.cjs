@@ -69,7 +69,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  name filled by code:', await page.inputValue('#lines tbody tr:nth-child(1) [data-k=name]'));
   await key('Enter'); console.log('  code → ', await focused(), '(price prefilled:', await page.inputValue('#lines tbody tr:nth-child(1) [data-k=price]') + ')');
   await key('Enter'); await page.keyboard.type('100'); await key('Enter'); await page.keyboard.type('50'); await key('Enter'); await key('Enter');
-  console.log('  line 2 on:', await focused(), '| line numbers:', await page.locator('#lines td.ln').allTextContents());
+  console.log('  line 2 on:', await focused(), '| line numbers:', await page.locator('#lines .lno').allTextContents());
   await key('Enter'); console.log('  empty code → ', await focused());
   await page.keyboard.type('omep'); await key('Enter');
   console.log('  name search picked:', await page.inputValue('#lines tbody tr:nth-child(2) [data-k=code]'), '| on:', await focused());

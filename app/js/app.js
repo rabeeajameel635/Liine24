@@ -139,6 +139,20 @@ function ask(question, yes = 'Yes', no = 'Cancel') {
     setTimeout(() => $('[data-v=no]', dlg).focus(), 30);
   });
 }
+// the menu behind a line's capsule: change the item, open its card, or remove the line
+function lineMenu(it, no) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog'); dlg.className = 'ask lmenu';
+    dlg.innerHTML = `<div class="lmh"><span class="lcap big" dir="ltr"><span class="lno">${esc(no)}</span><span class="lcode" dir="ltr">${esc(it?.code || '')}</span></span><b dir="auto">${esc(it?.name || '')}</b></div>
+      <div class="lmb"><button class="btn" data-v="change">${ic('undo')}<span>Change item</span></button><button class="btn" data-v="card">${ic('book')}<span>Item card</span></button><button class="btn danger" data-v="delete">${ic('x')}<span>Remove from invoice</span></button></div>
+      <div class="actions"><button class="btn" data-v="cancel">Cancel</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    $$('[data-v]', dlg).forEach((b) => (b.onclick = () => end(b.dataset.v === 'cancel' ? null : b.dataset.v)));
+    setTimeout(() => $('[data-v=cancel]', dlg).focus(), 30);
+  });
+}
 function leaveDialog(hasSavedDraft) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
@@ -375,7 +389,7 @@ function editor(doc) {
   //   middle: the grey work grid, filled in its own rows
   //   bottom: notes + approved balance | totals
   //   last line: icon buttons in four groups (save · post · export · cancel)
-  $('#main').innerHTML = `<div class="ws">
+  $('#main').innerHTML = `<div class="ws" dir="ltr">
     <datalist id="dlNames">${itemsList.map((i) => `<option value="${esc(i.name)}" label="${esc(i.code)}">`).join('')}</datalist>
     <datalist id="dlParties">${parties.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <header class="whead">
@@ -858,10 +872,9 @@ function linesUI(doc) {
   const row = (l) => {
     const it = itemById(l.itemId);
     return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
-      <td class="ln"><button type="button" class="lno" data-del tabindex="-1" title="Remove line from draft"></button></td>
       <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" enterkeyhint="next" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
       <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></div>
-        <div class="subline"><label class="xl"><span dir="ltr" data-notr>Exp. Date</span><input data-k="expiry" dir="ltr" inputmode="numeric" value="${esc(expShow(l.expiry))}" placeholder="--/----" title="Expiry (MM/YYYY)" tabindex="-1"></label><input data-k="batch" dir="ltr" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><span class="oh"></span></div></td>
+        <div class="subline"><button type="button" class="lcap" dir="ltr" data-cap tabindex="-1" title="Change or remove this line"><span class="lno"></span><span class="lcode" dir="ltr">${esc(it ? it.code : '')}</span></button><label class="xl"><span dir="ltr" data-notr>Exp. Date</span><input data-k="expiry" dir="ltr" inputmode="numeric" value="${esc(expShow(l.expiry))}" placeholder="--/----" title="Expiry (MM/YYYY)" tabindex="-1"></label><input data-k="batch" dir="ltr" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><span class="oh"></span></div></td>
       <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" enterkeyhint="next" value="${esc(l.price)}" style="width:104px"></td>
       <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" enterkeyhint="next" value="${esc(l.qty)}" style="width:92px"></td>
       <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" enterkeyhint="next" value="${esc(l.bonus)}" style="width:84px"></td>
@@ -869,7 +882,7 @@ function linesUI(doc) {
       <td class="n amt"></td></tr>`;
   };
   return `<div class="tablewrap"><table class="t lines" id="lines"><thead><tr>
-    <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead>
+    <th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead>
     <tbody>${(doc.lines.length ? doc.lines : [blankLine()]).map(row).join('')}</tbody></table></div>
     <div class="gfoot"><span id="gStats"></span><span class="gact"><button class="btn small" id="addline" tabindex="-1">+ Line</button><button class="btn small" id="smart" tabindex="-1">${ic('spark')}<span>Smart entry (AI / paste)</span></button></span></div>
     <template id="rowTpl">${row(blankLine())}</template>`;
@@ -909,7 +922,7 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
       const have = oh[it]?.qty || 0; const after = have + outSign * need[it];
       const short = outSign < 0 && after < 0;
       el.classList.toggle('short', short || have < 0);
-      el.innerHTML = `<span>Stock count</span>: <b dir="ltr">${fmt(have, 0)}</b>${short ? ` · <span>after this document</span>: <b dir="ltr">${fmt(after, 0)}</b>` : ''}`;
+      el.innerHTML = `<span>Stock</span>: <b dir="ltr">${fmt(have, 0)}</b>${short ? ` · <span>after this document</span>: <b dir="ltr">${fmt(after, 0)}</b>` : ''}`;
       translate(el);
     });
   };
@@ -921,6 +934,7 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
     $('[data-k=code]', tr).value = it.code;
     $('[data-k=name]', tr).value = it.name;
     const pr = $('[data-k=price]', tr); if (!pr.value) pr.value = defaultPrice(it, doc.type);
+    $('.lcode', tr).textContent = it.code;
   };
   const byName = (v) => {
     const low = v.trim().toLowerCase(); if (!low) return null;
@@ -944,12 +958,16 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
   });
   tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'price' && docTotalsOpts(doc, S.settings).roundTotals && e.target.value.trim() !== '') { e.target.value = round1(num(e.target.value)); recalc(); } });
   tbody.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-del]'); if (!b) return;
+    const b = e.target.closest('[data-cap]'); if (!b) return;
     const tr = b.closest('tr'); if (isEmpty(tr)) return;
     const it = itemById(tr.dataset.item);
-    if (!(await ask(T('Remove this item from the invoice?') + (it ? `\n${it.code} — ${it.name}` : ''), 'Yes, remove', 'Cancel'))) return;
+    const v = await lineMenu(it, $('.lno', tr).textContent);
+    if (v === 'change') return pick(tr, '');
+    if (v === 'card') { await itemCard(it, getPid(), doc.type, { change: false }); return; }
+    if (v !== 'delete') return;
     tr.remove(); if (!tbody.children.length) addRow(); renumber(); recalc();
     if (phoneGrid && !$$('tr', tbody).some((r) => isEmpty(r))) addRow();
+    $('#main').dispatchEvent(new Event('change'));
   });
   tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'expiry') e.target.value = expShow(expParse(e.target.value)); });
   const pick = async (tr, filter) => {
