@@ -29,7 +29,7 @@ const AR = {
   'draft': 'مسودة', 'posted': 'مرحّل', 'voided': 'ملغى', 'Draft': 'مسودة', 'New': 'جديد', 'Backdated': 'تاريخ رجعي', 'inactive': 'معطّل', 'reversal': 'قيد عكسي',
   'Code': 'الكود', 'Item': 'الصنف', 'Name': 'الاسم', 'Brand': 'العلامة', 'Category': 'الفئة', 'Unit': 'الوحدة', 'Buy': 'شراء', 'Public': 'جمهور', 'Pharmacist': 'صيدلي', 'On hand': 'الرصيد',
   'Batch': 'الدفعة', 'Expiry': 'الانتهاء', 'Qty': 'الكمية', 'Bonus': 'بونص', 'Price': 'السعر', 'Disc %': 'خصم %', 'Amount': 'المبلغ', 'Totals': 'المجاميع',
-  'Phone': 'الهاتف', 'Region': 'المنطقة', 'Credit limit': 'سقف الدين', 'Balance': 'الرصيد', 'Edit': 'تعديل',
+  'Phone': 'الهاتف', 'Region': 'المنطقة', 'Credit limit': 'سقف الدين', 'Balance': 'الرصيد', 'After': 'بعد', 'Edit': 'تعديل',
   'Document': 'المستند', 'Debit': 'مدين', 'Credit': 'دائن', 'Closing balance': 'الرصيد الختامي', 'Account': 'الحساب', 'Total debit': 'مجموع المدين', 'Total credit': 'مجموع الدائن',
   'Debit balance': 'رصيد مدين', 'Credit balance': 'رصيد دائن', 'In': 'وارد', 'Bonus in': 'بونص وارد', 'Out': 'صادر', 'Bonus out': 'بونص صادر', 'Avg cost': 'متوسط الكلفة', 'Value': 'القيمة',
   'Inventory value': 'قيمة المخزون', 'Total qty': 'مجموع الكمية', 'Total ₪': 'المجموع ₪', 'When': 'الوقت', 'User': 'المستخدم', 'Action': 'الإجراء', 'Reference': 'المرجع', 'Detail': 'التفاصيل',

@@ -50,7 +50,7 @@ const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
 document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
 const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
-  guardEditor = null; pageKeys = null; document.body.classList.remove('editing');
+  guardEditor = null; pageKeys = null; document.body.classList.remove('editing', 'sheet-open');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
@@ -227,7 +227,7 @@ function editor(doc) {
   $('#main').innerHTML = `
     <div class="docbar"><button class="iconbtn monly" id="eBack" tabindex="-1" title="Exit">${ic('chev')}</button>
       <div><div class="dtitle"><span>${t.name}</span> <span class="pill draft">${doc.id ? 'Saved' : 'New'}</span></div>
-      <div class="dparty" id="barParty" dir="auto">—</div></div>
+      <div class="dparty" id="barParty" dir="auto">—</div><div class="dbal" id="barBal"></div></div>
       <div class="dtotal"><span class="muted">Total ₪</span><b id="barTotal">0.00</b></div>
       <button class="btn small" id="toNotes" tabindex="-1" title="Notes">${ic('journal')}<span>Notes</span></button></div>
     <p class="sub">Drafts can be edited freely. Posting gives the permanent number and locks the document.</p>
@@ -245,12 +245,15 @@ function editor(doc) {
     <div class="dock">
     ${t.lines ? `<div class="composer" id="composer">
       <div class="cname" id="cName" hidden><b dir="auto"></b><button type="button" class="cx" id="cClear" tabindex="-1">×</button></div>
-      <div class="crow">
-        <button type="button" class="cbtn" id="cLook" tabindex="-1" title="Lookup (F2)">${ic('search')}</button>
+      <div class="cmain">
         <input id="cItem" dir="auto" placeholder="Code or item name" enterkeyhint="next" autocomplete="off">
         <span class="cnums" id="cNums" hidden><label>Price<input id="cPrice" inputmode="decimal" enterkeyhint="next"></label><label>Qty<input id="cQty" inputmode="decimal" enterkeyhint="next"></label><label>B.<input id="cBonus" inputmode="decimal" enterkeyhint="done"></label></span>
+      </div>
+      <div class="crow">
+        <button type="button" class="cbtn" id="cLook" tabindex="-1" title="Lookup (F2)">${ic('search')}</button>
+        <span class="coh muted" id="cOh"></span>
         <button type="button" class="cbtn send" id="cAdd" tabindex="-1" title="Add line">${ic('up')}</button>
-      </div></div>` : ''}
+      </div></div>` : '<div class="composer" id="composer"></div>'}
     <div class="finish" id="finish" tabindex="0">
       <span class="grow hint"><kbd>F2</kbd> <kbd>@</kbd> <span>Lookup</span> · <kbd>F4</kbd> <kbd>#</kbd> <span>Save</span> · <kbd>F9</kbd> <kbd>€</kbd> <span>Print &amp; post</span> · <kbd>Esc</kbd> <span>Exit</span></span>
       <span class="symkeys"><kbd>@</kbd> <span>Lookup</span> · <kbd>#</kbd> <span>Save</span> · <kbd>€</kbd> <span>Print &amp; post</span></span>
@@ -261,6 +264,25 @@ function editor(doc) {
       ${t.lines ? '<button class="btn" id="smart">Smart entry (AI / paste)</button>' : ''}
     </div></div>`;
   document.body.classList.add('editing');
+  const phone = window.matchMedia('(max-width: 860px)').matches;
+  const openSheet = () => document.body.classList.add('sheet-open');
+  const closeSheet = () => document.body.classList.remove('sheet-open');
+  if (phone) {
+    const sh = document.createElement('div'); sh.className = 'psheet'; sh.id = 'psheet';
+    sh.append($('#main > .row'), $('#partyInfo'));
+    if (t.lines) sh.append($('#invdisc').closest('.row')); else $('#composer').append($('#amount').closest('.row'), $('#amtWords'));
+    sh.append($('#notes').closest('label'));
+    sh.insertAdjacentHTML('beforeend', '<button type="button" class="grab" id="grab" tabindex="-1" aria-label="Close"></button>');
+    const bk = document.createElement('div'); bk.className = 'pback'; bk.onclick = closeSheet;
+    $('#main').append(bk, sh);
+    $('#grab', sh).onclick = closeSheet;
+    // pull the top bar down to open, push the sheet up to close
+    const drag = (el, fn) => { let y0 = null; el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true }); el.addEventListener('touchmove', (e) => { if (y0 !== null) { const dy = e.touches[0].clientY - y0; if (Math.abs(dy) > 28) { fn(dy); y0 = null; } } }, { passive: true }); };
+    drag($('.docbar'), (dy) => dy > 0 && openSheet());
+    drag(sh, (dy) => dy < 0 && sh.scrollTop <= 0 && closeSheet());
+    $('.docbar > div:nth-of-type(1)').onclick = openSheet;
+    document.documentElement.style.setProperty('--bar', $('.docbar').offsetHeight + 'px');
+  }
 
   // exact code or label wins; a name search picks only when exactly one record matches
   const findParty = (v, report = false) => {
@@ -396,12 +418,25 @@ function editor(doc) {
     else $('#amount').focus();
   }));
 
+  let balBase = null;
+  const BAL_SIGN = { SI: 1, DN: 1, PI: 1, SR: -1, CN: -1, PR: -1, RV: -1, PV: -1 };
+  const showBal = () => {
+    const el = $('#barBal'); if (!el) return;
+    if (balBase === null) { el.textContent = ''; return; }
+    const tot = Number($('#barTotal').dataset.c || 0), sg = BAL_SIGN[doc.type];
+    el.innerHTML = `<span>Balance</span> <b>${money(balBase)}</b>${sg && tot ? ` · <span>After</span> <b>${money(balBase + sg * tot)}</b>` : ''}`;
+    translate(el);
+  };
+  $('#barTotal').addEventListener('total', showBal);
   if ($('#party')) {
     const info = async () => {
       const p = findParty($('#party').value);
       $('#barParty').textContent = p ? partyLabel(p) : '—';
+      balBase = null; showBal();
       if (!p) { $('#partyInfo').textContent = ''; return; }
       const bal = await partyBalanceC(p.id);
+      balBase = bal; showBal();
+      if (phone && document.activeElement === $('#party')) { closeSheet(); ($('#cItem') || $('#amount')).focus(); }
       $('#partyInfo').innerHTML = `Balance <b>${money(bal)}</b>${p.creditLimit ? ` · Credit limit ${fmt(p.creditLimit)} · Remaining <b>${money(toCents(p.creditLimit) - bal)}</b>` : ''}${p.region ? ` · <span>${esc(T(REGIONS[p.region]))}</span>` : ''}`;
       translate($('#partyInfo'));
     };
@@ -411,7 +446,7 @@ function editor(doc) {
   else {
     const m = () => { const c = $('#method').value === 'cheque'; $$('.cheque').forEach((x) => (x.style.display = c ? '' : 'none')); if (c && $('#cashAccount').value === '1100') $('#cashAccount').value = '1120'; };
     $('#method').onchange = m; m();
-    const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; $('#barTotal').textContent = fmt(a || 0); };
+    const w = () => { const a = num($('#amount').value); $('#amtWords').textContent = a > 0 ? amountInWords(a) : ''; $('#barTotal').textContent = fmt(a || 0); $('#barTotal').dataset.c = toCents(a || 0); $('#barTotal').dispatchEvent(new Event('total')); };
     $('#amount').oninput = w; w();
     const vf = ['#amount', '#method', '#cashAccount', '#chequeNo', '#chequeBank', '#dueDate'].map((q) => $(q)).filter((x) => x && x.type !== 'hidden');
     vf.forEach((el) => el.addEventListener('keydown', (e) => {
@@ -439,9 +474,12 @@ function editor(doc) {
     const el = b.dataset.lk === 'party' ? $('#party') : $('[data-k=name]', b.closest('tr'));
     el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
   };
-  $('#toNotes').onclick = () => { $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
+  $('#toNotes').onclick = () => { if (phone) return document.body.classList.toggle('sheet-open'); $('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#notes').focus(); };
   $('#eBack').onclick = back;
-  setTimeout(() => ($('#party') || $('#date')).focus(), 50);
+  setTimeout(() => {
+    if (!phone) return ($('#party') || $('#date')).focus();
+    if ($('#party') && !findParty($('#party').value)) { openSheet(); $('#party').focus(); }
+  }, 50);
 }
 // Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
 // rows: [{ id, code, name, extra: [...] }] ; resolves the picked id or null
@@ -592,7 +630,7 @@ function linesUI(doc) {
       <td class="ln"></td>
       <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
       <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">⌕</button></div>
-        <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"></div></td>
+        <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"><span class="oh"></span></div></td>
       <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" value="${esc(l.price)}" style="width:104px"></td>
       <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" value="${esc(l.qty)}" style="width:92px"></td>
       <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" value="${esc(l.bonus)}" style="width:84px"></td>
@@ -630,8 +668,13 @@ function wireLines(doc, arm, parties = []) {
       <div class="grand"><span>Total ₪</span><span>${money(tot.totalC)}</span></div>
       <div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div>`;
     translate($('#totals'));
-    $('#barTotal').textContent = money(tot.totalC);
+    $('#barTotal').textContent = money(tot.totalC); $('#barTotal').dataset.c = tot.totalC; $('#barTotal').dispatchEvent(new Event('total'));
+    showOh();
   };
+  // stock on hand beside the expiry: on screen only, never printed
+  let oh = null;
+  const showOh = () => { if (oh) $$('tr', tbody).forEach((tr) => { const el = $('.oh', tr); const it = tr.dataset.item; el.innerHTML = it ? `<span>On hand</span> <b>${fmt(oh[it]?.qty || 0, 0)}</b>` : ''; if (it && !el.dataset.done) translate(el); }); };
+  db.all('stock').then((m) => { oh = stockOnHand(m); showOh(); });
   const setItem = (tr, it) => {
     tr.dataset.item = it ? it.id : '';
     tr.classList.toggle('found', !!it);
@@ -707,14 +750,13 @@ function wireLines(doc, arm, parties = []) {
 
   // Phone composer: one capsule above the keyboard that feeds the next line.
   // Enter: item → price → qty → bonus → line added, back to item.
-  // on phones the lines table lives inside the composer card, like the text area of a chat app
-  if (window.matchMedia('(max-width: 860px)').matches) $('#composer').prepend($('#lines').closest('.tablewrap'));
   const C = { item: $('#cItem'), price: $('#cPrice'), qty: $('#cQty'), bonus: $('#cBonus'), name: $('#cName'), nums: $('#cNums') };
   let cPicked = null;
-  const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; };
+  const cReset = () => { cPicked = null; C.item.value = ''; C.price.value = ''; C.qty.value = ''; C.bonus.value = ''; C.name.hidden = true; C.nums.hidden = true; C.item.hidden = false; $('#cOh').textContent = ''; };
   const cPick = (it) => {
     cPicked = it; $('b', C.name).textContent = `${it.code} — ${it.name}`; C.name.hidden = false; C.nums.hidden = false; C.item.hidden = true;
     C.price.value = defaultPrice(it, doc.type); C.qty.focus();
+    $('#cOh').innerHTML = oh ? `<span>On hand</span> <b>${fmt(oh[it.id]?.qty || 0, 0)}</b>` : ''; translate($('#cOh'));
   };
   const cResolve = async () => {
     const v = C.item.value.trim();
@@ -730,7 +772,7 @@ function wireLines(doc, arm, parties = []) {
     setItem(tr, cPicked);
     $('[data-k=price]', tr).value = C.price.value; $('[data-k=qty]', tr).value = C.qty.value; $('[data-k=bonus]', tr).value = C.bonus.value;
     renumber(); recalc(); cReset(); C.item.focus();
-    const box = tr.closest('.tablewrap'); box.scrollTop = box.scrollHeight;
+    tr.scrollIntoView({ block: 'nearest' });
   };
   C.item.addEventListener('keydown', (e) => {
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); cResolve(); }

@@ -467,36 +467,71 @@ dialog.card-dlg h3 { font-size: 1em; font-weight: 500; color: var(--muted); marg
 }
 @media (max-width: 860px) { body.editing .row > label.f:has(#date) { flex: 1.5 1 130px; } }
 
-/* phone: the work area is the composer card itself (lines inside, chat-app size and type) */
+/* ---------- work screen v3 (phone): lines in the middle, a chat-size composer card, header fields in a pull-down sheet ---------- */
+.dbal { font-size: .9em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dbal b { color: var(--text); font-weight: 600; }
+.subline .oh { font-size: .82em; color: var(--muted); white-space: nowrap; align-self: center; }
+.subline .oh b { color: var(--accent-ink); }
 @media (max-width: 860px) {
-  body.editing main { padding-bottom: 150px; }
-  body.editing:has(#lines tr.found) main { padding-bottom: 430px; }
-  .composer { border-radius: 26px; padding: 6px 8px 8px; }
-  .composer .tablewrap { background: transparent; box-shadow: none; border-radius: 0; margin: 0 !important; padding: 0 8px; overflow-y: auto; max-height: min(248px, calc(100vh - var(--kb, 0px) - 290px)); border-bottom: 1px solid var(--line); }
-  .composer .tablewrap:not(:has(tr.found)) { display: none; }
-  .composer #lines thead { position: sticky; top: 0; background: #fff; z-index: 1; }
-  .composer #lines thead tr, .composer #lines tbody tr { grid-template-columns: 44px minmax(0, 1fr) 50px 46px 34px 68px; }
-  .composer #lines input, .composer #lines td.amt { font-size: 16.5px; font-weight: 500; }
-  .composer #lines input { height: 32px; min-height: 32px; }
-  .composer #lines thead th { font-size: 13px; padding: 10px 0 6px; }
-  .composer #lines .subline input, .composer #lines td.num[data-label="Disc %"] input { font-size: 12px; height: 18px; min-height: 18px; }
-  .composer #lines tbody tr { padding: 4px 0 2px; }
-  .composer #cItem { font-size: 17px; }
-}
-@media (max-width: 860px) {
-  .composer { padding: 6px; }
-  .composer .tablewrap:has(#lines) { background: transparent; box-shadow: none; border-radius: 0; padding: 0 6px; margin: 0 !important; }
-  .composer #lines thead tr, .composer #lines tbody tr { grid-template-columns: 40px minmax(0, 1fr) 46px 40px 30px 62px; column-gap: 4px; }
-  .composer #lines .namewrap input { font-size: 15.5px; }
-}
-@media (max-width: 860px) {
-  /* the dock is opaque: nothing shows through behind the pill and the card */
-  .dock { background: var(--page); box-shadow: 0 -18px 18px var(--page); }
-  body.editing main { padding-bottom: 210px; }
-  body.editing:has(#lines tr.found) main { padding-bottom: 480px; }
+  body.editing main { padding: 0 10px 250px; }
   label.f .opt { display: none; }
-  .composer #lines thead tr, .composer #lines tbody tr { grid-template-columns: 38px minmax(0, 1fr) 44px 34px 26px 60px; column-gap: 3px; }
-  .composer #lines .namewrap input { font-size: 15px; text-overflow: ellipsis; }
-  .composer #lines td.amt, .composer #lines input[data-k=price], .composer #lines input[data-k=qty], .composer #lines input[data-k=bonus], .composer #lines input[data-k=code] { font-size: 15.5px; }
+  /* top bar: only what is needed while working */
+  .docbar { padding: calc(8px + env(safe-area-inset-top)) 12px 8px; gap: 10px; margin-bottom: 4px; }
+  .docbar .dtitle { font-size: .72em; }
+  .docbar .dparty { font-size: 1.02em; line-height: 1.25; }
+  .docbar .dbal { font-size: .78em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .docbar #eBack, #toNotes { width: 40px; height: 40px; min-height: 40px; }
+
+  /* lines: flat list in the middle of the screen, like messages in a chat */
+  .tablewrap:has(#lines) { background: transparent; box-shadow: none; border-radius: 0; padding: 0 4px; margin-top: 0 !important; }
+  .tablewrap:has(#lines):not(:has(tr.found)) { display: none; }
+  #lines thead { position: sticky; top: calc(64px + env(safe-area-inset-top)); background: var(--page); z-index: 2; }
+  #lines thead tr, #lines tbody tr { grid-template-columns: 40px minmax(0, 1fr) 48px 38px 28px 64px; column-gap: 4px; }
+  #lines thead th { font-size: 12px; white-space: nowrap; overflow: hidden; color: var(--muted); font-weight: 600; }
+  #lines input, #lines td.amt { font-size: 15.5px; font-weight: 500; }
+  #lines .namewrap input { text-overflow: ellipsis; }
+  #lines .subline { align-items: center; }
+  #lines .subline input[data-k=batch] { width: 58px; }
+  #lines .subline input[type=month] { width: 100px; }
+  #lines .subline .oh { font-size: 11.5px; margin-inline-start: auto; }
+
+  /* dock + composer card: same footprint and type as a chat composer */
+  .dock { background: var(--page); box-shadow: 0 -14px 14px var(--page); padding: 6px 10px calc(8px + env(safe-area-inset-bottom)); }
+  .composer { border-radius: 26px; padding: 12px 12px 8px; box-shadow: 0 1px 10px rgba(60,64,67,.16); border: 1px solid var(--line); }
+  .composer .cmain { min-height: 52px; display: flex; align-items: flex-start; padding: 2px 6px 0; }
+  .composer #cItem { flex: 1; min-width: 0; font-size: 17px; min-height: 40px; padding: 0; }
+  .composer .cnums { gap: 8px; }
+  .composer .cnums label { font-size: 11.5px; padding: 5px 12px 2px; border-radius: 16px; }
+  .composer .cnums input { font-size: 17px; height: 32px; min-height: 32px; }
+  .composer .cname { padding: 0 6px 8px; font-size: 16px; }
+  .composer .crow { justify-content: space-between; margin-top: 4px; }
+  .composer .coh { flex: 1; font-size: 13px; padding: 0 6px; } .composer .coh b { color: var(--accent-ink); }
+  .cbtn { width: 40px; height: 40px; }
+  .cbtn.send { background: #1f1f1f; color: #fff; }
+  /* vouchers use the same card */
+  .composer > .row { margin: 0 !important; gap: 8px; }
+  .composer > .row label.f { flex: 1 1 120px; min-width: 0; font-size: .78em; }
+  .composer > .row input, .composer > .row select { background: var(--surface); border-radius: 14px; min-height: 44px; padding: 0 12px; width: 100% !important; font-size: 16px; }
+  .composer #amount { font-size: 22px !important; font-weight: 600; background: transparent; padding: 0 4px; }
+  .composer > .row label.f:has(#amount) { flex-basis: 100%; }
+  .composer .words { font-size: .8em; padding: 4px 6px 6px; color: var(--muted); }
+  .composer:empty { display: none; }
+
+  /* pull-down sheet: customer, date, reference, salesman, discount, totals, notes */
+  .pback { position: fixed; inset: 0; z-index: 29; background: rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .psheet { position: fixed; inset-inline: 0; top: 0; z-index: 30; background: #fff; border-radius: 0 0 28px 28px; padding: calc(14px + env(safe-area-inset-top)) 16px 0; box-shadow: 0 10px 40px rgba(0,0,0,.2); max-height: 88vh; overflow-y: auto; transform: translateY(-105%); visibility: hidden; transition: transform .28s cubic-bezier(.2,.8,.2,1), visibility .28s; }
+  body.sheet-open .psheet { transform: none; visibility: visible; }
+  body.sheet-open .pback { opacity: 1; pointer-events: auto; }
+  .psheet .row { margin-top: 10px !important; }
+  .psheet #partyInfo { font-size: .85em; }
+  .psheet .totals { box-shadow: none; background: var(--surface); flex: 1 1 100%; }
+  .psheet textarea { min-height: 64px !important; }
+  .psheet .grab { display: block; width: 100%; border: none; background: transparent; padding: 14px 0 12px; }
+  .psheet .grab::before { content: ""; display: block; width: 44px; height: 5px; border-radius: 3px; background: #dadce0; margin: 0 auto; }
 }
-@media (max-width: 860px) { .composer #lines th { font-size: 12.5px; white-space: nowrap; overflow: hidden; } }
+@media (max-width: 860px) {
+  #lines thead { top: var(--bar, 104px); }
+  #lines tbody tr { scroll-margin-top: calc(var(--bar, 104px) + 44px); scroll-margin-bottom: 250px; }
+  .psheet .totals > div { padding: 3px 0; font-size: .92em; }
+}
+@media (max-width: 860px) { #lines thead { position: static; } #lines tbody tr { scroll-margin-top: calc(var(--bar, 104px) + 8px); } }
