@@ -1175,3 +1175,31 @@ dialog.lmenu .lmb .btn.danger { color: #B3261E; }
 dialog.lookup .lk-q, dialog .lk-q, dialog .lk-q:focus { border: none; border-bottom: 1px solid transparent; background: transparent; border-radius: 0; min-height: 30px; height: 30px; padding: 0 2px; margin: -6px 0 8px; font-size: 15px; font-weight: 600; color: var(--cl-ink); box-shadow: none; outline: none; }
 dialog .lk-q::placeholder { color: #B9B6AE; font-weight: 400; font-size: 13px; }
 dialog .lk-q:not(:placeholder-shown) { border-bottom-color: var(--cl-orange); }
+/* ---------- lists v3: at least 15 rows in view with a scroll, white at 75% (25% see-through), hold a row for its card ---------- */
+dialog.lookup { background: rgba(255,255,255,.75) !important; -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); }
+dialog.lookup::backdrop { background: rgba(31,30,28,.18); }
+dialog.lookup .lk-list, dialog.lookup .lk-list tbody td { background: transparent !important; }
+dialog.lookup .lk-list { max-height: calc(100dvh - 2cm - 150px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+dialog.lookup .lk-list tbody td { padding-top: 6px; padding-bottom: 6px; }
+dialog.lookup tbody tr { border-bottom: 1px solid rgba(31,30,28,.07); }
+dialog.lookup tr.sel td, dialog.lookup tr.sel { background: rgba(201,100,66,.12) !important; }
+dialog.lookup h2 { margin-bottom: 6px; }
+@media (max-width: 860px) {
+  dialog.lookup .hint { display: none; }
+  dialog.lookup { padding: 14px 12px 12px !important; }
+  dialog.lookup tbody tr { padding: 5px 4px !important; line-height: 1.22; }
+  dialog.lookup tbody td:nth-child(2) { font-size: 14.5px; }
+  dialog.lookup tbody td:nth-child(1), dialog.lookup tbody td:nth-child(3) { font-size: 12px; }
+  dialog.lookup tbody td:nth-child(4) { font-size: 14px; }
+  dialog.lookup .lk-list { max-height: calc(100dvh - 2cm - 120px); }
+}
+@media (max-width: 860px) {
+  /* one compact line per row: code · name · value(s) — 15 rows fit on a phone */
+  dialog.lookup tbody tr { grid-template-columns: auto minmax(0, 1fr) auto auto !important; grid-template-areas: "code name v1 v2" !important; align-items: baseline; column-gap: 10px !important; padding: 7px 4px !important; min-height: 0; }
+  dialog.lookup tbody td:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  dialog.lookup tbody td:nth-child(1) { min-width: 34px; }
+  dialog.lookup tbody td:nth-child(3) { max-width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  dialog.lookup h2 { margin: 0 0 2px; font-size: 1.15em; }
+  dialog.lookup .dlg-x { top: 10px; width: 30px; height: 30px; }
+  dialog.lookup .lk-list { max-height: calc(100dvh - 2cm - 96px); }
+}

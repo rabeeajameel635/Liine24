@@ -672,7 +672,7 @@ function lookup({ title, headers, rows, filter = '', onHold }) {
   let all = getRows();
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
-    dlg.className = 'lookup';
+    dlg.className = 'lookup'; dlg.dir = 'ltr';
     dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">${esc(title)}</h2>
       <input class="lk-q" placeholder="Type a code or a name…" dir="auto" autocomplete="off" enterkeyhint="search" value="${esc(filter)}">
       <div class="lk-list"><table class="t"><thead><tr><th>Code</th><th>Name</th>${headers.map((h) => `<th class="n">${esc(h)}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
@@ -709,8 +709,11 @@ async function lookupParty(list, filter = '') {
   const entries = await ledger();
   const bal = {};
   for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + e.debitC - e.creditC;
+  // hold a row: the same customer / supplier card as everywhere; the list redraws after an edit
+  const ids = new Set(list.map((p) => p.id));
   const id = await lookup({ title: list[0]?.kind === 'supplier' ? 'Suppliers' : 'Customers', headers: ['Region', 'Balance'], filter,
-    rows: list.map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [regionLabel(p.region), money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })) });
+    rows: () => S.parties.filter((p) => ids.has(p.id)).map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [regionLabel(p.region), money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })),
+    onHold: (pid) => partyCard(partyById(pid), { change: false }) });
   return id ? partyById(id) : null;
 }
 async function lookupItem(filter = '', type = 'SI', partyId = null) {
@@ -1218,15 +1221,17 @@ async function printDoc(d, reason = '', copies = 1) {
   // Print layout: company head with a monogram, grey title block, black table head, zebra rows,
   // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
   const A = getLang() === 'ar';
-  const L = (en, a) => (A ? a : en);
-  const page = ({ label, copyNo }, idx) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="${A ? 'rtl' : 'ltr'}">
+  // print is left to right; an Arabic label sits in its own isolate and drops the colon, so it reads «الرقم SI-…»
+  const L = (en, a) => (A ? `<bdi>${a}</bdi>` : en);
+  const C = A ? '' : ':';
+  const page = ({ label, copyNo }, idx) => { const stamp = stampOf({ label, copyNo }); return `<div class="doc-print page" dir="ltr">
     ${label === 'DRAFT' ? '<div class="wm">مسودة</div>' : ''}
     ${letterhead()}
     <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
-        <div class="tno">${L('No.', 'الرقم')}: <b dir="ltr">${esc(d.number || L('DRAFT', 'مسودة'))}</b> · ${L('Date', 'التاريخ')}: <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}: <b>${esc(d.reference)}</b>` : ''}</div></div>
+        <div class="tno">${L('No.', 'الرقم')}${C} <b dir="ltr">${esc(d.number || (A ? 'مسودة' : 'DRAFT'))}</b> · ${L('Date', 'التاريخ')}${C} <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}${C} <b>${esc(d.reference)}</b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
-      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}: <b dir="auto">${esc(p.code)} — ${esc(p.name)}</b>${p.address || p.region ? ` — ${L('Address', 'العنوان')}: <b dir="auto">${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</b>` : ''}</div>
-      <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', L('All amounts in NIS', 'جميع المبالغ بالشيكل') + (t.lines && opt.pricesIncludeVat ? L(', VAT included', '، الأسعار تشمل ض.ق.م') : '')].filter(Boolean).join(' · ')}</div>` : ''}</div>
+      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}${C} <b><span dir="ltr">${esc(p.code)}</span> — <bdi>${esc(p.name)}</bdi></b>${[p.address, p.region ? regionName(p.region) : ''].filter(Boolean).length ? ` — ${L('Address', 'العنوان')}${C} <b><bdi>${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</bdi></b>` : ''}</div>
+      <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', (t.lines && opt.pricesIncludeVat ? L('All amounts in NIS, VAT included', 'جميع المبالغ بالشيكل، الأسعار تشمل ض.ق.م') : L('All amounts in NIS', 'جميع المبالغ بالشيكل'))].filter(Boolean).join(' · ')}</div>` : ''}</div>
     ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
       ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${[l.batch ? `${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch)}</span>` : '', l.expiry ? `<span dir="ltr">Exp. ${esc(expShow(l.expiry))}</span>` : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
         <td class="c">${fmt(l.qty || 0, 0)}</td><td class="c">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="c">${pricef(l.price, opt.roundTotals)}</td><td class="c">${l.disc ? l.disc + '%' : ''}</td><td class="n"><b>${amt(l.amountC, opt.roundTotals)}</b></td></tr>`; }).join('')}
@@ -1760,7 +1765,7 @@ routes.settings = async () => {
     <p class="muted">One currency in this version: every amount, statement and report is in shekels.</p>
     ${isAdmin() ? '' : '<h2 id="sec-pin">Password</h2><p class="muted">Switch to admin to set or change the admin PIN.</p>'}
     <div class="note" style="margin-top:24px">This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.</div>`;
-  const prev = () => { const fd = Object.fromEntries(new FormData($('#co'))); const keep = S.settings; S.settings = { ...keep, ...fd }; $('#lhPrev').innerHTML = `<div class="doc-print" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">${letterhead()}</div>`; S.settings = keep; };
+  const prev = () => { const fd = Object.fromEntries(new FormData($('#co'))); const keep = S.settings; S.settings = { ...keep, ...fd }; $('#lhPrev').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}</div>`; S.settings = keep; };
   $('#co').addEventListener('input', prev); prev();
   const fq = new URLSearchParams(location.hash.split('?')[1] || '').get('f');
   if (fq) setTimeout(() => { const el = $('#sec-' + fq); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); (el.querySelector('select,input') || el.nextElementSibling?.querySelector?.('input'))?.focus(); } }, 60);
@@ -1819,7 +1824,7 @@ function letterhead() {
 }
 function printStatement(party, o, st) {
   const s = S.settings; const A = getLang() === 'ar';
-  $('#printArea').innerHTML = `<div class="doc-print page stprint" dir="${A ? 'rtl' : 'ltr'}">
+  $('#printArea').innerHTML = `<div class="doc-print page stprint" dir="ltr">
     ${letterhead()}
     <div class="tb"><div class="tbh"><div><div class="t1">${esc(T('Account statement'))}</div></div></div>${statementHead(party, o, st)}</div>
     ${statementTable(st, { ...o, print: true })}
@@ -1829,7 +1834,7 @@ function printStatement(party, o, st) {
   document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
 }
 function printHtml(html) {
-  $('#printArea').innerHTML = `<div class="doc-print" dir="${getLang() === 'ar' ? 'rtl' : 'ltr'}">${letterhead()}${html}<div class="meta"><span dir="ltr">${new Date().toLocaleString('en-GB')}</span><span></span></div></div>`;
+  $('#printArea').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}${html}<div class="meta"><span dir="ltr">${new Date().toLocaleString('en-GB')}</span><span></span></div></div>`;
   document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
 }
 
