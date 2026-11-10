@@ -1589,11 +1589,15 @@ async function runImport(obj) {
   }
   if (obj.invoice) {
     const inv = obj.invoice;
-    const p = S.parties.find((x) => x.code === String(inv.customerCode || inv.supplierCode || '')) || S.parties.find((x) => x.name === inv.customerName);
+    // look for the party among the right kind only: suppliers for purchases, customers for sales
+    const kind = ['PI', 'PR'].includes(inv.type) ? 'supplier' : 'customer';
+    const pool = S.parties.filter((x) => x.kind === kind);
+    const code = String((kind === 'supplier' ? inv.supplierCode : inv.customerCode) || '');
+    const p = (code && pool.find((x) => x.code === code)) || pool.find((x) => x.name === (kind === 'supplier' ? inv.supplierName : inv.customerName));
     const lines = parseSmart(JSON.stringify({ invoice: inv }));
     const d = await db.saveDraft({ type: inv.type || 'SI', date: inv.date || today(), partyId: p?.id || '', reference: inv.reference || '', notes: 'Imported from AI', lines: lines.filter((l) => l.itemId), invoiceDiscount: 0 }, S.user);
     const missing = lines.filter((l) => !l.itemId).length;
-    return { msg: `Draft created${missing ? ` · ${missing} unknown items skipped` : ''}${p ? '' : ' · choose the customer'}`, go: '#/doc/' + d.id };
+    return { msg: `Draft created${missing ? ` · ${missing} unknown items skipped` : ''}${p ? '' : kind === 'supplier' ? ' · choose the supplier' : ' · choose the customer'}`, go: '#/doc/' + d.id };
   }
   return { msg: `${n} records imported${osLines.length ? ' · opening stock posted' : ''}` };
 }
