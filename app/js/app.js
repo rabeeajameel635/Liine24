@@ -820,7 +820,23 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
   };
   // stock on hand beside the expiry: on screen only, never printed
   let oh = null;
-  const showOh = () => { if (oh) $$('tr', tbody).forEach((tr) => { const el = $('.oh', tr); const it = tr.dataset.item; el.innerHTML = it ? `<span>Stock count</span>: <b>${fmt(oh[it]?.qty || 0, 0)}</b>` : ''; if (it && !el.dataset.done) translate(el); }); };
+  // Rabee's rule: a sale never stops at zero; the stock goes below zero until the purchase invoice arrives.
+  // The line shows the count, and what it will be after this document when that goes below zero.
+  const outSign = DOC_TYPES[doc.type].stock || 0;
+  const showOh = () => {
+    if (!oh) return;
+    const need = {};
+    $$('tr', tbody).forEach((tr) => { const it = tr.dataset.item; if (it) need[it] = (need[it] || 0) + (num($('[data-k=qty]', tr).value) || 0) + (num($('[data-k=bonus]', tr).value) || 0); });
+    $$('tr', tbody).forEach((tr) => {
+      const el = $('.oh', tr); const it = tr.dataset.item;
+      if (!it) { el.innerHTML = ''; el.classList.remove('short'); return; }
+      const have = oh[it]?.qty || 0; const after = have + outSign * need[it];
+      const short = outSign < 0 && after < 0;
+      el.classList.toggle('short', short || have < 0);
+      el.innerHTML = `<span>Stock count</span>: <b dir="ltr">${fmt(have, 0)}</b>${short ? ` · <span>after this document</span>: <b dir="ltr">${fmt(after, 0)}</b>` : ''}`;
+      translate(el);
+    });
+  };
   db.all('stock').then((m) => { oh = stockOnHand(m); showOh(); });
   const setItem = (tr, it) => {
     tr.dataset.item = it ? it.id : '';
@@ -1437,7 +1453,7 @@ routes.integrity = async () => {
   $('#main').innerHTML = `<h1>Integrity check</h1><p class="sub">Runs on every visit. The forensic audit questions, answered by the system itself.</p>
     ${check(tb.balanced, 'Trial balance is balanced', `Debit ${money(tb.totalDebitC)} · Credit ${money(tb.totalCreditC)}`)}
     ${check(!gaps.length, 'No gaps in any numbering series', gaps.length ? gaps.map((g) => `${g.series}: expected ${g.expected}, found ${g.found}`).join('<br>') : `${new Set(S.docs.filter((d) => d.series).map((d) => d.series)).size} series checked`)}
-    ${check(!negative.length, 'No item below zero', negative.map((i) => esc(i.code)).join(', ') || 'All items at zero or above')}
+    ${negative.length ? `<div class="card" style="margin-bottom:10px"><span class="pill draft">Waiting</span> <b>Items below zero, waiting for a purchase invoice</b><div class="muted" style="margin-top:6px">${negative.map((i) => `<span dir="ltr">${esc(i.code)}</span> <span dir="auto">${esc(i.name)}</span>: <b dir="ltr">${fmt(oh[i.id].qty, 0)}</b>`).join('<br>')}</div><div class="muted" style="margin-top:6px">Allowed: a sale never stops at zero. The count comes back when the purchase invoice is entered.</div></div>` : check(true, 'No item below zero', 'All items at zero or above')}
     ${check(!backdated.length, 'No backdated documents', backdated.map((d) => `${esc(d.number)}: ${esc(d.backdateReason)}`).join('<br>') || 'None')}
     ${check(!oldDrafts.length, 'No drafts older than 3 days', oldDrafts.map((d) => `${DOC_TYPES[d.type].name} ${esc(d.date)}`).join('<br>') || 'None')}`;
 };

@@ -172,3 +172,15 @@ test('statement including saved drafts marks them and keeps posted rows first', 
   const all = statement([...posted, ...draftEntries(docs, { roundTotals: true }, { partyId: 'p' })], docs, 'p', 'customer');
   assert.equal(all.closing, 10000 - 4000 + 2500);   // 25.3 → 25 shekels (rounded total)
 });
+
+test('a sale never stops at zero: stock goes below zero until the purchase arrives', async () => {
+  const { buildPosting, stockOnHand, isBalanced } = await import('../js/core.js');
+  const items = { a: { buyPrice: 11.6 } };
+  const settings = { vatRate: 16, pricesIncludeVat: true, roundTotals: true };
+  const os = buildPosting({ type: 'OS', lines: [{ itemId: 'a', qty: 5, price: 11.6 }] }, { items, settings });
+  const sale = buildPosting({ type: 'SI', partyId: 'p', lines: [{ itemId: 'a', qty: 8, price: 20 }] }, { moves: os.moves, items, settings });
+  assert.ok(isBalanced(sale.entries));
+  assert.equal(stockOnHand([...os.moves, ...sale.moves]).a.qty, -3);
+  const buy = buildPosting({ type: 'PI', partyId: 's', lines: [{ itemId: 'a', qty: 10, price: 11.6 }] }, { items, settings });
+  assert.equal(stockOnHand([...os.moves, ...sale.moves, ...buy.moves]).a.qty, 7);
+});

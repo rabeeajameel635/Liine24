@@ -997,3 +997,5 @@ table.st tfoot td { font-size: 1.02em; }
 .doc-print .lct .tel { font-variant-numeric: tabular-nums; letter-spacing: .04em; font-weight: 600; }
 .lhprev { background: #fff; border: 1px dashed var(--cl-line, #E2DFD6); border-radius: 14px; padding: 14px 16px; }
 .lhprev .doc-print .ph { margin: 0; }
+.wbody #lines .subline .oh.short { opacity: 1; color: #B3261E; }
+.wbody #lines .subline .oh.short b { color: #B3261E; }
