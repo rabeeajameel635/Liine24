@@ -247,13 +247,26 @@ export function trialBalance(entries) {
 }
 
 // statement for one party on AR (customer) or AP (supplier)
+// Saved (draft) documents as they would hit the party's account, for a statement "including saved".
+// Nothing is written: these rows exist only on screen, marked saved, after the posted rows of their day.
+export function draftEntries(docs, settings = {}, { partyId = null, except = null } = {}) {
+  const out = [];
+  for (const d of docs) {
+    if (d.status !== 'draft' || !d.partyId || d.id === except || (partyId && d.partyId !== partyId)) continue;
+    let posting;
+    try { posting = buildPosting(d, { settings }); } catch { continue; }
+    for (const e of posting.entries) if (e.partyId) out.push({ ...e, docId: d.id, date: d.date, number: '', type: d.type, draft: true, seq: 1e15 });
+  }
+  return out;
+}
+
 export function statement(entries, docs, partyId, kind = 'customer', { from, to } = {}) {
   const account = kind === 'supplier' ? '2100' : '1200';
   const byDoc = new Map(docs.map((d) => [d.id, d]));
   const rows = entries
     .filter((e) => e.account === account && e.partyId === partyId)
     .map((e) => ({ ...e, doc: byDoc.get(e.docId) }))
-    .sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.seq - b.seq);
+    .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.seq ?? 0) - (b.seq ?? 0));
   let bal = 0, opening = 0;
   const out = [];
   for (const r of rows) {

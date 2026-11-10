@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
-  computeTotals, docTotalsOpts, round1, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
+  computeTotals, docTotalsOpts, round1, draftEntries, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
@@ -53,6 +53,7 @@ const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
 document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
 const backToPlace = () => go(lastPlace || '#/dashboard');
 async function render() {
+  $$('dialog').forEach((d) => d.remove());   // a sheet never outlives its screen
   guardEditor = null; pageKeys = null; onMasters = null; document.onvisibilitychange = null; document.body.classList.remove('editing', 'sheet-open');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
@@ -287,7 +288,7 @@ function editor(doc) {
     <section class="wbody">${t.lines ? linesUI(doc) : voucherUI(doc)}</section>
     <footer class="wfoot">
       <div class="wcard wnote"><label class="wnl">Notes<textarea id="notes" dir="auto" rows="2">${esc(doc.notes || '')}</textarea></label>
-        ${t.party !== 'none' ? `<div class="wbal"><span class="wlbl">Approved balance</span><b id="balAfter">—</b><div class="wsub" id="balBefore"></div></div>` : ''}</div>
+        ${t.party !== 'none' ? `<div class="wbal"><span class="wlbl">Approved balance</span><b id="balAfter">—</b><button type="button" class="wsub wlink" id="balBefore" title="Statement before this document"></button></div>` : ''}</div>
       <div class="wcard wsum" id="totals">
         ${t.lines ? `<div class="sr"><span>Items total</span><b id="tSub">0.00</b></div>
         <div class="sr"><span>Invoice discount</span><input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" placeholder="0.00"></div>
@@ -534,6 +535,7 @@ function editor(doc) {
     el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
   };
   $('#eBack').onclick = back;
+  if ($('#balBefore')) $('#balBefore').onclick = () => { const p = partyById(curPartyId); if (p) statementSheet(p, doc.id); };
   if ($('#party')) holdable($('.whead'), '#party', (el) => { el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })); });
   onMasters = () => {
     parties = pickParties();
@@ -758,7 +760,7 @@ function linesUI(doc) {
       <td class="ln"><button type="button" class="lno" data-del tabindex="-1" title="Remove line from draft"></button></td>
       <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" enterkeyhint="next" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
       <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></div>
-        <div class="subline"><label class="xl"><span dir="ltr">Exp. Date</span><input data-k="expiry" dir="ltr" inputmode="numeric" value="${esc(expShow(l.expiry))}" placeholder="--/----" title="Expiry (MM/YYYY)" tabindex="-1"></label><input data-k="batch" dir="ltr" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><span class="oh"></span></div></td>
+        <div class="subline"><label class="xl"><span dir="ltr" data-notr>Exp. Date</span><input data-k="expiry" dir="ltr" inputmode="numeric" value="${esc(expShow(l.expiry))}" placeholder="--/----" title="Expiry (MM/YYYY)" tabindex="-1"></label><input data-k="batch" dir="ltr" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><span class="oh"></span></div></td>
       <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" enterkeyhint="next" value="${esc(l.price)}" style="width:104px"></td>
       <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" enterkeyhint="next" value="${esc(l.qty)}" style="width:92px"></td>
       <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" enterkeyhint="next" value="${esc(l.bonus)}" style="width:84px"></td>
@@ -1199,30 +1201,99 @@ async function postOpening(party, amount) {
 }
 
 // ---------- reports ----------
+// ---------- account statement (Bisan's way: a refresh button opens the choice screen) ----------
+// options: party, region (narrows the party list), from / to, brief or detailed, posted only or including saved
+async function statementOf(party, { from = '', to = '', saved = false, except = null } = {}) {
+  const entries = await ledger();
+  const extra = saved ? draftEntries(S.docs, S.settings, { partyId: party.id, except }) : [];
+  return statement([...entries, ...extra], S.docs, party.id, party.kind, { from, to });
+}
+const stLines = (d) => {
+  if (!d || !DOC_TYPES[d.type]?.lines) return '';
+  const R = docTotalsOpts(d, S.settings).roundTotals;
+  const tot = computeTotals(d.lines || [], docTotalsOpts(d, S.settings));
+  return tot.lines.filter((l) => l.itemId).map((l) => { const it = itemById(l.itemId) || {}; return `<div><span dir="ltr">${esc(it.code || '')}</span> <span dir="auto">${esc(it.name || '')}</span> · ${fmt(l.qty || 0, 0)}${l.bonus ? ` + ${fmt(l.bonus, 0)}` : ''} × ${pricef(l.price, R)} = <b>${amt(l.amountC, R)}</b></div>`; }).join('');
+};
+function statementTable(st, { saved = false, detail = false } = {}) {
+  const status = (r) => (saved ? `<td class="ss"><span class="pill ${r.draft ? 'draft' : 'posted'}">${r.draft ? 'Saved (draft)' : 'Posted'}</span></td>` : '');
+  return `<div class="tablewrap"><table class="t st${saved ? ' withst' : ''}"><thead><tr><th>Date</th><th>Document</th><th>Type</th><th>Ref.</th>${saved ? '<th>Status</th>' : ''}<th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
+    ${st.opening ? `<tr><td colspan="${saved ? 7 : 6}"><i>Opening balance</i></td><td class="n">${money(st.opening)}</td></tr>` : ''}
+    ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : ''}"><td class="sd">${esc(r.date)}</td><td class="sn"><a href="#/doc/${r.docId}">${esc(r.number || r.doc?.number || T('Draft'))}</a></td><td class="sy">${esc(DOC_TYPES[r.type]?.name || '')}${r.reversal ? ' <span class="pill voided">reversal</span>' : ''}</td><td class="sr">${esc(r.doc?.reference || '')}</td>${status(r)}
+      <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>
+      ${detail && !r.reversal && stLines(r.doc) ? `<tr class="sdet"><td colspan="${saved ? 8 : 7}">${stLines(r.doc)}</td></tr>` : ''}`).join('')}
+    </tbody><tfoot><tr><td colspan="${saved ? 5 : 4}">Closing balance</td><td class="n">${money(st.rows.reduce((s, r) => s + r.debitC, 0))}</td><td class="n">${money(st.rows.reduce((s, r) => s + r.creditC, 0))}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
+}
+function statementOptions(cur = {}) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog'); dlg.className = 'lookup card-dlg stopts';
+    let party = partyById(cur.pid);
+    const regionSel = `<select id="soRegion"><option value="">All regions</option>${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}" ${cur.region === k ? 'selected' : ''}>${esc(T(v))}</option>`).join('')}</select>`;
+    dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">Account statement</h2>
+      <div class="sog">
+        <label class="f wide">Customer or supplier<div class="namewrap"><input id="soParty" dir="auto" readonly placeholder="Tap to choose" value="${esc(partyLabel(party))}"><button type="button" class="lkbtn" id="soLook" title="Lookup">${ic('search')}</button></div></label>
+        <label class="f">Region${regionSel}</label>
+        <label class="f">From<input id="soFrom" type="date" value="${esc(cur.from || '')}"></label>
+        <label class="f">To<input id="soTo" type="date" value="${esc(cur.to || '')}"></label>
+        <div class="f wide"><span>Display</span><div class="seg2"><button type="button" data-d="0" class="${cur.detail ? '' : 'on'}">Brief</button><button type="button" data-d="1" class="${cur.detail ? 'on' : ''}">Detailed</button></div></div>
+      </div>
+      <div class="actions sobtn" style="margin-bottom:0"><button class="btn tonal" data-m="all">Including saved</button><button class="btn ink" data-m="posted">Posted only</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    let detail = !!cur.detail;
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    $('[data-x]', dlg).onclick = () => end(null);
+    $$('[data-d]', dlg).forEach((b) => (b.onclick = () => { detail = b.dataset.d === '1'; $$('[data-d]', dlg).forEach((x) => x.classList.toggle('on', x === b)); }));
+    const choose = async () => {
+      const reg = $('#soRegion', dlg).value;
+      const list = S.parties.filter((p) => !reg || p.region === reg);
+      const cust = list.filter((p) => p.kind === 'customer'), sup = list.filter((p) => p.kind === 'supplier');
+      const p = await lookupParty(party?.kind === 'supplier' && sup.length ? sup : cust.length ? cust : sup, '');
+      if (p) { party = p; $('#soParty', dlg).value = partyLabel(p); }
+    };
+    $('#soLook', dlg).onclick = choose; $('#soParty', dlg).onclick = choose;
+    $$('[data-m]', dlg).forEach((b) => (b.onclick = () => {
+      if (!party) { toast('Choose a customer or supplier', true); return; }
+      end({ pid: party.id, region: $('#soRegion', dlg).value, from: $('#soFrom', dlg).value, to: $('#soTo', dlg).value, detail, saved: b.dataset.m === 'all' });
+    }));
+  });
+}
 routes.statement = async (pid) => {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
   const party = partyById(pid);
-  const all = S.parties;
-  $('#main').innerHTML = `<h1>Account statement</h1><p class="sub">Every number links to its document.</p>
-    <datalist id="dlP">${all.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
-    <div class="row"><label class="f grow">Customer or supplier<input id="p" list="dlP" dir="auto" value="${esc(partyLabel(party))}"></label>
-      <label class="f">From<input id="from" type="date" value="${esc(q.get('from') || '')}"></label><label class="f">To<input id="to" type="date" value="${esc(q.get('to') || '')}"></label>
-      <button class="btn primary" id="show">Show</button><button class="btn" id="pr">Print / PDF</button><button class="btn" id="xl">Excel</button></div><div id="out" style="margin-top:20px"></div>`;
-  $('#show').onclick = () => { const p = all.find((x) => partyLabel(x) === $('#p').value.trim()); if (p) location.hash = `#/statement/${p.id}?from=${$('#from').value}&to=${$('#to').value}`; };
-  if (!party) return;
+  const o = { pid, region: q.get('region') || '', from: q.get('from') || '', to: q.get('to') || '', detail: q.get('detail') === '1', saved: q.get('saved') === '1' };
+  const open = async () => {
+    const r = await statementOptions(o); if (!r) return;
+    go(`#/statement/${r.pid}?from=${r.from}&to=${r.to}&region=${r.region}&detail=${r.detail ? 1 : 0}&saved=${r.saved ? 1 : 0}`);
+  };
+  $('#main').innerHTML = `<div class="sthead"><div><h1>Account statement</h1>
+      <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(T(REGIONS[party.region]))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${o.saved ? 'Including saved' : 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
+      <div class="stbtns"><button class="rb main" id="stOpts" title="Statement options" aria-label="Statement options">${ic('undo')}</button><button class="rb" id="pr" title="Print / PDF" aria-label="Print / PDF">${ic('printer')}</button><button class="rb" id="xl" title="Excel" aria-label="Excel">${ic('in')}</button></div></div>
+    <div id="out" style="margin-top:16px"></div>`;
+  $('#stOpts').onclick = open;
+  if (!party) { $('#pr').disabled = $('#xl').disabled = true; setTimeout(open, 60); return; }
   const mk = party.kind === 'supplier' ? [['PV', 'Payment voucher'], ['PI', 'Purchase invoice']] : [['RV', 'Receipt voucher'], ['SI', 'Sales invoice']];
   $('#out').insertAdjacentHTML('beforebegin', `<div class="chain">${mk.map(([k, n], i) => `<a class="btn ${i ? '' : 'ink'}" href="#/new/${k}?party=${party.id}">${ic('plus')}<span>${n}</span></a>`).join('')}</div>`);
-  const st = statement(await ledger(), S.docs, party.id, party.kind, { from: q.get('from') || '', to: q.get('to') || '' });
-  const rows = st.rows.map((r) => [r.date, r.number || r.doc?.number, DOC_TYPES[r.type]?.name + (r.reversal ? ' (void reversal)' : ''), r.doc?.reference || '', r.debitC, r.creditC, r.balanceC]);
-  $('#out').innerHTML = `<div class="tablewrap"><table class="t st"><thead><tr><th>Date</th><th>Document</th><th>Type</th><th>Ref.</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
-    ${st.opening ? `<tr><td colspan="6"><i>Opening balance</i></td><td class="n">${money(st.opening)}</td></tr>` : ''}
-    ${st.rows.map((r) => `<tr><td class="sd">${esc(r.date)}</td><td class="sn"><a href="#/doc/${r.docId}">${esc(r.number || '')}</a></td><td class="sy">${esc(DOC_TYPES[r.type]?.name || '')}${r.reversal ? ' <span class="pill voided">reversal</span>' : ''}</td><td class="sr">${esc(r.doc?.reference || '')}</td>
-      <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>`).join('')}
-    </tbody><tfoot><tr><td colspan="4">Closing balance</td><td class="n">${money(st.rows.reduce((s, r) => s + r.debitC, 0))}</td><td class="n">${money(st.rows.reduce((s, r) => s + r.creditC, 0))}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>
-    <p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
-  $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [['Date', 'Document', 'Type', 'Ref', 'Debit', 'Credit', 'Balance'], ...rows.map((r) => [...r.slice(0, 4), fromCents(r[4]), fromCents(r[5]), fromCents(r[6])])]);
-  $('#pr').onclick = () => printHtml(`<h2>Statement · كشف حساب</h2><p><b dir="auto">${esc(partyLabel(party))}</b> · ${esc(q.get('from') || 'start')} → ${esc(q.get('to') || today())}</p>${$('#out').innerHTML}`);
+  const st = await statementOf(party, o);
+  $('#out').innerHTML = statementTable(st, o) + `<p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
+  $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [['Date', 'Document', 'Type', 'Ref', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
+    ...(st.opening ? [[T('Opening balance'), '', '', '', ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
+    ...st.rows.map((r) => [r.date, r.number || T('Draft'), T(DOC_TYPES[r.type]?.name || ''), r.doc?.reference || '', ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), fromCents(r.debitC), fromCents(r.creditC), fromCents(r.balanceC)])]);
+  $('#pr').onclick = () => printHtml(`<h2>Statement · كشف حساب</h2><p><b dir="auto">${esc(partyLabel(party))}</b> · ${esc(o.from || 'start')} → ${esc(o.to || today())}${o.saved ? ' · ' + esc(T('Including saved')) : ''}</p>${$('#out').innerHTML}`);
 };
+// the party's statement before the document being entered, opened over the document
+async function statementSheet(party, exceptId) {
+  const st = await statementOf(party, { except: exceptId });
+  const last = st.rows.slice(-12);
+  const dlg = document.createElement('dialog'); dlg.className = 'lookup card-dlg stsheet';
+  dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button>
+    <h2 style="margin-top:0" dir="auto">${esc(partyLabel(party))}</h2><p class="muted" style="margin:-6px 0 12px">Statement before this document</p>
+    ${statementTable({ opening: st.rows.length > last.length ? st.rows[st.rows.length - last.length - 1].balanceC : st.opening, rows: last, closing: st.closing })}
+    <div class="actions" style="margin-bottom:0"><a class="btn tonal" href="#/statement/${party.id}">Open full statement</a><button class="btn" data-x2>Close</button></div>`;
+  document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+  const end = () => dlg.remove();
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(); });
+  $('[data-x]', dlg).onclick = end; $('[data-x2]', dlg).onclick = end; $('a', dlg).addEventListener('click', end);
+}
 
 routes.tb = async () => {
   const tb = trialBalance(await ledger());

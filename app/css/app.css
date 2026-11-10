@@ -846,3 +846,43 @@ dialog.card-dlg .btn.ink { background: var(--cl-orange, #C96442); color: #fff; }
 }
 @keyframes sheetup { from { transform: translateY(40%); opacity: .4; } to { transform: none; opacity: 1; } }
 dialog.lookup h2 { padding-inline: 46px; }
+/* ---------- statement: options sheet, status column, detail lines ---------- */
+.sthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.sthead h1 { margin-bottom: 4px; }
+.stbtns { display: flex; gap: 10px; flex: none; }
+.stbtns .rb { width: 46px; height: 46px; }
+.stopts .sog { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stopts .f.wide { grid-column: 1 / -1; }
+.stopts .f > span { font-size: .84em; color: var(--muted); }
+.stopts .namewrap { display: flex; gap: 6px; align-items: center; }
+.stopts .namewrap input { flex: 1; cursor: pointer; }
+.seg2 { display: flex; background: var(--surface); border-radius: 999px; padding: 4px; gap: 4px; margin-top: 4px; }
+.seg2 button { flex: 1; border: none; background: transparent; border-radius: 999px; min-height: 38px; font: inherit; color: var(--muted); cursor: pointer; }
+.seg2 button.on { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.stopts .sobtn { margin-top: 18px; } .stopts .sobtn .btn { flex: 1; justify-content: center; }
+.stopts .btn.ink { background: var(--cl-orange, #C96442); color: #fff; }
+table.st tr.isdraft td { background: #FBF7EF; }
+table.st td.ss .pill { font-size: .78em; }
+table.st tr.sdet td { background: transparent !important; padding: 0 16px 8px !important; color: var(--muted); font-size: .85em; }
+table.st tr.sdet td div { padding: 1px 0; }
+.wlink { background: none; border: none; padding: 0; font: inherit; cursor: pointer; text-align: start; text-decoration: underline dotted; text-underline-offset: 3px; color: var(--cl-muted, #75736C); }
+.stsheet .tablewrap { max-height: 52dvh; overflow-y: auto; }
+@media (max-width: 860px) {
+  .sthead h1 { font-size: 1.5em; }
+  .stbtns .rb { width: 42px; height: 42px; }
+  table.st.withst tr { grid-template-areas: "sn amt sb" "sy amt sb" "ss amt sb"; }
+  table.st td.ss { grid-area: ss; }
+  table.st tr.sdet { display: block; padding: 0 2px 8px; border-bottom: 1px solid var(--line); margin-top: -6px; }
+  table.st tr.sdet td { display: block; padding: 0 !important; font-size: 12px; }
+  .stopts .sog { grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+@media (max-width: 860px) {
+  dialog.stsheet table.st tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto 96px; grid-template-areas: "sn amt sb" "sy amt sb"; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  dialog.stsheet table.st td.sn { grid-area: sn; font-size: 15px; color: inherit; font-weight: 600; }
+  dialog.stsheet table.st td.sy { grid-area: sy; font-weight: 400; font-size: 12px; color: var(--muted); }
+  dialog.stsheet table.st td.sd { grid-area: sy; justify-self: end; font-size: 12px; color: var(--muted); font-weight: 400; }
+  dialog.stsheet table.st td.sdb, dialog.stsheet table.st td.scr { grid-area: amt; font-size: 15px; font-weight: 400; color: inherit; display: block; }
+  dialog.stsheet table.st td.scr { color: #188038; }
+  dialog.stsheet table.st td.sb { grid-area: sb; text-align: end; font-size: 15px; }
+  dialog.stsheet table.st td.sr { display: none; }
+}

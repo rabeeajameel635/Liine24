@@ -155,3 +155,20 @@ test('names with movements take spelling fixes only', async () => {
   assert.ok(!isSpellingFix('PARACETAMOL 500MG 20T', 'IBUPROFEN 400MG 20T'));
   assert.ok(!isSpellingFix('صيدلية الشفاء', 'صيدلية النور'));
 });
+
+test('statement including saved drafts marks them and keeps posted rows first', async () => {
+  const { draftEntries, statement } = await import('../js/core.js');
+  const posted = [{ account: '1200', partyId: 'p', debitC: 10000, creditC: 0, docId: 'd1', date: '2026-11-01', number: 'SI-26-000001', type: 'SI', seq: 1 }];
+  const docs = [
+    { id: 'd2', type: 'RV', status: 'draft', partyId: 'p', date: '2026-11-01', amount: 40, cashAccount: '1100' },
+    { id: 'd3', type: 'SI', status: 'draft', partyId: 'p', date: '2026-11-02', lines: [{ itemId: 'a', qty: 1, price: 25.3 }] },
+    { id: 'd4', type: 'RV', status: 'draft', partyId: 'q', date: '2026-11-02', amount: 5 },
+    { id: 'd5', type: 'RV', status: 'draft', partyId: 'p', date: '2026-11-02', amount: 0 },
+  ];
+  const extra = draftEntries(docs, { vatRate: 16, pricesIncludeVat: true, roundTotals: true }, { partyId: 'p', except: 'd3' });
+  assert.equal(extra.length, 1);
+  const st = statement([...posted, ...extra], docs, 'p', 'customer');
+  assert.deepEqual(st.rows.map((r) => [r.docId, !!r.draft, r.balanceC]), [['d1', false, 10000], ['d2', true, 6000]]);
+  const all = statement([...posted, ...draftEntries(docs, { roundTotals: true }, { partyId: 'p' })], docs, 'p', 'customer');
+  assert.equal(all.closing, 10000 - 4000 + 2500);   // 25.3 → 25 shekels (rounded total)
+});

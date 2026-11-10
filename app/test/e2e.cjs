@@ -155,6 +155,14 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');
   console.log('  closing:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
+  await page.evaluate(async (pid) => { const db = await import('./js/db.js'); await db.saveDraft({ type: 'RV', partyId: pid, date: '2026-11-10', amount: 100, method: 'cash', cashAccount: '1100', lines: [] }, 'test'); }, cid);
+  await page.click('#stOpts'); await page.waitForSelector('dialog.stopts');
+  console.log('  options sheet:', (await page.locator('dialog.stopts label, dialog.stopts .f > span').allTextContents()).map((t) => t.trim().split(/\s{2,}/)[0]).join(' | '));
+  await page.click('dialog.stopts [data-d="1"]'); await page.click('dialog.stopts [data-m=all]'); await page.waitForSelector('#out table.withst');
+  console.log('  including saved, statuses:', (await page.locator('#out td.ss').allTextContents()).map((t) => t.trim()).join(','), '| detail rows:', await page.locator('#out tr.sdet').count());
+  console.log('  closing with saved:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
+  await page.click('#stOpts'); await page.waitForSelector('dialog.stopts'); await page.click('dialog.stopts [data-m=posted]'); await page.waitForTimeout(500);
+  console.log('  posted only again has no status column:', await page.locator('#out td.ss').count() === 0);
   const nums = await page.evaluate(async () => (await (await import('./js/db.js')).all('docs')).filter((x) => x.number).map((x) => x.number));
   console.log('  no document posted twice (numbers unique):', new Set(nums).size === nums.length, nums.filter((n) => /^(SI|RV)/.test(n)));
 
