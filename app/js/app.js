@@ -1241,7 +1241,7 @@ function statementTable(st, { saved = false, detail = false, print = false } = {
     ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : ''}"><td class="sd" dir="ltr">${esc(r.date)}</td><td class="sn">${stDesc(r, !print)}</td>${status(r)}
       <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>
       ${detail && !r.reversal && stLines(r.doc) ? `<tr class="sdet"><td></td><td colspan="${span + 3}">${stLines(r.doc)}</td></tr>` : ''}`).join('')}
-    </tbody><tfoot><tr><td colspan="${span}">${esc(T('Total'))}</td><td class="n">${money(dr)}</td><td class="n">${money(cr)}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
+    </tbody><tfoot><tr><td colspan="${span}">${esc(T('Total balance'))}</td><td class="n">${money(dr)}</td><td class="n">${money(cr)}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
 }
 // head of a statement, screen and paper alike: who, which period, and the balance they owe (or we owe)
 function statementHead(party, o, st) {
@@ -1304,11 +1304,19 @@ routes.statement = async (pid) => {
   const st = await statementOf(party, o);
   $('#out').innerHTML = statementHead(party, o, st) + statementTable(st, o) + `<p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
   const plain = (r) => { const el = document.createElement('div'); el.innerHTML = stDesc(r, false); return el.textContent.replace(/\s+/g, ' ').trim(); };
-  $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [[S.settings.companyName], [T('Account statement'), `${party.code} — ${party.name}`], [T('Period'), `${o.from || '…'} → ${o.to || today()}`], [T('Required balance'), fromCents(st.closing)], [],
-    ['Date', 'Description', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
-    ...(st.opening ? [['', T('Balance brought forward'), ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
-    ...st.rows.map((r) => [r.date, plain(r), ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), fromCents(r.debitC), fromCents(r.creditC), fromCents(r.balanceC)]),
-    [T('Total'), '', ...(o.saved ? [''] : []), fromCents(st.rows.reduce((a, r) => a + r.debitC, 0)), fromCents(st.rows.reduce((a, r) => a + r.creditC, 0)), fromCents(st.closing)]]);
+  // export in the same order as the paper: company, customer, required balance, the table, the total
+  $('#xl').onclick = () => {
+    const w = o.saved ? 6 : 5; const pad = (row) => [...row, ...Array(Math.max(0, w - row.length)).fill('')];
+    const head = [pad([S.settings.companyName]), pad([`${party.code} — ${party.name}`]), pad([`${party.region ? T(REGIONS[party.region]) + ' · ' : ''}${o.from || '…'} → ${o.to || today()} · ${T('NIS')}${o.saved ? ' · ' + T('Including saved') : ''}`]),
+      pad([T('Required balance'), fromCents(st.closing)]), pad([])];
+    const body = [['Date', 'Description', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
+      ...(st.opening ? [['', T('Balance brought forward'), ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
+      ...st.rows.map((r) => [r.date, plain(r), ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), r.debitC ? fromCents(r.debitC) : '', r.creditC ? fromCents(r.creditC) : '', fromCents(r.balanceC)]),
+      [T('Total balance'), '', ...(o.saved ? [''] : []), fromCents(st.rows.reduce((a, r) => a + r.debitC, 0)), fromCents(st.rows.reduce((a, r) => a + r.creditC, 0)), fromCents(st.closing)],
+      [], [amountInWords(fromCents(Math.abs(st.closing)))]];
+    toExcel(`statement-${party.code}.xlsx`, [...head, ...body], { cols: [12, 58, ...(o.saved ? [10] : []), 14, 14, 14], sheet: T('Account statement').slice(0, 31),
+      merges: [0, 1, 2].map((r) => ({ s: { r, c: 0 }, e: { r, c: w - 1 } })) });
+  };
   $('#pr').onclick = () => printStatement(party, o, st);
 };
 // the party's statement before the document being entered, opened over the document
@@ -1600,7 +1608,14 @@ routes.settings = async () => {
 
 // ---------- utils ----------
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
-function toExcel(name, aoa) { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Sheet1'); XLSX.writeFile(wb, name); }
+function toExcel(name, aoa, { cols, merges, sheet = 'Sheet1' } = {}) {
+  const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (cols) ws['!cols'] = cols.map((w) => ({ wch: w }));
+  if (merges) ws['!merges'] = merges;
+  XLSX.utils.book_append_sheet(wb, ws, sheet);
+  if (getLang() === 'ar') wb.Workbook = { Views: [{ RTL: true }] };   // the sheet opens right to left
+  XLSX.writeFile(wb, name);
+}
 function printStatement(party, o, st) {
   const s = S.settings; const A = getLang() === 'ar';
   const mono = (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
