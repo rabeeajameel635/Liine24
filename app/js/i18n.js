@@ -101,6 +101,13 @@ const AR = {
   'Change': 'تغيير', 'Remaining': 'المتبقي', 'Last invoice': 'آخر فاتورة', 'Last payment': 'آخر دفعة', 'Last price to this customer': 'آخر سعر لهذا الزبون',
   'Last purchase price': 'آخر سعر شراء', 'Batches in stock': 'الدفعات بالمخزن', 'Last sales': 'آخر المبيعات',
   'Invoice': 'فاتورة', 'Documents': 'المستندات', 'Menu': 'القائمة',
+  'Home': 'الرئيسية', 'Invoices': 'الفواتير', 'Vouchers': 'السندات', 'Directories': 'الأدلة', 'System': 'النظام', 'Soon': 'قريباً',
+  'Journal voucher': 'سند قيد', 'Employees': 'دليل الموظفين', 'Regions': 'دليل المناطق', 'Chart of accounts': 'دليل الحسابات',
+  'Sales by item': 'مبيعات حسب الصنف', 'Sales by customer': 'مبيعات حسب الزبون', 'Purchases by item': 'مشتريات حسب الصنف', 'Purchases by supplier': 'مشتريات حسب المورد',
+  'Purchases report': 'تقرير المشتريات', 'Recent documents': 'آخر المستندات', 'AI import': 'إدخال ذكي', 'Print / PDF': 'طباعة / PDF', 'New': 'جديد',
+  'Posted invoices minus returns, VAT included. Tap a row for its details.': 'الفواتير المرحّلة ناقص المرتجعات، شامل الضريبة. اضغط على أي سطر لتفاصيله.',
+  'Fixed chart in this version. Balances come from posted entries only.': 'دليل ثابت بهذه النسخة. الأرصدة من القيود المرحّلة فقط.',
+  'asset': 'أصول', 'liability': 'التزامات', 'equity': 'حقوق ملكية', 'income': 'إيرادات', 'expense': 'مصروفات',
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',

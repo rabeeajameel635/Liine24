@@ -4,6 +4,7 @@ import {
   computeTotals, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
+import { ic, TYPE_ICON } from './icons.js';
 import { apply as applyLang, getLang, setLang, translate, T } from './i18n.js';
 
 // ---------- state ----------
@@ -40,6 +41,7 @@ async function reload() {
 
 // ---------- router ----------
 const routes = {};
+const GROUPS = { inv: ['SI', 'SR', 'PI', 'PR', 'CN', 'DN'], vch: ['RV', 'PV'] };
 // The open editor registers itself here so leaving it can be guarded.
 let guardEditor = null, currentHash = location.hash, bypass = false;
 // Bisan keys: F2 lookup · F4 save · F9 print (posts, so it asks) · Esc exit back to where you were
@@ -53,11 +55,16 @@ async function render() {
   if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
   const hash = location.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
-  const best = $$('#nav a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
+  const navKey = name === 'new' ? `docs?type=${args[0]}` : hash;
+  const best = $$('#nav a').filter((a) => navKey.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
   $$('#nav a').forEach((a) => a.classList.toggle('on', a === best));
   document.body.classList.remove('menu-open');
-  const tb = $$('#tabs a').filter((a) => hash.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
-  $$('#tabs a').forEach((a) => a.classList.toggle('on', a === tb));
+  const qType = name === 'new' ? args[0] : new URLSearchParams(hash.split('?')[1] || '').get('type');
+  const tab = name === 'dashboard' ? 'home'
+    : (name === 'docs' || name === 'new') ? (GROUPS.vch.includes(qType) ? 'vch' : 'inv')
+    : ['reports', 'statement', 'sales', 'stock', 'tb'].includes(name) ? 'rep'
+    : ['dirs', 'customers', 'suppliers', 'items', 'accounts'].includes(name) ? 'dir' : '';
+  $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
   $('#mTitle').textContent = best ? best.textContent : (S.settings?.companyName || 'Ledger');
   const fn = routes[name] || routes.dashboard;
   await reload();
@@ -110,50 +117,58 @@ async function partyBalanceC(partyId) {
 
 // ---------- dashboard ----------
 routes.dashboard = async () => {
-  const entries = await ledger();
-  const tb = trialBalance(entries);
-  const ar = entries.filter((e) => e.account === '1200').reduce((s, e) => s + e.debitC - e.creditC, 0);
-  const ap = entries.filter((e) => e.account === '2100').reduce((s, e) => s + e.creditC - e.debitC, 0);
-  const cash = entries.filter((e) => CASH_ACCOUNTS.includes(e.account)).reduce((s, e) => s + e.debitC - e.creditC, 0);
-  const posted = S.docs.filter((d) => d.status === 'posted');
-  const month = today().slice(0, 7);
-  const salesOf = (pred) => posted.filter((d) => pred(d) && (d.type === 'SI' || d.type === 'SR')).reduce((s, d) => s + (d.type === 'SI' ? d.totalC : -d.totalC), 0);
-  const drafts = S.docs.filter((d) => d.status === 'draft');
-  const gaps = sequenceGaps(S.docs.filter((d) => d.number));
-  const healthy = tb.balanced && !gaps.length;
+  const tb = trialBalance(await ledger());
+  const healthy = tb.balanced && !sequenceGaps(S.docs.filter((d) => d.number)).length;
+  const recent = S.docs.filter((d) => d.status !== 'cancelled' && !['OB', 'OS'].includes(d.type))
+    .sort((a, b) => (b.postedAt || b.updatedAt || '').localeCompare(a.postedAt || a.updatedAt || '')).slice(0, 12);
+  const tile = (href, icon, label) => `<a class="tile" href="${href}"><span class="tico">${ic(icon)}</span><span>${label}</span></a>`;
   $('#main').innerHTML = `
-    <h1>${esc(S.settings.companyName)}</h1><p class="sub">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-    <div class="cards">
-      ${kpi("Today's sales", money(salesOf((d) => d.date === today())))}
-      ${kpi('This month', money(salesOf((d) => (d.date || '').startsWith(month))))}
-      ${kpi('Receivables', money(ar))}
-      ${kpi('Payables', money(ap))}
-      ${kpi('Cash, bank, cheques', money(cash))}
-      ${kpi('Books', healthy ? '<span class="pill ok">Balanced</span>' : '<span class="pill bad">Check</span>', '#/integrity')}
+    <div class="homehead"><div><h1 dir="auto">${esc(S.settings.companyName)}</h1>
+      <p class="date">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p></div>
+      <a href="#/integrity" class="pill ${healthy ? 'ok' : 'bad'}">${healthy ? 'Balanced' : 'Check'}</a></div>
+    <div class="hero">
+      <a class="bigcard" href="#/new/SI"><span class="bico">${ic('plus')}</span><b>New sales invoice</b></a>
+      <a class="bigcard alt" href="#/new/RV"><span class="bico">${ic('in')}</span><b>Receipt voucher</b></a>
     </div>
-    <div class="actions">
-      <a class="btn primary" href="#/new/SI">New sales invoice</a>
-      <a class="btn" href="#/new/RV">Receipt</a>
-      <a class="btn" href="#/new/PI">Purchase invoice</a>
-      <a class="btn" href="#/statement">Statement</a>
-      <a class="btn" href="#/import">Import Excel / AI</a>
+    <div class="tiles">
+      ${tile('#/new/SR', 'undo', 'Sales return')}${tile('#/new/PI', 'cart', 'Purchase invoice')}${tile('#/new/PV', 'out', 'Payment voucher')}${tile('#/statement', 'list', 'Account statement')}
+      ${tile('#/items', 'box', 'Items')}${tile('#/customers', 'users', 'Customers')}${tile('#/reports', 'bars', 'Reports')}${tile('#/import', 'spark', 'AI import')}
     </div>
-    <h2>Pending drafts <span class="muted">(${drafts.length})</span></h2>
-    ${docTable(drafts.slice(-15).reverse())}
-    <h2>Latest posted</h2>
-    ${docTable(posted.sort((a, b) => (b.postedAt || '').localeCompare(a.postedAt || '')).slice(0, 12))}
+    <div class="listhead"><h2>Recent documents</h2><a class="btn small" href="#/docs?type=SI">All</a></div>
+    ${docTable(recent)}
     ${S.items.length ? '' : `<div class="note" style="margin-top:20px">Start here: add items and customers in <a href="#/items">Items</a> and <a href="#/customers">Customers</a>, or import them from Excel in <a href="#/import">Import</a>.</div>`}`;
 };
-const kpi = (label, value, href) => `<${href ? `a href="${href}"` : 'div'} class="card kpi"><div class="label">${label}</div><div class="value">${value}</div></${href ? 'a' : 'div'}>`;
 
+// one hub screen for a group of links (Reports, Directories)
+function hub(title, rows) {
+  $('#main').innerHTML = `<h1>${title}</h1><div class="hublist">${rows.map(([href, icon, label]) => href
+    ? `<a class="hrow" href="${href}"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span>${ic('chev')}</a>`
+    : `<span class="hrow off"><span class="tico">${ic(icon)}</span><span class="grow">${label}</span><em>Soon</em></span>`).join('')}</div>`;
+}
+routes.reports = async () => hub('Reports', [
+  ['#/statement', 'list', 'Account statement'], ['#/sales?kind=sales&by=item', 'bars', 'Sales by item'], ['#/sales?kind=sales&by=customer', 'users', 'Sales by customer'],
+  ['#/sales?kind=purchases&by=item', 'cart', 'Purchases by item'], ['#/sales?kind=purchases&by=customer', 'truck', 'Purchases by supplier'],
+  ['#/stock', 'box', 'Inventory'], ['#/tb', 'layers', 'Trial balance']]);
+routes.dirs = async () => hub('Directories', [
+  ['#/customers', 'users', 'Customers'], ['#/suppliers', 'truck', 'Suppliers'], ['#/items', 'box', 'Items'], ['#/accounts', 'book', 'Chart of accounts'],
+  ['', 'users', 'Employees'], ['', 'pin', 'Regions']]);
+routes.accounts = async () => {
+  const tb = trialBalance(await ledger());
+  const bal = Object.fromEntries(tb.rows.map((r) => [r.account, r.balDebitC - r.balCreditC]));
+  $('#main').innerHTML = `<h1>Chart of accounts</h1><p class="sub">Fixed chart in this version. Balances come from posted entries only.</p>
+    <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Name</th><th>Type</th><th class="n">Balance</th></tr></thead><tbody>
+    ${Object.entries(ACCOUNTS).map(([k, a]) => `<tr><td><b>${k}</b></td><td>${a.name}</td><td>${a.type}</td><td class="n">${money(bal[k] || 0)}</td></tr>`).join('')}</tbody></table></div>`;
+};
+
+// documents as soft list rows (same on phone and desktop)
 function docTable(docs) {
   if (!docs.length) return '<p class="muted">Nothing here.</p>';
-  return `<div class="tablewrap"><table class="t"><thead><tr><th>Number</th><th>Type</th><th>Date</th><th>Party</th><th>Ref.</th><th class="n">Total</th><th>Status</th></tr></thead><tbody>
-    ${docs.map((d) => `<tr style="cursor:pointer" onclick="location.hash='#/doc/${d.id}'">
-      <td><b>${esc(docLabel(d))}</b>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</td><td>${DOC_TYPES[d.type].name}</td><td>${esc(d.date)}</td>
-      <td dir="auto">${esc(docPartyName(d))}</td><td>${esc(d.reference || '')}</td>
-      <td class="n">${d.status === 'draft' || d.status === 'cancelled' ? money(draftTotalC(d)) : money(d.totalC)}</td><td><span class="pill ${d.status}">${d.status}</span></td></tr>`).join('')}
-  </tbody></table></div>`;
+  return `<div class="dlist">${docs.map((d) => `<a class="drow" href="#/doc/${d.id}">
+      <span class="dthumb s-${d.status}">${ic(TYPE_ICON[d.type] || 'doc')}</span>
+      <span class="dmain"><span class="dtop"><b dir="ltr">${esc(docLabel(d))}</b><span class="dtype">${DOC_TYPES[d.type].name}</span>${d.backdated ? '<span class="pill bad">Backdated</span>' : ''}</span>
+        <span class="dsub"><span dir="auto">${esc(docPartyName(d) || '—')}</span> · <span dir="ltr">${esc(d.date)}</span>${d.reference ? ` · <span dir="ltr">${esc(d.reference)}</span>` : ''}</span></span>
+      <span class="dend"><b class="n">${d.status === 'draft' || d.status === 'cancelled' ? money(draftTotalC(d)) : money(d.totalC)}</b><span class="pill ${d.status}">${d.status}</span></span>
+    </a>`).join('')}</div>`;
 }
 function draftTotalC(d) {
   if (!DOC_TYPES[d.type].lines) return toCents(d.amount);
@@ -172,27 +187,28 @@ routes.doc = async (id) => {
   if (!d) throw new Error('Document not found');
   if (d.status === 'draft') editor(d); else await viewDoc(d);
 };
+// Status capsule: four circles, the active one opens into a pill with its name.
 const STATUS_TABS = [
-  ['open', 'Posted + saved', (d) => d.status === 'posted' || d.status === 'draft'],
-  ['draft', 'Saved (drafts)', (d) => d.status === 'draft'],
-  ['posted', 'Posted', (d) => d.status === 'posted'],
-  ['voided', 'Voided', (d) => d.status === 'voided'],
-  ['cancelled', 'Cancelled drafts', (d) => d.status === 'cancelled'],
-  ['all', 'All', () => true],
+  ['draft', 'Saved', 'saved', (d) => d.status === 'draft'],
+  ['posted', 'Posted', 'check', (d) => d.status === 'posted'],
+  ['voided', 'Voided', 'ban', (d) => d.status === 'voided'],
+  ['all', 'All', 'layers', () => true],
 ];
 routes.docs = async () => {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const type = q.get('type') || '', tab = q.get('tab') || 'open';
+  const type = q.get('type') || '';
   const ofType = S.docs.filter((d) => !type || d.type === type);
-  const pred = (STATUS_TABS.find((x) => x[0] === tab) || STATUS_TABS[0])[2];
+  // default: saved documents if there are any waiting, otherwise posted
+  const tab = q.get('tab') || (ofType.some((d) => d.status === 'draft') ? 'draft' : 'posted');
+  const pred = (STATUS_TABS.find((x) => x[0] === tab) || STATUS_TABS[0])[3];
   const list = ofType.filter(pred).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0) || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   const link = (t, tb) => `#/docs?type=${t}&tab=${tb}`;
-  $('#main').innerHTML = `<h1>${type ? DOC_TYPES[type].name + 's' : 'All documents'}</h1>
-    <p class="sub">Nothing is ever deleted. Voided documents stay visible with their reversal.</p>
-    <div class="chips">${STATUS_TABS.map(([k, label, f]) => `<a class="chip ${k === tab ? 'on' : ''}" href="${link(type, k)}"><span>${label}</span> <b>${ofType.filter(f).length}</b></a>`).join('')}</div>
-    <div class="chips" style="margin-top:8px"><a class="chip small ${!type ? 'on' : ''}" href="${link('', tab)}">All types</a>${['SI', 'SR', 'RV', 'CN', 'DN', 'PI', 'PR', 'PV'].map((k) => `<a class="chip small ${k === type ? 'on' : ''}" href="${link(k, tab)}">${DOC_TYPES[k].name}</a>`).join('')}</div>
-    <div class="row" style="margin:18px 0"><label class="f grow">Search<input id="fq" placeholder="Number, party, reference"></label>
-      ${type && type !== 'OB' && type !== 'OS' ? `<a class="btn primary" href="#/new/${type}">New ${DOC_TYPES[type].name.toLowerCase()}</a>` : ''}</div>
+  const group = GROUPS.vch.includes(type) ? GROUPS.vch : type ? GROUPS.inv : [...GROUPS.inv, ...GROUPS.vch];
+  $('#main').innerHTML = `<div class="listhead"><h1>${type ? DOC_TYPES[type].name : 'All documents'}</h1>
+      ${type && DOC_TYPES[type].party !== 'none' && type !== 'OB' ? `<a class="btn ink" id="newDoc" href="#/new/${type}">${ic('plus')}<span>New</span></a>` : ''}</div>
+    <div class="chips scroll">${group.map((k) => `<a class="chip small ${k === type ? 'on' : ''}" href="${link(k, q.get('tab') || '')}">${DOC_TYPES[k].name}</a>`).join('')}</div>
+    <div class="segrow"><div class="seg">${STATUS_TABS.map(([k, label, icon, f]) => `<a class="s-${k} ${k === tab ? 'on' : ''}" href="${link(type, k)}" title="${label}"><i>${ic(icon)}</i><span>${label}</span><b>${ofType.filter(f).length}</b></a>`).join('')}</div>
+      <label class="searchpill">${ic('search')}<input id="fq" placeholder="Number, party, reference"></label></div>
     <div id="dl">${docTable(list)}</div>`;
   $('#fq').oninput = (e) => {
     const s = e.target.value.toLowerCase();
@@ -946,7 +962,7 @@ routes.statement = async (pid) => {
     <datalist id="dlP">${all.map((p) => `<option value="${esc(partyLabel(p))}">`).join('')}</datalist>
     <div class="row"><label class="f grow">Customer or supplier<input id="p" list="dlP" dir="auto" value="${esc(partyLabel(party))}"></label>
       <label class="f">From<input id="from" type="date" value="${esc(q.get('from') || '')}"></label><label class="f">To<input id="to" type="date" value="${esc(q.get('to') || '')}"></label>
-      <button class="btn primary" id="show">Show</button><button class="btn" id="pr">Print</button><button class="btn" id="xl">Excel</button></div><div id="out" style="margin-top:20px"></div>`;
+      <button class="btn primary" id="show">Show</button><button class="btn" id="pr">Print / PDF</button><button class="btn" id="xl">Excel</button></div><div id="out" style="margin-top:20px"></div>`;
   $('#show').onclick = () => { const p = all.find((x) => partyLabel(x) === $('#p').value.trim()); if (p) location.hash = `#/statement/${p.id}?from=${$('#from').value}&to=${$('#to').value}`; };
   if (!party) return;
   const st = statement(await ledger(), S.docs, party.id, party.kind, { from: q.get('from') || '', to: q.get('to') || '' });
@@ -967,7 +983,7 @@ routes.tb = async () => {
     <div class="tablewrap"><table class="t"><thead><tr><th>Account</th><th>Name</th><th class="n">Total debit</th><th class="n">Total credit</th><th class="n">Debit balance</th><th class="n">Credit balance</th></tr></thead><tbody>
     ${tb.rows.map((r) => `<tr><td>${r.account}</td><td>${esc(r.name)}</td><td class="n">${money(r.debitC)}</td><td class="n">${money(r.creditC)}</td><td class="n">${r.balDebitC ? money(r.balDebitC) : ''}</td><td class="n">${r.balCreditC ? money(r.balCreditC) : ''}</td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${money(tb.totalDebitC)}</td><td class="n">${money(tb.totalCreditC)}</td></tr></tfoot></table></div>
-    <div class="actions"><button class="btn" id="pr">Print</button></div>`;
+    <div class="actions"><button class="btn" id="pr">Print / PDF</button></div>`;
   $('#pr').onclick = () => printHtml(`<h2>Trial balance · ميزان المراجعة</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
 };
 
@@ -984,40 +1000,50 @@ routes.stock = async () => {
     ${rows.map(({ i, s, avg, value }) => `<tr><td>${esc(i.code)}</td><td dir="auto">${esc(i.name)}</td><td class="n">${fmt(s.in, 0)}</td><td class="n">${fmt(s.bonusIn, 0)}</td><td class="n">${fmt(s.out, 0)}</td><td class="n">${fmt(s.bonusOut, 0)}</td>
       <td class="n" style="${s.qty < 0 ? 'color:var(--bad)' : ''}"><b>${fmt(s.qty, 0)}</b></td><td class="n">${fmt(avg / 100, 3)}</td><td class="n">${money(value)}</td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="8">Inventory value</td><td class="n">${money(rows.reduce((t, r) => t + r.value, 0))}</td></tr></tfoot></table></div>
-    <div class="actions"><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print</button></div>`;
+    <div class="actions"><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print / PDF</button></div>`;
   $('#xl').onclick = () => toExcel('inventory.xlsx', [['Code', 'Item', 'In', 'Bonus in', 'Out', 'Bonus out', 'On hand', 'Avg cost', 'Value'], ...rows.map(({ i, s, avg, value }) => [i.code, i.name, s.in, s.bonusIn, s.out, s.bonusOut, s.qty, avg / 100, value / 100])]);
   $('#pr').onclick = () => printHtml(`<h2>Inventory · جرد البضاعة</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
 };
 
 routes.sales = async () => {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const kind = q.get('kind') === 'purchases' ? 'purchases' : 'sales';
   const from = q.get('from') || today().slice(0, 8) + '01', to = q.get('to') || today(), by = q.get('by') || 'item';
-  const docs = S.docs.filter((d) => d.status === 'posted' && (d.type === 'SI' || d.type === 'SR') && d.date >= from && d.date <= to);
+  const [plus, minus] = kind === 'purchases' ? ['PI', 'PR'] : ['SI', 'SR'];
+  const partyWord = kind === 'purchases' ? 'Supplier' : 'Customer';
+  const docs = S.docs.filter((d) => d.status === 'posted' && (d.type === plus || d.type === minus) && d.date >= from && d.date <= to);
   const agg = {};
   for (const d of docs) {
-    const sign = d.type === 'SI' ? 1 : -1;
+    const sign = d.type === plus ? 1 : -1;
     const tot = computeTotals(d.lines, { vatRate: d.settingsAtPost?.vatRate ?? 16, pricesIncludeVat: d.settingsAtPost?.pricesIncludeVat ?? true, invoiceDiscount: d.invoiceDiscount });
     const factor = tot.subtotalC ? tot.totalC / tot.subtotalC : 0;
     const p = partyById(d.partyId) || {};
     for (const l of tot.lines) {
       const it = lineItem(l);
-      const key = by === 'item' ? it.code : by === 'region' ? REGIONS[p.region] || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' ' + p.name : d.date;
-      const a = (agg[key] ||= { key, name: by === 'item' ? it.name : '', qty: 0, bonus: 0, amountC: 0 });
-      a.qty += sign * (Number(l.qty) || 0); a.bonus += sign * (Number(l.bonus) || 0); a.amountC += sign * Math.round(l.amountC * factor);
+      const key = by === 'item' ? it.code : by === 'region' ? REGIONS[p.region] || '—' : by === 'type' ? CUSTOMER_TYPES[p.type] || '—' : by === 'customer' ? p.code + ' — ' + p.name : d.date;
+      const a = (agg[key] ||= { key, name: by === 'item' ? it.name : '', qty: 0, bonus: 0, amountC: 0, det: [] });
+      const amt = sign * Math.round(l.amountC * factor);
+      a.qty += sign * (Number(l.qty) || 0); a.bonus += sign * (Number(l.bonus) || 0); a.amountC += amt;
+      a.det.push({ id: d.id, number: d.number, date: d.date, who: by === 'item' ? p.name || '' : `${it.code} ${it.name}`, qty: sign * (Number(l.qty) || 0), bonus: sign * (Number(l.bonus) || 0), price: Number(l.price) || 0, amt });
     }
   }
   const rows = Object.values(agg).sort((a, b) => b.amountC - a.amountC);
   const tsum = rows.reduce((s, r) => ({ q: s.q + r.qty, b: s.b + r.bonus, a: s.a + r.amountC }), { q: 0, b: 0, a: 0 });
-  $('#main').innerHTML = `<h1>Sales report</h1><p class="sub">Posted sales minus returns, VAT included.</p>
+  const byOpts = [['item', 'Item'], ['customer', partyWord], ...(kind === 'sales' ? [['region', 'Region'], ['type', 'Customer type']] : []), ['date', 'Date']];
+  const cols = by === 'item' ? 6 : 5;
+  const title = kind === 'purchases' ? 'Purchases report' : 'Sales report';
+  $('#main').innerHTML = `<h1>${title}</h1><p class="sub">Posted invoices minus returns, VAT included. Tap a row for its details.</p>
     <div class="row"><label class="f">From<input id="from" type="date" value="${from}"></label><label class="f">To<input id="to" type="date" value="${to}"></label>
-    <label class="f">Group by<select id="by">${[['item', 'Item'], ['customer', 'Customer'], ['region', 'Region'], ['type', 'Customer type'], ['date', 'Date']].map(([k, v]) => `<option value="${k}" ${k === by ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <button class="btn primary" id="show">Show</button><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print</button></div>
-    <div class="tablewrap" style="margin-top:20px"><table class="t"><thead><tr><th>${{ item: 'Item', customer: 'Customer', region: 'Region', type: 'Customer type', date: 'Date' }[by]}</th>${by === 'item' ? '<th>Name</th>' : ''}<th class="n">Qty</th><th class="n">Bonus</th><th class="n">Total qty</th><th class="n">Total ₪</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td dir="auto"><b>${esc(r.key)}</b></td>${by === 'item' ? `<td dir="auto">${esc(r.name)}</td>` : ''}<td class="n">${fmt(r.qty, 0)}</td><td class="n">${fmt(r.bonus, 0)}</td><td class="n">${fmt(r.qty + r.bonus, 0)}</td><td class="n">${money(r.amountC)}</td></tr>`).join('')}
+    <label class="f">Group by<select id="by">${byOpts.map(([k, v]) => `<option value="${k}" ${k === by ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    <button class="btn primary" id="show">Show</button><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print / PDF</button></div>
+    <div class="tablewrap" style="margin-top:20px"><table class="t" id="rep"><thead><tr><th>${Object.fromEntries(byOpts)[by]}</th>${by === 'item' ? '<th>Name</th>' : ''}<th class="n">Qty</th><th class="n">Bonus</th><th class="n">Total qty</th><th class="n">Total ₪</th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr class="grp" data-i="${i}" style="cursor:pointer"><td dir="auto"><b>${esc(r.key)}</b></td>${by === 'item' ? `<td dir="auto">${esc(r.name)}</td>` : ''}<td class="n">${fmt(r.qty, 0)}</td><td class="n">${fmt(r.bonus, 0)}</td><td class="n">${fmt(r.qty + r.bonus, 0)}</td><td class="n">${money(r.amountC)}</td></tr>
+      <tr class="det" data-d="${i}" hidden><td colspan="${cols}">${miniTable(['Number', 'Date', by === 'item' ? partyWord : 'Item', 'Qty', 'Bonus', 'Price', 'Amount'], r.det.map((x) => [`<a href="#/doc/${x.id}" dir="ltr">${esc(x.number)}</a>`, esc(x.date), `<span dir="auto">${esc(x.who)}</span>`, fmt(x.qty, 0), fmt(x.bonus, 0), fmt(x.price, 3), money(x.amt)]))}</td></tr>`).join('')}
     </tbody><tfoot><tr><td ${by === 'item' ? 'colspan="2"' : ''}>Totals</td><td class="n">${fmt(tsum.q, 0)}</td><td class="n">${fmt(tsum.b, 0)}</td><td class="n">${fmt(tsum.q + tsum.b, 0)}</td><td class="n">${money(tsum.a)}</td></tr></tfoot></table></div>`;
-  $('#show').onclick = () => (location.hash = `#/sales?from=${$('#from').value}&to=${$('#to').value}&by=${$('#by').value}`);
-  $('#xl').onclick = () => toExcel(`sales-${by}.xlsx`, [[by, 'Name', 'Qty', 'Bonus', 'Total qty', 'Total ILS'], ...rows.map((r) => [r.key, r.name, r.qty, r.bonus, r.qty + r.bonus, r.amountC / 100])]);
-  $('#pr').onclick = () => printHtml(`<h2>Sales report · تقرير المبيعات</h2><p>${from} → ${to} · by ${by}</p>` + $('.tablewrap').outerHTML);
+  $$('#rep tr.grp').forEach((tr) => (tr.onclick = () => { const d = $(`#rep tr.det[data-d="${tr.dataset.i}"]`); d.hidden = !d.hidden; }));
+  $('#show').onclick = () => (location.hash = `#/sales?kind=${kind}&by=${$('#by').value}&from=${$('#from').value}&to=${$('#to').value}`);
+  $('#xl').onclick = () => toExcel(`${kind}-${by}.xlsx`, [[by, 'Name', 'Qty', 'Bonus', 'Total qty', 'Total ILS'], ...rows.map((r) => [r.key, r.name, r.qty, r.bonus, r.qty + r.bonus, r.amountC / 100])]);
+  $('#pr').onclick = () => { $$('#rep tr.det').forEach((d) => (d.hidden = false)); printHtml(`<h2>${title}</h2><p>${from} → ${to}</p>` + $('.tablewrap').outerHTML); };
 };
 
 routes.integrity = async () => {
@@ -1234,6 +1260,7 @@ function printHtml(html) {
 // ---------- boot ----------
 (async () => {
   applyLang();
+  $$('[data-ic]').forEach((el) => (el.innerHTML = ic(el.dataset.ic)));
   const lb = $('#langBtn');
   lb.textContent = getLang() === 'ar' ? 'English' : 'العربية';
   lb.onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); };
