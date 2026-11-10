@@ -777,3 +777,45 @@ body.editing .sheet { background: var(--cl-cream); box-shadow: 0 1px 2px rgba(31
   .wbody #lines td.code { width: 84px; } .wbody #lines td.code input { width: 76px; padding: 0 4px; }
   .wbody #lines td.num input { width: 82px !important; padding: 0 6px; }
 }
+/* ---------- line v7: orange number (tap = remove), screen-only band "Exp. Date · batch · stock count" ---------- */
+.lno { width: 23px; height: 23px; min-height: 23px; border-radius: 50%; border: none; background: var(--cl-orange); color: #fff; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-variant-numeric: tabular-nums; line-height: 1; }
+.lno:active { transform: scale(.92); }
+#lines tr:not(.found) .lno { visibility: hidden; }
+.wbody #lines .subline { align-items: center; gap: 10px; }
+.wbody #lines .subline .xl { display: inline-flex; align-items: center; gap: 5px; margin: 0; font-size: 11.5px; color: var(--cl-muted); white-space: nowrap; }
+.wbody #lines .subline .xl input { width: 64px !important; }
+.wbody #lines .subline input[data-k=batch] { width: 70px !important; }
+.wbody #lines .subline input::placeholder { color: #B9B6AE; }
+.wbody #lines .subline .oh { opacity: .5; margin-inline-start: auto; white-space: nowrap; font-size: 11.5px; }
+.wbody #lines .subline .oh b { color: var(--cl-ink); }
+dialog.ask { border: none; border-radius: 22px; padding: 20px 20px 16px; max-width: 340px; width: calc(100% - 40px); background: #fff; box-shadow: 0 12px 40px rgba(31,30,28,.22); }
+dialog.ask::backdrop { background: rgba(31,30,28,.28); }
+dialog.ask .q { margin: 0 0 16px; font-size: 1.02em; line-height: 1.5; white-space: pre-line; color: var(--cl-ink); }
+dialog.ask .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0; }
+dialog.ask .btn { min-height: 40px; padding: 0 18px; border-radius: 999px; }
+dialog.ask .btn.ink { background: var(--cl-orange); color: #fff; }
+@media (min-width: 861px) {
+  .wbody table.t.lines tbody td { background: linear-gradient(#fff calc(100% - 30px), #F5F4EF calc(100% - 30px)); vertical-align: top; padding-top: 10px; padding-bottom: 0; }
+  .wbody table.t.lines tbody tr:not(.found) td { background: #fff; padding-bottom: 8px; }
+  .wbody #lines td.item .subline { height: 30px; margin-top: 4px; }
+  .wbody #lines td.ln { padding-top: 12px; }
+}
+@media (max-width: 860px) {
+  .wbody #lines td.ln { display: block; grid-area: del; align-self: center; justify-self: start; margin: 0 !important; padding: 0 !important; }
+  .wbody #lines td.amt { grid-area: amt; margin: 0; align-self: center; }
+  .wbody #lines tbody tr.found { background: linear-gradient(#fff calc(100% - 27px), #F5F4EF calc(100% - 27px)); padding-bottom: 2px; box-shadow: 0 1px 2px rgba(31,30,28,.06); }
+  .wbody #lines tbody tr.found .subline { margin-top: 3px; min-height: 22px; }
+  .wbody #lines tbody tr.found td.num[data-label="Disc %"] { margin-top: 3px; }
+  .wbody #lines .subline .xl { font-size: 10.5px; gap: 3px; }
+  .wbody #lines .subline .xl input, .wbody #lines .subline input[data-k=batch] { font-size: 11.5px; height: 20px; min-height: 20px; }
+  .wbody #lines .subline .xl input { width: 58px !important; }
+  .wbody #lines .subline input[data-k=batch] { width: 52px !important; }
+  .wbody #lines .subline .oh { font-size: 10.5px; }
+}
+.wbody #lines .lno, .wbody #lines [data-del].lno { width: 23px; height: 23px; min-height: 23px; border-radius: 50%; background: var(--cl-orange); color: #fff; font-size: 11.5px; font-weight: 700; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.wbody #lines tr:not(.found) .lno { visibility: hidden; }
+@media (max-width: 860px) {
+  .wbody #lines tbody tr { margin-bottom: 4px; }
+  .whead { gap: 6px; }
+}
+@media (max-width: 860px) { .ws { gap: 9px; } }

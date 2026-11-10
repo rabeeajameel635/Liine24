@@ -43,7 +43,7 @@ require('fs').mkdirSync(OUT, { recursive: true });
     await p.evaluate(() => window.scrollTo(0, 9999)); await p.waitForTimeout(150); await p.screenshot({ path: `${OUT}/${lang}-3c-bottom.png` });
     console.log(lang, 'buttons:', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#finish .rb')].map((b) => [b.id, Math.round(b.getBoundingClientRect().left)]))));
     await p.fill('#invdisc', '');
-    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-del]').tap(); await p.waitForTimeout(150); }
+    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-del]').tap(); await p.waitForTimeout(200); await p.tap('dialog.ask [data-v=yes]'); await p.waitForTimeout(150); }
     const r1 = p.locator('#lines tbody tr.found').first();
     await r1.locator('[data-k=expiry]').fill('2026-12');
     console.log(lang, 'lines:', await p.locator('#lines tbody tr.found').count(), '| first:', await r1.locator('[data-k=code]').inputValue(), await r1.locator('[data-k=name]').inputValue(), '| total:', await p.textContent('#gTotal'));

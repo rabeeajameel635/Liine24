@@ -91,6 +91,19 @@ window.addEventListener('beforeunload', (e) => { if (guardEditor && guardEditor.
 const go = (h) => { guardEditor = null; if (location.hash === h) render(); else location.hash = h; };
 
 // "You started this document. What now?"  → 'stay' | 'discard' | 'save' | 'post'
+// a small yes / no question in the app's own style (not the browser's box)
+function ask(question, yes = 'Yes', no = 'Cancel') {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'ask';
+    dlg.innerHTML = `<p class="q">${esc(question)}</p><div class="actions"><button class="btn" data-v="no">${esc(no)}</button><button class="btn ink" data-v="yes">${esc(yes)}</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(false); });
+    $('[data-v=yes]', dlg).onclick = () => end(true); $('[data-v=no]', dlg).onclick = () => end(false);
+    setTimeout(() => $('[data-v=no]', dlg).focus(), 30);
+  });
+}
 function leaveDialog(hasSavedDraft) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
@@ -282,7 +295,7 @@ function editor(doc) {
       d.lines = $$('#lines tbody tr').map((tr) => {
         const g = (k) => $(`[data-k="${k}"]`, tr).value.trim();
         const it = itemById(tr.dataset.item);
-        return { itemId: it?.id || '', itemText: g('code') || g('name'), qty: num(g('qty')), bonus: num(g('bonus')), price: R && g('price') !== '' ? round1(num(g('price'))) : num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: g('expiry') };
+        return { itemId: it?.id || '', itemText: g('code') || g('name'), qty: num(g('qty')), bonus: num(g('bonus')), price: R && g('price') !== '' ? round1(num(g('price'))) : num(g('price')), disc: num(g('disc')), batch: g('batch'), expiry: expParse(g('expiry')) };
       }).filter((l) => l.itemId || l.itemText || l.qty || l.bonus);
       d.invoiceDiscount = num($('#invdisc').value);
     } else {
@@ -622,6 +635,14 @@ function findItem(text) {
   const code = text.split(' — ')[0].trim().toLowerCase();
   return S.items.find((i) => i.code.toLowerCase() === code) || S.items.find((i) => `${i.code} — ${i.name}` === text) || S.items.find((i) => i.name.toLowerCase() === text.toLowerCase());
 }
+function expParse(v) {
+  v = String(v || '').trim(); if (!v) return '';
+  let m = v.match(/^(\d{4})-(\d{1,2})$/); if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
+  m = v.match(/^(\d{1,2})\s*[\/\s.-]?\s*(\d{4}|\d{2})$/);
+  if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2].length === 2 ? '20' + m[2] : m[2]}-${m[1].padStart(2, '0')}`;
+  return v;
+}
+function expShow(v) { const m = String(v || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}/${m[1]}` : v || ''; }
 function defaultPrice(item, type) {
   if (!item) return '';
   const v = ['PI', 'PR', 'OS'].includes(type) ? item.buyPrice ?? '' : item.pricePharmacist || item.pricePublic || '';
@@ -632,19 +653,18 @@ function linesUI(doc) {
   const row = (l) => {
     const it = itemById(l.itemId);
     return `<tr data-item="${esc(it?.id || '')}" class="${it ? 'found' : ''}">
-      <td class="ln"></td>
+      <td class="ln"><button type="button" class="lno" data-del tabindex="-1" title="Remove line from draft"></button></td>
       <td class="code"><input data-k="code" dir="ltr" inputmode="numeric" enterkeyhint="next" value="${esc(it ? it.code : '')}" placeholder="Code"></td>
       <td class="item"><div class="namewrap"><input data-k="name" list="dlNames" dir="auto" value="${esc(it ? it.name : l.itemText || '')}" placeholder="Item name" enterkeyhint="next"><button type="button" class="lkbtn" data-lk="item" tabindex="-1" title="Lookup (F2)">${ic('search')}</button></div>
-        <div class="subline"><input data-k="batch" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><input data-k="expiry" type="month" value="${esc(l.expiry)}" title="Expiry" tabindex="-1"><span class="oh"></span></div></td>
+        <div class="subline"><label class="xl"><span dir="ltr">Exp. Date</span><input data-k="expiry" dir="ltr" inputmode="numeric" value="${esc(expShow(l.expiry))}" placeholder="--/----" title="Expiry (MM/YYYY)" tabindex="-1"></label><input data-k="batch" dir="ltr" value="${esc(l.batch)}" placeholder="Batch" tabindex="-1"><span class="oh"></span></div></td>
       <td class="num" data-label="Price"><input data-k="price" inputmode="decimal" enterkeyhint="next" value="${esc(l.price)}" style="width:104px"></td>
       <td class="num" data-label="Qty"><input data-k="qty" inputmode="decimal" enterkeyhint="next" value="${esc(l.qty)}" style="width:92px"></td>
       <td class="num" data-label="Bonus"><input data-k="bonus" inputmode="decimal" enterkeyhint="next" value="${esc(l.bonus)}" style="width:84px"></td>
       <td class="num" data-label="Disc %"><input data-k="disc" inputmode="decimal" enterkeyhint="next" value="${esc(l.disc)}" placeholder="%" style="width:72px"></td>
-      <td class="n amt"></td>
-      <td><button class="btn small" data-del tabindex="-1" title="Remove line from draft">×</button></td></tr>`;
+      <td class="n amt"></td></tr>`;
   };
   return `<div class="tablewrap"><table class="t lines" id="lines"><thead><tr>
-    <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th><th></th></tr></thead>
+    <th>#</th><th>Code</th><th>Item</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead>
     <tbody>${(doc.lines.length ? doc.lines : [blankLine()]).map(row).join('')}</tbody></table></div>
     <div class="gfoot"><span id="gStats"></span><span class="gact"><button class="btn small" id="addline" tabindex="-1">+ Line</button><button class="btn small" id="smart" tabindex="-1">${ic('spark')}<span>Smart entry (AI / paste)</span></button></span></div>
     <template id="rowTpl">${row(blankLine())}</template>`;
@@ -653,7 +673,8 @@ function linesUI(doc) {
 function wireLines(doc, arm, parties = [], setTotal = () => {}) {
   const tbody = $('#lines tbody');
   const ORDER = ['code', 'name', 'price', 'qty', 'bonus', 'disc'];
-  const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.ln', tr).textContent = i + 1));
+  const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.lno', tr).textContent = i + 1));
+  const phoneGrid = window.matchMedia('(max-width: 860px)').matches;
   const recalc = () => {
     const lines = $$('tr', tbody).map((tr) => ({ qty: num($('[data-k=qty]', tr).value) || 0, bonus: num($('[data-k=bonus]', tr).value) || 0, price: num($('[data-k=price]', tr).value) || 0, disc: num($('[data-k=disc]', tr).value) || 0 }));
     const tot = computeTotals(lines, { ...docTotalsOpts(doc, S.settings), invoiceDiscount: num($('#invdisc').value) || 0 });
@@ -670,7 +691,7 @@ function wireLines(doc, arm, parties = [], setTotal = () => {}) {
   };
   // stock on hand beside the expiry: on screen only, never printed
   let oh = null;
-  const showOh = () => { if (oh) $$('tr', tbody).forEach((tr) => { const el = $('.oh', tr); const it = tr.dataset.item; el.innerHTML = it ? `<span>On hand</span> <b>${fmt(oh[it]?.qty || 0, 0)}</b>` : ''; if (it && !el.dataset.done) translate(el); }); };
+  const showOh = () => { if (oh) $$('tr', tbody).forEach((tr) => { const el = $('.oh', tr); const it = tr.dataset.item; el.innerHTML = it ? `<span>Stock count</span>: <b>${fmt(oh[it]?.qty || 0, 0)}</b>` : ''; if (it && !el.dataset.done) translate(el); }); };
   db.all('stock').then((m) => { oh = stockOnHand(m); showOh(); });
   const setItem = (tr, it) => {
     tr.dataset.item = it ? it.id : '';
@@ -701,7 +722,15 @@ function wireLines(doc, arm, parties = [], setTotal = () => {}) {
     recalc();
   });
   tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'price' && docTotalsOpts(doc, S.settings).roundTotals && e.target.value.trim() !== '') { e.target.value = round1(num(e.target.value)); recalc(); } });
-  tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined) { e.target.closest('tr').remove(); if (!tbody.children.length) addRow(); renumber(); recalc(); } });
+  tbody.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-del]'); if (!b) return;
+    const tr = b.closest('tr'); if (isEmpty(tr)) return;
+    const it = itemById(tr.dataset.item);
+    if (!(await ask(T('Remove this item from the invoice?') + (it ? `\n${it.code} — ${it.name}` : ''), 'Yes, remove', 'Cancel'))) return;
+    tr.remove(); if (!tbody.children.length) addRow(); renumber(); recalc();
+    if (phoneGrid && !$$('tr', tbody).some((r) => isEmpty(r))) addRow();
+  });
+  tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'expiry') e.target.value = expShow(expParse(e.target.value)); });
   const pick = async (tr, filter) => {
     const it = await lookupItem(filter, doc.type);
     if (it) { setItem(tr, it); tr.classList.remove('unknown'); recalc(); const el = $('[data-k=price]', tr); el.focus(); el.select(); }
@@ -750,7 +779,6 @@ function wireLines(doc, arm, parties = [], setTotal = () => {}) {
   if (window.matchMedia('(max-width: 860px)').matches) {
     ORDER.pop();                                          // discount is not part of the Enter walk on phones
     if (!$$('tr', tbody).some((r) => isEmpty(r))) addRow();
-    tbody.addEventListener('click', (e) => { if (e.target.dataset.del !== undefined && !$$('tr', tbody).some((r) => isEmpty(r))) addRow(); });
     tbody.addEventListener('focusin', (e) => { if (e.target.dataset.k) e.target.closest('tr').scrollIntoView({ block: 'nearest' }); });
   }
   $('#invdisc').oninput = recalc;
