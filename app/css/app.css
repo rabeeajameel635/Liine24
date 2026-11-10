@@ -925,3 +925,37 @@ dialog .actions .btn.ink, dialog .btn.primary { background: var(--cl-orange, #C9
   .stopts .sobtn .btn { min-height: 44px; }
   .dlg-x { top: 12px; inset-inline-end: 12px; width: 32px; height: 32px; }
 }
+/* ---------- statement v2: head + required balance box, precise description ---------- */
+.sthd { display: flex; justify-content: space-between; align-items: center; gap: 16px; background: var(--cl-cream, #FAF9F5); border: 1px solid var(--cl-line, #E2DFD6); border-radius: 18px; padding: 14px 16px; margin: 0 0 14px; }
+.sthn { font-size: 1.15em; font-weight: 700; }
+.sths { color: var(--cl-muted, #75736C); font-size: .86em; margin-top: 2px; }
+.sthb { display: flex; flex-direction: column; align-items: flex-end; background: #fff; border: 1.5px solid var(--cl-ink, #1F1E1C); border-radius: 14px; padding: 8px 14px; flex: none; }
+.sthb span { font-size: .8em; color: var(--cl-muted, #75736C); }
+.sthb b { font-size: 1.45em; font-weight: 800; font-variant-numeric: tabular-nums; }
+table.st td.sn .dh { display: block; font-weight: 600; }
+table.st td.sn .dx { display: block; font-size: .82em; color: var(--muted); margin-top: 1px; }
+table.st tr.sop td { background: var(--surface) !important; }
+table.st tfoot td { font-size: 1.02em; }
+@media (max-width: 860px) {
+  .sthd { padding: 12px; gap: 10px; border-radius: 16px; }
+  .sthn { font-size: 1em; } .sths { font-size: .76em; }
+  .sthb { padding: 6px 10px; } .sthb b { font-size: 1.15em; } .sthb span { font-size: .7em; }
+  table.st tr { grid-template-areas: "sn amt sb" "sd amt sb"; }
+  table.st.withst tr { grid-template-areas: "sn amt sb" "sd amt sb" "ss amt sb"; }
+  table.st td.sn { white-space: normal !important; overflow: visible !important; font-weight: 400 !important; font-size: 14px !important; }
+  table.st td.sn .dh { font-size: 14.5px; }
+  table.st td.sn .dx { font-size: 11.5px; }
+  table.st td.sd { grid-area: sd !important; justify-self: start !important; }
+  table.st tr.sop { display: flex; justify-content: space-between; }
+  table.st tfoot tr { display: grid !important; grid-template-columns: 1fr auto auto auto; gap: 10px; }
+  table.st tfoot td:nth-child(2), table.st tfoot td:nth-child(3) { display: block !important; font-size: 12px; color: var(--muted); align-self: center; }
+  dialog.stsheet table.st tbody tr { grid-template-areas: "sn amt sb" "sd amt sb"; }
+  dialog.stsheet table.st td.sd { grid-area: sd; justify-self: start; }
+}
+/* paper */
+.stprint .tb .sthd { background: #fff; border: none; padding: 10px 0 0; margin: 8px 0 0; border-radius: 0; border-top: 1.5px solid #999; }
+.stprint .sthb { border: 2px solid #000; border-radius: 0; }
+.stprint table.pst td .dh { font-weight: 700; display: block; } .stprint table.pst td .dx { display: block; font-size: 9pt; color: #444; }
+.stprint table.pst tfoot td { font-weight: 800; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 7px 8px; }
+.stprint table.pst tr.sop td { background: #f1f1f1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.stprint table.pst a { color: inherit; text-decoration: none; }

@@ -163,6 +163,13 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  closing with saved:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
   await page.click('#stOpts'); await page.waitForSelector('dialog.stopts'); await page.click('dialog.stopts [data-m=posted]'); await page.waitForTimeout(500);
   console.log('  posted only again has no status column:', await page.locator('#out td.ss').count() === 0);
+  console.log('  descriptions:', (await page.locator('#out td.sn').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()).slice(0, 6));
+  console.log('  required balance box:', (await page.textContent('#out .sthb')).replace(/\s+/g, ' ').trim());
+  await page.screenshot({ path: OUT + '/4-statement.png', fullPage: true });
+  await page.click('#pr'); await page.waitForTimeout(300);
+  await page.evaluate(() => document.body.classList.add('printing')); await page.emulateMedia({ media: 'print' });
+  await page.screenshot({ path: OUT + '/5-statement-print.png', fullPage: true });
+  await page.emulateMedia({ media: 'screen' }); await page.evaluate(() => document.body.classList.remove('printing'));
   const nums = await page.evaluate(async () => (await (await import('./js/db.js')).all('docs')).filter((x) => x.number).map((x) => x.number));
   console.log('  no document posted twice (numbers unique):', new Set(nums).size === nums.length, nums.filter((n) => /^(SI|RV)/.test(n)));
 

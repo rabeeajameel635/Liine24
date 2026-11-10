@@ -1214,14 +1214,42 @@ const stLines = (d) => {
   const tot = computeTotals(d.lines || [], docTotalsOpts(d, S.settings));
   return tot.lines.filter((l) => l.itemId).map((l) => { const it = itemById(l.itemId) || {}; return `<div><span dir="ltr">${esc(it.code || '')}</span> <span dir="auto">${esc(it.name || '')}</span> · ${fmt(l.qty || 0, 0)}${l.bonus ? ` + ${fmt(l.bonus, 0)}` : ''} × ${pricef(l.price, R)} = <b>${amt(l.amountC, R)}</b></div>`; }).join('');
 };
-function statementTable(st, { saved = false, detail = false } = {}) {
-  const status = (r) => (saved ? `<td class="ss"><span class="pill ${r.draft ? 'draft' : 'posted'}">${r.draft ? 'Saved (draft)' : 'Posted'}</span></td>` : '');
-  return `<div class="tablewrap"><table class="t st${saved ? ' withst' : ''}"><thead><tr><th>Date</th><th>Document</th><th>Type</th><th>Ref.</th>${saved ? '<th>Status</th>' : ''}<th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
-    ${st.opening ? `<tr><td colspan="${saved ? 7 : 6}"><i>Opening balance</i></td><td class="n">${money(st.opening)}</td></tr>` : ''}
-    ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : ''}"><td class="sd">${esc(r.date)}</td><td class="sn"><a href="#/doc/${r.docId}">${esc(r.number || r.doc?.number || T('Draft'))}</a></td><td class="sy">${esc(DOC_TYPES[r.type]?.name || '')}${r.reversal ? ' <span class="pill voided">reversal</span>' : ''}</td><td class="sr">${esc(r.doc?.reference || '')}</td>${status(r)}
+// the description of a statement line, written out like an accountant would: type and number, reference,
+// how a voucher was paid (cheque no., bank, due date), how many items an invoice carried
+function stDesc(r, link = true) {
+  const d = r.doc || {};
+  const t = DOC_TYPES[r.type]?.name || '';
+  const num = r.number || d.number;
+  const no = num ? (link ? `<a href="#/doc/${r.docId}" dir="ltr">${esc(num)}</a>` : `<span dir="ltr">${esc(num)}</span>`)
+    : (link ? `<a href="#/doc/${r.docId}">${esc(T('saved, no number yet'))}</a>` : esc(T('saved, no number yet')));
+  const bits = [];
+  if (d.reference) bits.push(`${esc(T('Ref.'))} <span dir="auto">${esc(d.reference)}</span>`);
+  if (['RV', 'PV'].includes(r.type) && d.method) bits.push(d.method === 'cheque' && d.chequeNo
+    ? `${esc(T('Cheque'))} <span dir="ltr">${esc(d.chequeNo)}</span>${d.chequeBank ? ` · <span dir="auto">${esc(d.chequeBank)}</span>` : ''}${d.dueDate ? ` · ${esc(T('due'))} <span dir="ltr">${esc(d.dueDate)}</span>` : ''}`
+    : esc(T(PAY_METHODS[d.method] || '')));
+  if (DOC_TYPES[r.type]?.lines) { const n = (d.lines || []).filter((l) => l.itemId).length; if (n) bits.push(`${n} ${esc(T(n === 1 ? 'item' : 'items'))}`); }
+  if (d.notes && r.type !== 'OB') bits.push(`<span dir="auto">${esc(d.notes.slice(0, 60))}</span>`);
+  const head = r.type === 'OB' ? `${esc(T('Opening balance'))} ${no}` : `${r.reversal ? esc(T('Void of')) + ' ' : ''}${esc(T(t))} ${esc(T('no.'))} ${no}`;
+  return `<span class="dh">${head}</span>${bits.length ? `<span class="dx">${bits.join(' · ')}</span>` : ''}`;
+}
+function statementTable(st, { saved = false, detail = false, print = false } = {}) {
+  const status = (r) => (saved ? `<td class="ss"><span class="pill ${r.draft ? 'draft' : 'posted'}">${esc(T(r.draft ? 'Saved (draft)' : 'Posted'))}</span></td>` : '');
+  const span = saved ? 3 : 2;
+  const dr = st.rows.reduce((s, r) => s + r.debitC, 0), cr = st.rows.reduce((s, r) => s + r.creditC, 0);
+  return `<div class="${print ? '' : 'tablewrap'}"><table class="${print ? 'pst' : `t st${saved ? ' withst' : ''}`}"><thead><tr><th>${esc(T('Date'))}</th><th>${esc(T('Description'))}</th>${saved ? `<th>${esc(T('Status'))}</th>` : ''}<th class="n">${esc(T('Debit'))}</th><th class="n">${esc(T('Credit'))}</th><th class="n">${esc(T('Balance'))}</th></tr></thead><tbody>
+    ${st.opening ? `<tr class="sop"><td class="sd"></td><td class="sn"><span class="dh">${esc(T('Balance brought forward'))}</span></td>${saved ? '<td class="ss"></td>' : ''}<td class="n sdb"></td><td class="n scr"></td><td class="n sb"><b>${money(st.opening)}</b></td></tr>` : ''}
+    ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : ''}"><td class="sd" dir="ltr">${esc(r.date)}</td><td class="sn">${stDesc(r, !print)}</td>${status(r)}
       <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>
-      ${detail && !r.reversal && stLines(r.doc) ? `<tr class="sdet"><td colspan="${saved ? 8 : 7}">${stLines(r.doc)}</td></tr>` : ''}`).join('')}
-    </tbody><tfoot><tr><td colspan="${saved ? 5 : 4}">Closing balance</td><td class="n">${money(st.rows.reduce((s, r) => s + r.debitC, 0))}</td><td class="n">${money(st.rows.reduce((s, r) => s + r.creditC, 0))}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
+      ${detail && !r.reversal && stLines(r.doc) ? `<tr class="sdet"><td></td><td colspan="${span + 3}">${stLines(r.doc)}</td></tr>` : ''}`).join('')}
+    </tbody><tfoot><tr><td colspan="${span}">${esc(T('Total'))}</td><td class="n">${money(dr)}</td><td class="n">${money(cr)}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
+}
+// head of a statement, screen and paper alike: who, which period, and the balance they owe (or we owe)
+function statementHead(party, o, st) {
+  const owes = st.closing >= 0;
+  const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
+  return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
+      <div class="sths">${party.region ? `${esc(T(REGIONS[party.region]))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
+    <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }
 function statementOptions(cur = {}) {
   return new Promise((resolve) => {
@@ -1274,11 +1302,14 @@ routes.statement = async (pid) => {
   const mk = party.kind === 'supplier' ? [['PV', 'Payment voucher'], ['PI', 'Purchase invoice']] : [['RV', 'Receipt voucher'], ['SI', 'Sales invoice']];
   $('#out').insertAdjacentHTML('beforebegin', `<div class="chain">${mk.map(([k, n], i) => `<a class="btn ${i ? '' : 'ink'}" href="#/new/${k}?party=${party.id}">${ic('plus')}<span>${n}</span></a>`).join('')}</div>`);
   const st = await statementOf(party, o);
-  $('#out').innerHTML = statementTable(st, o) + `<p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
-  $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [['Date', 'Document', 'Type', 'Ref', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
-    ...(st.opening ? [[T('Opening balance'), '', '', '', ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
-    ...st.rows.map((r) => [r.date, r.number || T('Draft'), T(DOC_TYPES[r.type]?.name || ''), r.doc?.reference || '', ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), fromCents(r.debitC), fromCents(r.creditC), fromCents(r.balanceC)])]);
-  $('#pr').onclick = () => printHtml(`<h2>Statement · كشف حساب</h2><p><b dir="auto">${esc(partyLabel(party))}</b> · ${esc(o.from || 'start')} → ${esc(o.to || today())}${o.saved ? ' · ' + esc(T('Including saved')) : ''}</p>${$('#out').innerHTML}`);
+  $('#out').innerHTML = statementHead(party, o, st) + statementTable(st, o) + `<p class="words">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</p>`;
+  const plain = (r) => { const el = document.createElement('div'); el.innerHTML = stDesc(r, false); return el.textContent.replace(/\s+/g, ' ').trim(); };
+  $('#xl').onclick = () => toExcel(`statement-${party.code}.xlsx`, [[S.settings.companyName], [T('Account statement'), `${party.code} — ${party.name}`], [T('Period'), `${o.from || '…'} → ${o.to || today()}`], [T('Required balance'), fromCents(st.closing)], [],
+    ['Date', 'Description', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
+    ...(st.opening ? [['', T('Balance brought forward'), ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
+    ...st.rows.map((r) => [r.date, plain(r), ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), fromCents(r.debitC), fromCents(r.creditC), fromCents(r.balanceC)]),
+    [T('Total'), '', ...(o.saved ? [''] : []), fromCents(st.rows.reduce((a, r) => a + r.debitC, 0)), fromCents(st.rows.reduce((a, r) => a + r.creditC, 0)), fromCents(st.closing)]]);
+  $('#pr').onclick = () => printStatement(party, o, st);
 };
 // the party's statement before the document being entered, opened over the document
 async function statementSheet(party, exceptId) {
@@ -1570,6 +1601,18 @@ routes.settings = async () => {
 // ---------- utils ----------
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 function toExcel(name, aoa) { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Sheet1'); XLSX.writeFile(wb, name); }
+function printStatement(party, o, st) {
+  const s = S.settings; const A = getLang() === 'ar';
+  const mono = (s.companyName || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
+  $('#printArea').innerHTML = `<div class="doc-print page stprint" dir="${A ? 'rtl' : 'ltr'}">
+    <div class="ph"><div><div class="co" dir="auto">${esc(A && s.companyNameAr ? s.companyNameAr : s.companyName)}</div><div class="cosub">${[s.address, s.phone].filter(Boolean).map(esc).join(' — ')}</div></div>${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>
+    <div class="tb"><div class="tbh"><div><div class="t1">${esc(T('Account statement'))}</div></div></div>${statementHead(party, o, st)}</div>
+    ${statementTable(st, { ...o, print: true })}
+    <div class="wbox"><div class="wl">${esc(T('Amount in words'))}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</div></div>
+    <div class="sign"><span>${esc(T('Signature'))}</span><span>${esc(T('Received by'))}</span></div>
+    <div class="meta"><span>${esc(T('Printed by'))} <span dir="auto">${esc(S.user)}</span> · <span dir="ltr">${new Date().toLocaleString('en-GB')}</span></span><span></span></div></div>`;
+  document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
+}
 function printHtml(html) {
   $('#printArea').innerHTML = `<div class="doc-print"><div class="ph"><div class="co">${esc(S.settings.companyName)}</div><div>${new Date().toLocaleString('en-GB')}</div></div>${html}</div>`;
   document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
