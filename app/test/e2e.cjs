@@ -169,6 +169,18 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  letterhead preview:', (await page.locator('#lhPrev .lct').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()), '|', (await page.textContent('#lhPrev .co')).trim());
   await page.locator('#lhPrev').screenshot({ path: OUT + '/6-letterhead.png' });
   console.log('  phones recognised (hidden marks dropped):', await page.locator('#lhPrev .tel').count());
+  { // logo: a picture on white becomes a clean transparent logo on the letterhead (generated here, no company file)
+    const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 300; c.height = 400; const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, 300, 400); g.fillStyle = '#1560c8'; g.beginPath(); g.arc(150, 150, 80, 0, 7); g.fill(); g.fillStyle = '#d99a00'; g.fillRect(120, 230, 60, 120); return c.toDataURL('image/png').split(',')[1]; });
+    if (await page.locator('#logoFile').count()) {
+      await page.setInputFiles('#logoFile', { name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') }); await page.waitForSelector('#logoImg');
+      const lg = await page.evaluate(() => { const i = document.querySelector('#logoImg'); const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight; c.getContext('2d').drawImage(i, 0, 0);
+        return { size: i.naturalWidth + 'x' + i.naturalHeight, cornerAlpha: c.getContext('2d').getImageData(0, 0, 1, 1).data[3], onLetterhead: !!document.querySelector('#lhPrev .lhlogo img'), monogram: !!document.querySelector('#lhPrev .mono') }; });
+      console.log('  logo:', JSON.stringify(lg));
+      await page.click('#logoDel'); await page.waitForTimeout(400);
+      console.log('  logo removed, monogram back:', await page.locator('#lhPrev .mono').count());
+    } else console.log('  logo: (accountant role, no upload)');
+  }
 
   step('statement');
   const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);

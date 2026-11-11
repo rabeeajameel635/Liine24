@@ -48,6 +48,7 @@ async function reload() {
   S.parties.sort((a, b) => a.code.localeCompare(b.code));
   document.documentElement.dataset.size = S.settings.fontScale;
   $('#brandName').textContent = (getLang() === 'ar' && S.settings.companyNameAr) || S.settings.companyName || 'Ledger';
+  showLogo();
   $('#whoami').innerHTML = `<span data-notr>${esc(S.user)}</span> · <b>${isAdmin() ? 'Admin' : 'Accountant'}</b><br><a href="#/settings">Switch role</a>`;
 }
 
@@ -190,7 +191,7 @@ routes.dashboard = async () => {
     .sort((a, b) => (b.postedAt || b.updatedAt || '').localeCompare(a.postedAt || a.updatedAt || '')).slice(0, 12);
   const tile = (href, icon, label) => `<a class="tile" href="${href}"><span class="tico">${ic(icon)}</span><span>${label}</span></a>`;
   $('#main').innerHTML = `
-    <div class="homehead"><div><h1 dir="auto">${esc(getLang() === 'ar' && S.settings.companyNameAr ? S.settings.companyNameAr : S.settings.companyName)}</h1>
+    <div class="homehead">${S.settings.logo ? `<img class="homelogo" src="${esc(S.settings.logo)}" alt="">` : ''}<div class="hhm"><h1 dir="auto">${esc(getLang() === 'ar' && S.settings.companyNameAr ? S.settings.companyNameAr : S.settings.companyName)}</h1>
       <p class="date">${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p></div>
       <a href="#/integrity" class="pill ${healthy ? 'ok' : 'bad'}">${healthy ? 'Balanced' : 'Check'}</a></div>
     <div class="homemap">${MAP.map((sec) => `<details class="hsec" data-k="${sec.k}" ${homeOpen().includes(sec.k) ? 'open' : ''}>
@@ -1417,7 +1418,7 @@ function statementHead(party, o, st) {
   const owes = st.closing >= 0;
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
   return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
-      <div class="sths"><span>Account</span> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
+      <div class="sths" dir="ltr"><bdi>${esc(T('Account'))}</bdi> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
       <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} – ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }
@@ -1760,6 +1761,8 @@ routes.settings = async () => {
     <h2>Company</h2><form id="co" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
       ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('city', 'City')}${f('monogram', 'Monogram (2–3 letters)')}
       <label class="f" style="grid-column:1/-1">Letterhead contacts · one per line: department | person | phone<textarea name="contacts" dir="auto" rows="3" ${isAdmin() ? '' : 'readonly'}>${esc(s.contacts || '')}</textarea></label>
+      <div class="f logorow" style="grid-column:1/-1"><span>Logo</span><div class="lgo">${s.logo ? `<img id="logoImg" src="${esc(s.logo)}" alt="">` : '<span class="muted">No logo: the monogram is printed.</span>'}
+        ${isAdmin() ? `<label class="btn small">${ic('plus')}<span>${s.logo ? 'Change logo' : 'Add logo'}</span><input type="file" id="logoFile" accept="image/*" hidden></label>${s.logo ? '<button type="button" class="btn small" id="logoDel">Remove logo</button>' : ''}` : ''}</div></div>
       <div class="lhprev" id="lhPrev" style="grid-column:1/-1"></div>
       ${f('taxNo', 'Licensed dealer no.')}${f('address', 'Address')}${f('phone', 'Phone')}${f('branch', 'Branch / vehicle code (series prefix)')}
       ${f('vatRate', 'VAT %', 'number')}${f('copiesInvoice', 'Print copies · Invoices', 'number')}${f('copiesVoucher', 'Print copies · Vouchers', 'number')}<label class="f">Prices include VAT<select name="pricesIncludeVat" ${isAdmin() ? '' : 'disabled'}><option value="true">Yes</option><option value="false" ${s.pricesIncludeVat ? '' : 'selected'}>No</option></select></label></form>
@@ -1789,8 +1792,46 @@ routes.settings = async () => {
     for (const [k, v] of Object.entries(fd)) await db.setSetting(k, v, S.user);
     toast('Saved'); render();
   }));
+  $('#logoFile') && ($('#logoFile').onchange = (e) => guard(async () => { const f = e.target.files[0]; if (!f) return; await db.setSetting('logo', await logoFromFile(f), S.user); toast('Logo saved'); render(); }));
+  $('#logoDel') && ($('#logoDel').onclick = () => guard(async () => { if (!confirm(T('Remove the logo? The monogram is printed again.'))) return; await db.setSetting('logo', '', S.user); toast('Logo removed'); render(); }));
   $('#savePin') && ($('#savePin').onclick = () => guard(async () => { const p = $('#pin').value.trim(); if (p.length < 4) throw new Error('At least 4 digits'); await db.setSetting('adminPin', p, S.user); toast('PIN set'); }));
 };
+
+// ---------- company logo (Settings → Company): kept in the books, never in the code ----------
+// shown on the letterhead (in place of the monogram), next to the company name in the menu, and as the tab icon
+function showLogo() {
+  const logo = S.settings?.logo || '';
+  const dot = $('.brand .dot'); if (dot) { dot.classList.toggle('logo', !!logo); dot.style.backgroundImage = logo ? `url("${logo}")` : ''; }
+  let ico = document.querySelector('link[rel=icon]');
+  if (logo) { if (!ico) { ico = document.createElement('link'); ico.rel = 'icon'; document.head.appendChild(ico); } ico.href = logo; }
+}
+// a picked image becomes a clean logo: a white background turns transparent, the empty margin is cut, 360 px tall
+function logoFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0); URL.revokeObjectURL(url);
+      const d = g.getImageData(0, 0, c.width, c.height); const px = d.data;
+      const corner = [0, (c.width - 1) * 4, (c.height - 1) * c.width * 4, (c.height * c.width - 1) * 4];
+      const whiteBg = corner.every((i) => px[i + 3] > 250 && Math.min(px[i], px[i + 1], px[i + 2]) > 240);
+      let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        const i = (y * c.width + x) * 4;
+        if (whiteBg) px[i + 3] = Math.min(px[i + 3], Math.max(0, Math.min(255, Math.round((248 - Math.min(px[i], px[i + 1], px[i + 2])) / 48 * 255))));
+        if (px[i + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) return reject(new Error('The picture is empty'));
+      g.putImageData(d, 0, 0);
+      const w = x1 - x0 + 1, h = y1 - y0 + 1, H = Math.min(360, h), W = Math.round(w * H / h);
+      const o = document.createElement('canvas'); o.width = W; o.height = H;
+      const og = o.getContext('2d'); og.imageSmoothingQuality = 'high'; og.drawImage(c, x0, y0, w, h, 0, 0, W, H);
+      resolve(o.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Not a picture')); };
+    img.src = url;
+  });
+}
 
 // ---------- utils ----------
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
@@ -1847,7 +1888,7 @@ function letterhead() {
       <div class="co" dir="auto">${esc(name)}${s.city ? `<span class="lcity"> - ${esc(s.city)}</span>` : ''}</div>
       ${cl.length ? `<div class="lhc">${cl.map((c) => `<div class="lct"><b dir="auto">${esc(c.label)}</b>${c.who ? `<span dir="auto">${esc(c.who)}</span>` : ''}${c.tel ? `<span class="tel" dir="ltr">${esc(c.tel)}</span>` : ''}</div>`).join('')}</div>` : old}
       ${s.taxNo ? `<div class="cosub">${esc(T('Licensed dealer no.'))}: <span dir="ltr">${esc(s.taxNo)}</span></div>` : ''}</div>
-    ${mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>`;
+    ${s.logo ? `<div class="lhlogo"><img src="${esc(s.logo)}" alt=""></div>` : mono ? `<div class="mono"><span>${esc(mono)}</span></div>` : ''}</div>`;
 }
 function printStatement(party, o, st) {
   const s = S.settings; const A = getLang() === 'ar';
