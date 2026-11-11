@@ -1252,7 +1252,7 @@ async function printDoc(d, reason = '', copies = 1) {
   </div>`; };
   $('#printArea').innerHTML = pages.map(page).join('');
   document.body.classList.add('printing');
-  setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
+  printWhenReady();
 }
 
 // ---------- items ----------
@@ -1418,7 +1418,7 @@ function statementHead(party, o, st) {
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
   return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
       <div class="sths"><span>Account</span> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
-      <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
+      <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} – ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }
 function statementOptions(cur = {}) {
@@ -1570,7 +1570,7 @@ routes.sales = async () => {
   $$('#rep tr.grp').forEach((tr) => (tr.onclick = () => { const d = $(`#rep tr.det[data-d="${tr.dataset.i}"]`); d.hidden = !d.hidden; }));
   $('#show').onclick = () => (location.hash = `#/sales?kind=${kind}&by=${$('#by').value}&from=${$('#from').value}&to=${$('#to').value}`);
   $('#xl').onclick = () => toExcel(`${kind}-${by}.xlsx`, [[by, 'Name', 'Qty', 'Bonus', 'Total qty', 'Total ILS'], ...rows.map((r) => [r.key, r.name, r.qty, r.bonus, r.qty + r.bonus, r.amountC / 100])]);
-  $('#pr').onclick = () => { $$('#rep tr.det').forEach((d) => (d.hidden = false)); printHtml(`<h2>${title}</h2><p>${from} → ${to}</p>` + $('.tablewrap').outerHTML); };
+  $('#pr').onclick = () => { $$('#rep tr.det').forEach((d) => (d.hidden = false)); printHtml(`<h2>${title}</h2><p dir="ltr">${from} – ${to}</p>` + $('.tablewrap').outerHTML); };
 };
 
 routes.integrity = async () => {
@@ -1794,13 +1794,37 @@ routes.settings = async () => {
 
 // ---------- utils ----------
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
-function toExcel(name, aoa, { cols, merges, sheet = 'Sheet1' } = {}) {
+// Excel export: left to right like the archive files, one clear font (Arial: on every computer and phone),
+// the title row and the column-header rows in bold. SheetJS community writes no styles, so the font and the
+// bold are set in the file's own XML (styles.xml and the sheet) before it is saved.
+const XL_FONT = 'Arial';
+function excelBytes(aoa, { cols, merges, sheet = 'Sheet1' } = {}) {
   const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(aoa);
   if (cols) ws['!cols'] = cols.map((w) => ({ wch: w }));
   if (merges) ws['!merges'] = merges;
-  XLSX.utils.book_append_sheet(wb, ws, sheet);
-  if (getLang() === 'ar') wb.Workbook = { Views: [{ RTL: true }] };   // the sheet opens right to left
-  XLSX.writeFile(wb, name);
+  XLSX.utils.book_append_sheet(wb, ws, String(sheet).slice(0, 31).replace(/[\\/?*[\]:]/g, ' '));
+  const bold = new Set(aoa.map((r, i) => {
+    const cells = (r || []).filter((c) => c !== '' && c != null);
+    return i === 0 || (cells.length >= 3 && cells.every((c) => typeof c === 'string')) ? i + 1 : 0;
+  }).filter(Boolean));
+  const zip = XLSX.CFB.read(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), { type: 'array' });
+  const part = (end) => zip.FileIndex[zip.FullPaths.findIndex((p) => p.endsWith(end))];
+  const td = new TextDecoder(), te = new TextEncoder();
+  const st = part('xl/styles.xml');
+  const font = (b) => `<font>${b ? '<b/>' : ''}<sz val="11"/><color theme="1"/><name val="${XL_FONT}"/><family val="2"/></font>`;
+  st.content = te.encode(td.decode(st.content)
+    .replace(/<fonts count="\d+">[\s\S]*?<\/fonts>/, `<fonts count="2">${font(false)}${font(true)}</fonts>`)
+    .replace(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/, (m, n, xs) => `<cellXfs count="${+n + 1}">${xs}<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>`));
+  const boldXf = td.decode(st.content).match(/<cellXfs count="(\d+)"/)[1] - 1;
+  const sh = part('xl/worksheets/sheet1.xml');
+  sh.content = te.encode(td.decode(sh.content).replace(/<row r="(\d+)"([^>]*)>([\s\S]*?)<\/row>/g, (m, r, at, body) =>
+    bold.has(+r) ? `<row r="${r}"${at}>${body.replace(/<c r="([A-Z]+\d+)"(?![^>]*\ss=)/g, `<c r="$1" s="${boldXf}"`)}</row>` : m));
+  return XLSX.CFB.write(zip, { fileType: 'zip', type: 'array' });
+}
+function toExcel(name, aoa, opts = {}) {
+  const blob = new Blob([excelBytes(aoa, opts)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 // Letterhead (Rabee, Nov 2026): name and city on one line, then one line per contact: department · person · phone.
 // Contacts are typed in Settings, one per line: "Management | 05xxxxxxxx" or "Sales | Dr. Name | 05xxxxxxxx".
@@ -1834,11 +1858,16 @@ function printStatement(party, o, st) {
     <div class="wbox"><div class="wl">${esc(T('Amount in words'))}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</div></div>
     <div class="sign"><span>${esc(T('Signature'))}</span><span>${esc(T('Received by'))}</span></div>
     <div class="meta"><span>${esc(T('Printed by'))} <span dir="auto">${esc(S.user)}</span> · <span dir="ltr">${new Date().toLocaleString('en-GB')}</span></span><span></span></div></div>`;
-  document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
+  document.body.classList.add('printing'); printWhenReady();
+}
+// print only once the bundled print font is loaded (it lives offline in vendor/fonts), so paper and PDF look the same everywhere
+async function printWhenReady() {
+  try { await Promise.all(['400', '600', '700'].map((w) => document.fonts.load(`${w} 12px "Plex Arabic"`, 'ابت Abc 123'))); await document.fonts.ready; } catch {}
+  setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 30);
 }
 function printHtml(html) {
   $('#printArea').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}${html}<div class="meta"><span dir="ltr">${new Date().toLocaleString('en-GB')}</span><span></span></div></div>`;
-  document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50);
+  document.body.classList.add('printing'); printWhenReady();
 }
 
 // ---------- boot ----------

@@ -49,7 +49,7 @@ const say = (o) => console.log(JSON.stringify(o));
   }, ref === 'last' ? last : ref);
   const reload = async (hash) => { await p.goto(URL + '?r=' + Date.now() + (hash || '#/dashboard')); await p.waitForTimeout(500); };
   const pdfOf = async (name) => {
-    await p.evaluate(() => document.body.classList.add('printing')); await p.emulateMedia({ media: 'print' });
+    await p.evaluate(() => document.body.classList.add('printing')); await p.emulateMedia({ media: 'print' }); await p.evaluate(() => document.fonts.ready);
     const file = path.join(PDF, name); await p.pdf({ path: file, format: 'A4', printBackground: true, margin: { top: '0', bottom: '0', left: '0', right: '0' } });
     await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => document.body.classList.remove('printing'));
     return file;

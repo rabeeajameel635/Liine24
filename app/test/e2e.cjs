@@ -190,6 +190,8 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   const XLSX = require(require('path').join(__dirname, '..', 'vendor', 'xlsx.full.min.js'));
   const wbx = XLSX.read(require('fs').readFileSync(xp)); const rowsx = XLSX.utils.sheet_to_json(wbx.Sheets[wbx.SheetNames[0]], { header: 1 });
   console.log('  excel export:', JSON.stringify(rowsx.slice(0, 6).map((r) => r.filter((c) => c !== '').slice(0, 3))), '| last:', JSON.stringify(rowsx.slice(-3)));
+  { const z = XLSX.CFB.read(require('fs').readFileSync(xp), { type: 'buffer' }); const g = (e) => Buffer.from(z.FileIndex[z.FullPaths.findIndex((p) => p.endsWith(e))].content).toString();
+    console.log('  excel font:', (g('styles.xml').match(/<name val="([^"]+)"/g) || []).join(' '), '| bold cells:', (g('sheet1.xml').match(/ s="1"/g) || []).length, '| right to left:', /rightToLeft|RTL/.test(g('workbook.xml') + g('sheet1.xml'))); }
   await page.click('#pr'); await page.waitForTimeout(300);
   await page.evaluate(() => document.body.classList.add('printing')); await page.emulateMedia({ media: 'print' });
   await page.screenshot({ path: OUT + '/5-statement-print.png', fullPage: true });
