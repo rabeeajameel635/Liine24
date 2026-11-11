@@ -408,7 +408,7 @@ function editor(doc) {
         ${t.lines ? `<div class="sr"><span>Items total</span><b id="tSub">0.00</b></div>
         <div class="sr"><span>Invoice discount</span><input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" placeholder="0.00"></div>
         <div class="sr" id="tRoundRow" hidden><span>Rounding</span><b id="tRound" dir="ltr"></b></div>
-        <div class="sr"><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : ''}
+        <div class="sr"${Number(S.settings.vatRate) ? '' : ' hidden'}><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : ''}
         <div class="sr grand"><span>${t.lines ? 'Grand total' : 'Amount'}</span><b id="gTotal">0.00</b></div>
         <div class="wwords" id="tWords"></div></div>
     </footer>
@@ -536,7 +536,7 @@ function editor(doc) {
       const tot = computeTotals(d.lines, docTotalsOpts(d, S.settings));
       const body = tot.lines.map((l) => { const it = itemById(l.itemId) || {}; return [it.code, it.name, l.qty || 0, l.bonus || 0, Number(l.price) || 0, l.disc || 0, l.amountC / 100, l.batch, l.expiry]; });
       toExcel(`${d.number || doc.type + '-draft'}.xlsx`, [...head, ['Code', 'Item', 'Qty', 'Bonus', 'Price', 'Disc %', 'Amount', 'Batch', 'Expiry'].map(T), ...body, [],
-        [T('Subtotal'), tot.subtotalC / 100], [T('Invoice discount'), tot.discC / 100], [T(`VAT ${S.settings.vatRate}%`), tot.vatC / 100], [T('Grand total'), tot.totalC / 100]]);
+        [T('Subtotal'), tot.subtotalC / 100], [T('Invoice discount'), tot.discC / 100], ...(Number(S.settings.vatRate) ? [[T(`VAT ${S.settings.vatRate}%`), tot.vatC / 100]] : []), [T('Grand total'), tot.totalC / 100]]);
     } else toExcel(`${d.number || doc.type + '-draft'}.xlsx`, [...head, [T('Amount'), d.amount || 0], [T('Method'), T(PAY_METHODS[d.method] || '')], ...(d.chequeNo ? [['Cheque', d.chequeNo, d.chequeBank, d.dueDate]] : []), ...(d.notes ? [[T('Notes'), d.notes]] : [])]);
     toast('Exported');
   });
@@ -1234,7 +1234,7 @@ async function printDoc(d, reason = '', copies = 1) {
         <div class="tno">${L('No.', 'الرقم')}${C} <b dir="ltr">${esc(d.number || (A ? 'مسودة' : 'DRAFT'))}</b> · ${L('Date', 'التاريخ')}${C} <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}${C} <b><bdi>${esc(d.reference)}</bdi></b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
       ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}${C} <b><span dir="ltr">${esc(p.code)}</span> — <bdi>${esc(p.name)}</bdi></b>${[p.address, p.region ? regionName(p.region) : ''].filter(Boolean).length ? ` — ${L('Address', 'العنوان')}${C} <b><bdi>${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</bdi></b>` : ''}</div>
-      <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', (t.lines && opt.pricesIncludeVat ? L('All amounts in NIS, VAT included', 'جميع المبالغ بالشيكل، الأسعار تشمل ض.ق.م') : L('All amounts in NIS', 'جميع المبالغ بالشيكل'))].filter(Boolean).join(' · ')}</div>` : ''}</div>
+      <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', (t.lines && opt.pricesIncludeVat && Number(opt.vatRate) ? L('All amounts in NIS, VAT included', 'جميع المبالغ بالشيكل، الأسعار تشمل ض.ق.م') : L('All amounts in NIS', 'جميع المبالغ بالشيكل'))].filter(Boolean).join(' · ')}</div>` : ''}</div>
     ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
       ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${[l.batch ? `${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch)}</span>` : '', l.expiry ? `<span dir="ltr">Exp. ${esc(expShow(l.expiry))}</span>` : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
         <td class="c">${fmt(l.qty || 0, 0)}</td><td class="c">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="c">${pricef(l.price, opt.roundTotals)}</td><td class="c">${l.disc ? l.disc + '%' : ''}</td><td class="n"><b>${amt(l.amountC, opt.roundTotals)}</b></td></tr>`; }).join('')}
@@ -1242,7 +1242,7 @@ async function printDoc(d, reason = '', copies = 1) {
       <div class="tot"><div class="sum"><div><span>${L('Lines', 'عدد الأصناف')} ${tot.lines.length} · ${L('Total qty', 'مجموع الكمية')} ${fmt(tot.qtyTotal, 0)} · ${L('Total bonus', 'مجموع البونص')} ${fmt(tot.bonusTotal, 0)}</span><span></span></div>
           <div><span>${L('Items total', 'المجموع')}</span><span>${amt(tot.subtotalC, opt.roundTotals)}</span></div>
           ${tot.discC ? `<div><span>${L('Invoice discount', 'خصم على الفاتورة')}</span><span>−${amt(tot.discC, opt.roundTotals)}</span></div>` : ''}${tot.roundC ? `<div><span>${L('Rounding', 'تقريب')}</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), opt.roundTotals)}</span></div>` : ''}
-          <div><span>${L('Net before VAT', 'الصافي قبل الضريبة')}</span><span>${money(tot.netC)}</span></div><div><span>${L('VAT', 'الضريبة')} ${opt.vatRate}%</span><span>${money(tot.vatC)}</span></div></div>
+          ${Number(opt.vatRate) ? `<div><span>${L('Net before VAT', 'الصافي قبل الضريبة')}</span><span>${money(tot.netC)}</span></div><div><span>${L('VAT', 'الضريبة')} ${opt.vatRate}%</span><span>${money(tot.vatC)}</span></div>` : ''}</div>
         <div class="g"><span>${L('Total (NIS)', 'المبلغ (شيكل)')}</span><span>${amt(tot.totalC, opt.roundTotals)}</span></div></div>`
     : `${d.method ? `<table><tbody><tr><td>${L('Method', 'طريقة الدفع')}</td><td><b>${esc(T(PAY_METHODS[d.method] || ''))}</b></td></tr>${d.chequeNo ? `<tr><td>${L('Cheque', 'شيك')}</td><td><b><span dir="ltr">${esc(d.chequeNo)}</span> · <span dir="auto">${esc(d.chequeBank)}</span> · <span dir="ltr">${esc(d.dueDate)}</span></b></td></tr>` : ''}</tbody></table>` : ''}
        <div class="tot"><div class="g"><span>${L('Amount (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`}

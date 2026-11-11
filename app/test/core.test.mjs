@@ -202,3 +202,13 @@ test('regions directory: two-digit codes, unique, named', async () => {
   assert.equal(checkRegions([...DEFAULT_REGIONS, { key: 'r4', code: '03', name: 'X' }]).length, 1);
   assert.equal(checkRegions([{ key: 'r5', code: '4', name: 'X' }]).length, 1);
 });
+
+test('VAT 0 (all prices final, tax inside): no VAT line, purchase stock at the full net', () => {
+  const s0 = { vatRate: 0, pricesIncludeVat: true, roundTotals: false };
+  const tot = computeTotals([{ itemId: 'a', qty: 10, price: 29, disc: 5 }], s0);
+  assert.equal(tot.vatC, 0); assert.equal(tot.totalC, 27550); assert.equal(tot.netC, 27550);
+  const pi = buildPosting({ type: 'PI', partyId: 's1', lines: [{ itemId: 'a', qty: 10, price: 29, disc: 5 }] }, { items: { a: { id: 'a' } }, settings: s0 });
+  assert.ok(isBalanced(pi.entries));
+  assert.ok(!pi.entries.some((e) => e.account === '1250' || e.account === '2200'), 'no VAT account touched');
+  assert.equal(pi.moves[0].valueC, 27550);
+});
