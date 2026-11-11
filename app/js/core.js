@@ -197,6 +197,16 @@ export function buildPosting(doc, { moves = [], items = {}, settings = {} } = {}
         sm.push({ itemId: l.itemId, qty: sign * units, valueC: sign > 0 ? vC : 0, bonus: Number(l.bonus) || 0, batch: l.batch || '', expiry: l.expiry || '' });
       }
     }
+    // stock that comes in carries exactly what the inventory account receives: the invoice discount and
+    // the rounding are spread over the lines by value (the last cent goes to the biggest line)
+    if (doc.type === 'PI' || doc.type === 'OS') {
+      const inC = sm.reduce((x, m) => x + m.valueC, 0), want = tot.netC;
+      if (inC && inC !== want) {
+        let left = want;
+        sm.forEach((m) => { m.valueC = Math.round(m.valueC * want / inC); left -= m.valueC; });
+        if (left) sm.reduce((big, m) => (m.valueC > big.valueC ? m : big), sm[0]).valueC += left;
+      }
+    }
     if (doc.type === 'SI') {
       E('1200', tot.totalC, 0, p); E('4100', 0, tot.netC); E('2200', 0, tot.vatC);
       E('5100', costC, 0); E('1300', 0, costC);

@@ -148,7 +148,8 @@ dialog::backdrop { background: rgba(32,33,36,.32); }
 @media print {
   @page { size: A4; margin: 12mm; }
   body.printing { background: #fff; }
-  body.printing #app, body.printing #toast { display: none !important; }
+  body.printing #app, body.printing #toast, body.printing #mbar, body.printing #tabs, body.printing .dock, body.printing dialog { display: none !important; }
+  html:has(body.printing) { background: #fff; }
   body.printing #printArea { display: block; }
   .doc-print.page + .doc-print.page { break-before: page; }
 }
@@ -1203,3 +1204,12 @@ dialog.lookup h2 { margin-bottom: 6px; }
   dialog.lookup .dlg-x { top: 10px; width: 30px; height: 30px; }
   dialog.lookup .lk-list { max-height: calc(100dvh - 2cm - 96px); }
 }
+/* report print: the whole table on the page (no screen scroll box), small enough to fit A4 */
+.doc-print .tablewrap { overflow: visible !important; max-height: none !important; min-height: 0 !important; background: none !important; padding: 0 !important; margin: 8px 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+.doc-print .tablewrap table { font-size: 9pt; table-layout: auto; }
+.doc-print .tablewrap th { font-size: 8.5pt; padding: 5px 6px; white-space: nowrap; }
+.doc-print .tablewrap td { font-size: 9pt; padding: 4px 6px; background: none !important; }
+.doc-print .tablewrap tr { display: table-row !important; }
+.doc-print .tablewrap td, .doc-print .tablewrap th { display: table-cell !important; }
+.doc-print .tablewrap tbody tr:nth-child(even) td { background: #f3f3f3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.doc-print h2 { margin: 14px 0 2px; font-size: 15pt; }

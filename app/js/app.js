@@ -1511,7 +1511,7 @@ routes.tb = async () => {
     ${[...tb.rows].sort((x, y) => Number(acctCode(x.account)) - Number(acctCode(y.account))).map((r) => `<tr><td dir="ltr">${esc(acctCode(r.account))}</td><td>${esc(acctName(r.account))}</td><td class="n">${money(r.debitC)}</td><td class="n">${money(r.creditC)}</td><td class="n">${r.balDebitC ? money(r.balDebitC) : ''}</td><td class="n">${r.balCreditC ? money(r.balCreditC) : ''}</td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${money(tb.totalDebitC)}</td><td class="n">${money(tb.totalCreditC)}</td></tr></tfoot></table></div>
     <div class="actions"><button class="btn" id="pr">Print / PDF</button></div>`;
-  $('#pr').onclick = () => printHtml(`<h2>Trial balance · ميزان المراجعة</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
+  $('#pr').onclick = () => printHtml(`<h2>${esc(T('Trial balance'))}</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
 };
 
 routes.stock = async () => {
@@ -1529,7 +1529,7 @@ routes.stock = async () => {
     </tbody><tfoot><tr><td colspan="8">Inventory value</td><td class="n">${money(rows.reduce((t, r) => t + r.value, 0))}</td></tr></tfoot></table></div>
     <div class="actions"><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print / PDF</button></div>`;
   $('#xl').onclick = () => toExcel('inventory.xlsx', [['Code', 'Item', 'In', 'Bonus in', 'Out', 'Bonus out', 'On hand', 'Avg cost', 'Value'], ...rows.map(({ i, s, avg, value }) => [i.code, i.name, s.in, s.bonusIn, s.out, s.bonusOut, s.qty, avg / 100, value / 100])]);
-  $('#pr').onclick = () => printHtml(`<h2>Inventory · جرد البضاعة</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
+  $('#pr').onclick = () => printHtml(`<h2>${esc(T('Inventory'))}</h2><p>${today()}</p>` + $('.tablewrap').outerHTML);
 };
 
 routes.sales = async () => {
@@ -1710,7 +1710,7 @@ async function runImport(obj) {
     const code = String((kind === 'supplier' ? inv.supplierCode : inv.customerCode) || '');
     const p = (code && pool.find((x) => x.code === code)) || pool.find((x) => x.name === (kind === 'supplier' ? inv.supplierName : inv.customerName));
     const lines = parseSmart(JSON.stringify({ invoice: inv }));
-    const d = await db.saveDraft({ type: inv.type || 'SI', date: inv.date || today(), partyId: p?.id || '', reference: inv.reference || '', notes: 'Imported from AI', lines: lines.filter((l) => l.itemId), invoiceDiscount: 0 }, S.user);
+    const d = await db.saveDraft({ type: inv.type || 'SI', date: inv.date || today(), partyId: p?.id || '', reference: inv.reference || '', notes: inv.notes || '', lines: lines.filter((l) => l.itemId), invoiceDiscount: 0 }, S.user);
     const missing = lines.filter((l) => !l.itemId).length;
     return { msg: `Draft created${missing ? ` · ${missing} unknown items skipped` : ''}${p ? '' : kind === 'supplier' ? ' · choose the supplier' : ' · choose the customer'}`, go: '#/doc/' + d.id };
   }

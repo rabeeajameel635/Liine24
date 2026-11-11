@@ -212,3 +212,14 @@ test('VAT 0 (all prices final, tax inside): no VAT line, purchase stock at the f
   assert.ok(!pi.entries.some((e) => e.account === '1250' || e.account === '2200'), 'no VAT account touched');
   assert.equal(pi.moves[0].valueC, 27550);
 });
+
+test('purchase stock value equals the inventory debit, rounding and invoice discount included', () => {
+  const s = { vatRate: 0, pricesIncludeVat: true, roundTotals: true };
+  const lines = [{ itemId: 'a', qty: 3, price: 10.3, disc: 10 }, { itemId: 'b', qty: 7, price: 4.45, disc: 10 }, { itemId: 'c', qty: 1, price: 99.9, disc: 10 }];
+  for (const invoiceDiscount of [0, 12.35]) {
+    const r = buildPosting({ type: 'PI', partyId: 's1', lines, invoiceDiscount }, { items: { a: {}, b: {}, c: {} }, settings: s });
+    const inv = r.entries.filter((e) => e.account === '1300').reduce((x, e) => x + e.debitC - e.creditC, 0);
+    assert.equal(r.moves.reduce((x, m) => x + m.valueC, 0), inv);
+    assert.ok(isBalanced(r.entries));
+  }
+});
