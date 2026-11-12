@@ -8,6 +8,8 @@
 // ops.json is a list, run in order:
 //   { "op": "settings", "values": { "companyNameAr": "...", "contacts": "..." } }
 //   { "op": "import", "file": "/path/prepared.json" }                 items, parties, one invoice draft
+//   { "op": "party", "party": { "kind": "customer", "name": "..." } }   add a customer or supplier (next code of its kind)
+//   { "op": "partyset", "party": { "kind": "customer", "code": "1001", "region": "south" } }  change a party's definition (by code)
 //   { "op": "draft", "doc": { "type": "SI", "partyCode": "1001", "date": "2026-11-10", "lines": [...] } }
 //   { "op": "edit", "ref": "last" | "<docId>", "lines": [{ "itemCode": "1001", "price": 9, "disc": 10 }], "set": { "notes": "..." } }
 //                                                                       change lines of a saved draft (by item code)
@@ -65,6 +67,25 @@ const say = (o) => console.log(JSON.stringify(o));
         await p.click('#doImport'); await p.waitForTimeout(3000);
         const h = await p.evaluate(() => location.hash); last = h.startsWith('#/doc/') ? h.slice(6) : last;
         say({ op: 'import', file: path.basename(o.file), draft: last });
+      } else if (o.op === 'party') {
+        const r = await dbx(async (db, c) => {
+          const core = await import('./js/core.js');
+          const parties = await db.all('parties'); const kind = c.kind || 'customer';
+          if (parties.some((x) => x.kind === kind && x.name === c.name)) throw new Error('party exists: ' + c.name);
+          const code = String(c.code || core.nextNumericCode(parties.filter((x) => x.kind === kind).map((x) => x.code)));
+          if (parties.some((x) => x.kind === kind && x.code === code)) throw new Error('code exists: ' + code);
+          const rec = await db.saveMaster('parties', { kind, code, name: c.name, phone: String(c.phone || ''), address: c.address || '', region: c.region || (kind === 'customer' ? 'gaza' : ''), type: c.type || (kind === 'customer' ? 'pharmacy' : ''), creditLimit: Number(c.creditLimit) || '' }, 'Claude');
+          return { code: rec.code, id: rec.id, kind };
+        }, o.party);
+        say({ op: 'party', ...r });
+      } else if (o.op === 'partyset') {
+        const r = await dbx(async (db, c) => {
+          const kind = c.kind || 'customer';
+          const p = (await db.all('parties')).find((x) => x.kind === kind && x.code === String(c.code)); if (!p) throw new Error('party not found: ' + c.code);
+          const { code, kind: k, ...v } = c; const rec = await db.saveMaster('parties', { ...p, ...v }, 'Claude');
+          return { code: rec.code, kind, set: Object.keys(v) };
+        }, o.party);
+        say({ op: 'partyset', ...r });
       } else if (o.op === 'draft') {
         last = await dbx(async (db, d) => {
           const parties = await db.all('parties'); const items = await db.all('items');

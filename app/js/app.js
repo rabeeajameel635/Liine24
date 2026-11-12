@@ -1221,7 +1221,7 @@ async function printDoc(d, reason = '', copies = 1) {
   const opt = docTotalsOpts(d, s);
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
   const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
-  const ar = { SI: 'فاتورة ضريبية', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
+  const ar = { SI: 'فاتورة مبيعات', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
   // Print layout: company head with a monogram, grey title block, black table head, zebra rows,
   // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
   const A = getLang() === 'ar';
