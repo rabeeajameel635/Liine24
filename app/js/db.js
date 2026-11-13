@@ -3,7 +3,7 @@
 import { buildPosting, reverse, seriesKey, formatNumber, isBalanced, SCHEMA_VERSION, computeTotals, isSpellingFix } from './core.js';
 
 const DB_NAME = 'ledger-app';
-const STORES = {
+export const STORES = {
   settings: { keyPath: 'key' },
   items: { keyPath: 'id', indexes: ['code'] },
   parties: { keyPath: 'id', indexes: ['kind', 'code'] },
@@ -20,6 +20,12 @@ const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result)
 const done = (tx) => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('Transaction aborted')); });
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
 const now = () => new Date().toISOString();
+
+// When the books live online (cloud.js), `mem` is their working copy and nothing is kept in this browser.
+// `fresh` re-reads the online books; a write that finds them changed elsewhere is run once more after it.
+let fresh = null;
+export function useMemory(mem, refresh) { db = mem; fresh = refresh; return db; }
+const again = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { if (e?.code !== 'stale' || !fresh) throw e; await fresh(); return fn(...a); } };
 
 export async function open() {
   db = await new Promise((res, rej) => {
@@ -54,10 +60,10 @@ export async function getSettings() {
     ...s,
   };
 }
-export async function setSetting(key, value, user) {
+async function setSetting_(key, value, user) {
   const tx = db.transaction(['settings', 'audit'], 'readwrite');
   tx.objectStore('settings').put({ key, value });
-  tx.objectStore('audit').add({ at: now(), user, action: 'setting', ref: key, detail: key === 'adminPin' ? '***' : typeof value === 'object' ? JSON.stringify(value) : value });
+  tx.objectStore('audit').add({ at: now(), user, action: 'setting', ref: key, detail: key === 'adminPin' ? '***' : key === 'logo' && value ? `image · ${String(value).length} chars` : typeof value === 'object' ? JSON.stringify(value) : value });
   return done(tx);
 }
 
@@ -72,7 +78,7 @@ export async function hasMovements(store, id) {
   return (await req(tx.objectStore('ledger').index('partyId').count(id))) > 0;
 }
 
-export async function saveMaster(store, obj, user) {
+async function saveMaster_(store, obj, user) {
   const tx = db.transaction([store, 'audit', 'ledger', 'stock'], 'readwrite');
   const before = obj.id ? await req(tx.objectStore(store).get(obj.id)) : null;
   if (before && before.code && obj.code !== before.code) throw new Error('Codes are permanent and cannot be changed');
@@ -91,7 +97,7 @@ export async function saveMaster(store, obj, user) {
   return rec;
 }
 
-export async function saveDraft(doc, user) {
+async function saveDraft_(doc, user) {
   const tx = db.transaction(['docs', 'audit'], 'readwrite');
   const before = doc.id ? await req(tx.objectStore('docs').get(doc.id)) : null;
   if (before && before.status !== 'draft') throw new Error('Posted documents cannot be edited');
@@ -103,7 +109,7 @@ export async function saveDraft(doc, user) {
 }
 
 // A draft that is abandoned is marked cancelled, never erased. It never received a number.
-export async function cancelDraft(docId, user) {
+async function cancelDraft_(docId, user) {
   const tx = db.transaction(['docs', 'audit'], 'readwrite');
   const doc = await req(tx.objectStore('docs').get(docId));
   if (!doc || doc.status !== 'draft') { tx.abort(); throw new Error('Only drafts can be cancelled'); }
@@ -113,7 +119,7 @@ export async function cancelDraft(docId, user) {
 }
 
 // Posting is one atomic transaction: number, ledger, stock and audit together or nothing.
-export async function post(docId, user, settings, { allowBackdate = false, backdateReason = '' } = {}) {
+async function post_(docId, user, settings, { allowBackdate = false, backdateReason = '' } = {}) {
   const items = Object.fromEntries((await all('items')).map((i) => [i.id, i]));
   const tx = db.transaction(['docs', 'ledger', 'stock', 'seqs', 'audit'], 'readwrite');
   const docs = tx.objectStore('docs');
@@ -145,7 +151,7 @@ export async function post(docId, user, settings, { allowBackdate = false, backd
   return rec;
 }
 
-export async function voidDoc(docId, reason, user) {
+async function voidDoc_(docId, reason, user) {
   if (!reason || reason.trim().length < 3) throw new Error('A reason is required');
   const tx = db.transaction(['docs', 'ledger', 'stock', 'audit'], 'readwrite');
   const doc = await req(tx.objectStore('docs').get(docId));
@@ -163,7 +169,7 @@ export async function voidDoc(docId, reason, user) {
 }
 
 // Draft prints carry a watermark. The first output of a posted document is "Original", once in its life.
-export async function logPrint(docId, user, channel = 'print', reason = '') {
+async function logPrint_(docId, user, channel = 'print', reason = '') {
   const tx = db.transaction(['docs', 'printlog', 'audit'], 'readwrite');
   const doc = await req(tx.objectStore('docs').get(docId));
   if (doc.status === 'draft') { await done(tx); return { label: 'DRAFT', copyNo: 0 }; }
@@ -204,5 +210,8 @@ export async function restoreAll(backup) {
   }
   await done(tx);
 }
+
+export const setSetting = again(setSetting_), saveMaster = again(saveMaster_), saveDraft = again(saveDraft_), cancelDraft = again(cancelDraft_),
+  post = again(post_), voidDoc = again(voidDoc_), logPrint = again(logPrint_);
 
 export { computeTotals };

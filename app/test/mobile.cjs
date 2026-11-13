@@ -10,6 +10,10 @@ require('fs').mkdirSync(OUT, { recursive: true });
     const errors = []; p.on('pageerror', (e) => errors.push(e.message));
     p.on('dialog', (d) => d.accept());
     await p.addInitScript((l) => { localStorage.setItem('lang', l); sessionStorage.setItem('role', 'admin'); window.print = () => { window.__printed = (window.__printed || 0) + 1; }; }, lang);
+    // ONLINE=1: the same phone run on online books (stand-in runtime); the program's own boxes are answered yes
+    if (process.env.ONLINE) await p.addInitScript(require('fs').readFileSync(require('path').join(__dirname, 'mock-claude.js'), 'utf8') + `;
+      new MutationObserver(() => { const pp = document.querySelector('dialog.paper[open]'); if (pp && !pp.dataset.auto) { pp.dataset.auto = 1; window.__printed = (window.__printed || 0) + 1; setTimeout(() => pp.querySelector('[data-v=close]')?.click(), 120); }
+        const d = document.querySelector('dialog.ask[open]:not(.lmenu)'); if (!d || d.dataset.auto) return; d.dataset.auto = 1; const i = d.querySelector('.ans'); if (i) i.value = 'test reason'; setTimeout(() => d.querySelector('[data-v=yes]')?.click(), 60); }).observe(document, { childList: true, subtree: true });`);
     const U = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
     await p.goto(U + '#/import'); await p.waitForSelector('#json');
     await p.fill('#json', JSON.stringify({ items: [{ name: 'PARACETAMOL 500MG 20T', pricePharmacist: 12.5, buyPrice: 9, openingQty: 500 }, { name: 'OMEPRAZOLE 20MG 28CAP', pricePharmacist: 18.25, buyPrice: 14, openingQty: 300 }],

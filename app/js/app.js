@@ -6,9 +6,21 @@ import {
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
 import { apply as applyLang, getLang, setLang, translate, T } from './i18n.js';
+import * as cloud from './cloud.js';
+
+// CLOUD: the program runs inside claude.ai and the books live online (cloud.js). Then the page keeps nothing
+// in the browser, asks its questions in its own boxes, routes without the address bar, and saves files and
+// PDFs through the host, because the frame it runs in refuses confirm/prompt/print/downloads.
+let CLOUD = false;
+const safeStore = (st) => ({ get: (k) => { try { return st().getItem(k); } catch { return null; } }, set: (k, v) => { try { st().setItem(k, v); } catch {} } });
+const SS = safeStore(() => sessionStorage), LS = safeStore(() => localStorage);
+const H = (() => { let cur = '';
+  return { get hash() { return CLOUD ? cur : location.hash; },
+    set hash(v) { if (!CLOUD) { location.hash = v; return; } if (v === cur) return; cur = v; queueMicrotask(() => onHash()); },
+    replace(v) { if (CLOUD) cur = v; else history.replaceState(null, '', v); } }; })();
 
 // ---------- state ----------
-const S = { settings: null, items: [], parties: [], docs: [], role: sessionStorage.getItem('role') || 'accountant', user: sessionStorage.getItem('user') || 'User' };
+const S = { settings: null, items: [], parties: [], docs: [], role: SS.get('role') || 'accountant', user: SS.get('user') || 'User' };
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,7 +68,7 @@ async function reload() {
 const routes = {};
 const GROUPS = { inv: ['SI', 'SR', 'CN', 'DN'], pur: ['PI', 'PR'], vch: ['RV', 'PV'] };
 // The open editor registers itself here so leaving it can be guarded.
-let guardEditor = null, currentHash = location.hash, bypass = false;
+let guardEditor = null, currentHash = '', bypass = false;
 // Bisan keys: F2 lookup · F4 save · F9 print (posts, so it asks) · Esc exit back to where you were
 let pageKeys = null, lastPlace = '#/dashboard';
 const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
@@ -66,8 +78,8 @@ async function render() {
   $$('dialog').forEach((d) => d.remove());   // a sheet never outlives its screen
   guardEditor = null; pageKeys = null; onMasters = null; document.onvisibilitychange = null; document.body.classList.remove('editing', 'sheet-open');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
-  if (!isDocRoute(location.hash)) lastPlace = location.hash || '#/dashboard';
-  const hash = location.hash.replace(/^#\//, '') || 'dashboard';
+  if (!isDocRoute(H.hash)) lastPlace = H.hash || '#/dashboard';
+  const hash = H.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
   const navKey = name === 'new' ? `docs?type=${args[0]}` : hash;
   const best = $$('#nav a').filter((a) => navKey.startsWith(a.dataset.k)).sort((x, y) => y.dataset.k.length - x.dataset.k.length)[0];
@@ -88,19 +100,22 @@ async function render() {
   translate(document.body);
   window.scrollTo(0, 0);
 }
-window.addEventListener('hashchange', async () => {
-  if (bypass) { bypass = false; currentHash = location.hash; return; }
+async function onHash() {
+  if (bypass) { bypass = false; currentHash = H.hash; return; }
   if (guardEditor && guardEditor.isDirty()) {
-    const target = location.hash;
-    bypass = true; location.hash = currentHash;          // stay put until the user decides
+    const target = H.hash;
+    bypass = true; H.hash = currentHash;          // stay put until the user decides
     const ok = await guardEditor.leave();
-    if (ok) { guardEditor = null; currentHash = target; location.hash = target; }
+    if (ok) { guardEditor = null; currentHash = target; H.hash = target; }
     return;
   }
-  currentHash = location.hash; render();
-});
+  currentHash = H.hash; render();
+}
+window.addEventListener('hashchange', () => { if (!CLOUD) onHash(); else if (location.hash.startsWith('#/')) H.hash = location.hash; });
+// online, links move the program's own route (the frame's address bar is not ours)
+document.addEventListener('click', (e) => { if (!CLOUD || e.defaultPrevented) return; const a = e.target.closest?.('a[href^="#/"]'); if (a) { e.preventDefault(); H.hash = a.getAttribute('href'); } });
 window.addEventListener('beforeunload', (e) => { if (guardEditor && guardEditor.isDirty()) { e.preventDefault(); e.returnValue = ''; } });
-const go = (h) => { guardEditor = null; if (location.hash === h) render(); else location.hash = h; };
+const go = (h) => { guardEditor = null; if (H.hash === h) render(); else H.hash = h; };
 
 // "You started this document. What now?"  → 'stay' | 'discard' | 'save' | 'post'
 // Long press (half a second) opens the inquiry for what is under the finger; right-click does the same on a
@@ -138,6 +153,21 @@ function ask(question, yes = 'Yes', no = 'Cancel') {
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(false); });
     $('[data-v=yes]', dlg).onclick = () => end(true); $('[data-v=no]', dlg).onclick = () => end(false);
     setTimeout(() => $('[data-v=no]', dlg).focus(), 30);
+  });
+}
+// a yes/no question and a one-line answer: the browser's own boxes on a computer, the program's own online
+const okBox = (q) => (CLOUD ? ask(q, 'Yes', 'Cancel') : Promise.resolve(confirm(q)));
+function textBox(q) {
+  if (!CLOUD) return Promise.resolve(prompt(q));
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog'); dlg.className = 'ask';
+    dlg.innerHTML = `<p class="q">${esc(q)}</p><input class="ans" dir="auto" style="width:100%;margin:0 0 14px"><div class="actions"><button class="btn" data-v="no">Cancel</button><button class="btn ink" data-v="yes">OK</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const inp = $('.ans', dlg); const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); end(inp.value); } };
+    $('[data-v=yes]', dlg).onclick = () => end(inp.value); $('[data-v=no]', dlg).onclick = () => end(null);
+    setTimeout(() => inp.focus(), 30);
   });
 }
 // the menu behind a line's capsule: change the item, open its card, or remove the line
@@ -183,7 +213,7 @@ async function partyBalanceC(partyId) {
 
 // ---------- dashboard ----------
 // which home sections are open is a per-device convenience
-const homeOpen = () => { try { return JSON.parse(localStorage.getItem('homeOpen') || '["inv"]'); } catch { return ['inv']; } };
+const homeOpen = () => { try { return JSON.parse(LS.get('homeOpen') || '["inv"]'); } catch { return ['inv']; } };
 routes.dashboard = async () => {
   const tb = trialBalance(await ledger());
   const healthy = tb.balanced && !sequenceGaps(S.docs.filter((d) => d.number)).length;
@@ -200,7 +230,7 @@ routes.dashboard = async () => {
     <div class="listhead"><h2>Recent documents</h2><a class="btn small" href="#/docs?type=SI">All</a></div>
     ${docTable(recent)}
     ${S.items.length ? '' : `<div class="note" style="margin-top:20px">Start here: add items and customers in <a href="#/items">Items</a> and <a href="#/customers">Customers</a>, or import them from Excel in <a href="#/import">Import</a>.</div>`}`;
-  $$('.hsec').forEach((d) => d.addEventListener('toggle', () => { try { localStorage.setItem('homeOpen', JSON.stringify($$('.hsec[open]').map((x) => x.dataset.k))); } catch { /* private mode: fine */ } }));
+  $$('.hsec').forEach((d) => d.addEventListener('toggle', () => { try { LS.set('homeOpen', JSON.stringify($$('.hsec[open]').map((x) => x.dataset.k))); } catch { /* private mode: fine */ } }));
 };
 
 // one hub screen for a group of links (Reports, Directories)
@@ -268,7 +298,7 @@ routes.regions = async () => {
 };
 // ---------- customer balances (Bisan's list): one line per customer, grouped by region, with totals ----------
 routes.balances = async () => {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const q = new URLSearchParams(H.hash.split('?')[1] || '');
   const reg = q.get('region') || '';
   const entries = await ledger();
   const dr = {}, cr = {}; for (const e of entries) if (e.partyId && e.account === '1200') { dr[e.partyId] = (dr[e.partyId] || 0) + e.debitC; cr[e.partyId] = (cr[e.partyId] || 0) + e.creditC; }
@@ -333,7 +363,7 @@ function draftTotalC(d) {
 routes.new = async (type) => {
   if (!DOC_TYPES[type]) throw new Error('Unknown document type');
   // Bisan-style chain: customer → statement → new document, with the customer already filled in
-  const pre = partyById(new URLSearchParams(location.hash.split('?')[1] || '').get('party'));
+  const pre = partyById(new URLSearchParams(H.hash.split('?')[1] || '').get('party'));
   const doc = { type, date: today(), partyId: pre?.id || '', reference: '', notes: '', lines: [], invoiceDiscount: 0, amount: '', method: 'cash', cashAccount: '1100' };
   if (DOC_TYPES[type].lines) doc.lines = [blankLine()];
   editor(doc);
@@ -351,7 +381,7 @@ const STATUS_TABS = [
   ['all', 'All', 'layers', () => true],
 ];
 routes.docs = async () => {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const q = new URLSearchParams(H.hash.split('?')[1] || '');
   const type = q.get('type') || '';
   const ofType = S.docs.filter((d) => !type || d.type === type);
   // default: saved documents if there are any waiting, otherwise posted
@@ -463,14 +493,14 @@ function editor(doc) {
     const p = partyById(r.partyId);
     if (r.type === 'SI' && p?.creditLimit) {
       const after = (await partyBalanceC(p.id)) + draftTotalC(r);
-      if (after > toCents(p.creditLimit) && !confirm(T(`Credit limit ${fmt(p.creditLimit)} will be exceeded (balance after: ${money(after)}). Post anyway?`))) return;
+      if (after > toCents(p.creditLimit) && !await okBox(T(`Credit limit ${fmt(p.creditLimit)} will be exceeded (balance after: ${money(after)}). Post anyway?`))) return;
     }
     let posted;
     try { posted = await db.post(r.id, S.user, S.settings); }
     catch (e) {
       if (!/Owner approval/.test(e.message)) throw e;
       if (!isAdmin()) throw new Error(e.message + ' Switch to admin.');
-      const reason = prompt(e.message + '\n\nReason for backdating:');
+      const reason = await textBox(e.message + '\n\nReason for backdating:');
       if (!reason) return;
       posted = await db.post(r.id, S.user, S.settings, { allowBackdate: true, backdateReason: reason });
     }
@@ -483,7 +513,7 @@ function editor(doc) {
   let busy = false;
   const once = (fn) => async () => { if (busy) return; busy = true; try { await guard(fn); } finally { busy = false; } };
   const postAndPrintNow = once(() => doPost(true));
-  const printAndPost = () => { if (!busy && confirm(T('Print and post this document?'))) return postAndPrintNow(); };
+  const printAndPost = async () => { if (!busy && await okBox(T('Print and post this document?'))) return postAndPrintNow(); };
   $('#save').onclick = saveDraftNow;
   $('#post').onclick = once(() => doPost(false));
 
@@ -507,7 +537,7 @@ function editor(doc) {
         const r = await db.saveDraft({ ...d, id: doc.id }, S.user);
         doc.id = r.id; lastSaved = snap; if (alive()) clean = snapshot();
         const pill = $('.whead .pill'); if (pill && pill.dataset.s !== 'saved') { pill.dataset.s = 'saved'; pill.textContent = T('Saved'); }
-        history.replaceState(null, '', '#/doc/' + r.id); currentHash = location.hash;
+        H.replace('#/doc/' + r.id); currentHash = H.hash;
       } catch (e) { console.warn('autosave', e); }
     })();
     await saving;
@@ -524,9 +554,9 @@ function editor(doc) {
   // cancel: a saved draft becomes "cancelled" (kept in the records); a new one is simply dropped
   $('#cancelDoc').onclick = () => guard(async () => {
     if (doc.id) {
-      if (!confirm(T('Cancel this draft? It stays in the records as cancelled.'))) return;
+      if (!await okBox(T('Cancel this draft? It stays in the records as cancelled.'))) return;
       await db.cancelDraft(doc.id, S.user); toast('Draft cancelled');
-    } else if (isDirty() && !confirm(T('Discard this new document?'))) return;
+    } else if (isDirty() && !await okBox(T('Discard this new document?'))) return;
     guardEditor = null; backToPlace();
   });
   // export: the document as it stands, to Excel
@@ -784,7 +814,7 @@ const saveFromCard = async (store, rec, vals) => {
   if (vals.active !== undefined) vals.active = vals.active !== 'false' && vals.active !== false;
   if (store === 'parties' && vals.active === false && rec.active !== false) {
     const bal = await partyBalanceC(rec.id);
-    if (bal !== 0 && !confirm(`${rec.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) throw new Error('Not changed');
+    if (bal !== 0 && !await okBox(`${rec.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) throw new Error('Not changed');
   }
   await db.saveMaster(store, { ...rec, ...vals }, S.user);
   await reload(); onMasters?.();
@@ -1195,7 +1225,7 @@ async function viewDoc(d) {
   };
   $('#printBtn').onclick = () => guard(async () => {
     let reason = '';
-    if (prints.length && isAdmin() && !prints.some((x) => x.copyNo > 1) && confirm('Was the original lost (printer jam, damaged)? Press OK to record a reason; it still prints as a Copy.')) reason = prompt('Reason:') || '';
+    if (prints.length && isAdmin() && !prints.some((x) => x.copyNo > 1) && await okBox('Was the original lost (printer jam, damaged)? Press OK to record a reason; it still prints as a Copy.')) reason = await textBox('Reason:') || '';
     await printDoc(d, reason); render();
   });
   $('#backBtn').onclick = backToPlace;
@@ -1205,7 +1235,7 @@ async function viewDoc(d) {
     toast('Draft created'); go('#/doc/' + r.id);
   }));
   $('#void') && ($('#void').onclick = () => guard(async () => {
-    const reason = prompt(`Void ${d.number}? A reversing entry will be posted and the number stays used.\n\nReason:`);
+    const reason = await textBox(`Void ${d.number}? A reversing entry will be posted and the number stays used.\n\nReason:`);
     if (!reason) return;
     await db.voidDoc(d.id, reason, S.user); toast('Voided with reversing entry'); render();
   }));
@@ -1252,6 +1282,7 @@ async function printDoc(d, reason = '', copies = 1) {
     <div class="meta"><span>${L('Printed by', 'طُبعت بواسطة')} <span dir="auto">${esc(S.user)}</span> · <span dir="ltr">${new Date().toLocaleString('en-GB')}</span> · ${esc(stamp)}</span><span dir="ltr">${String(idx + 1).padStart(2, '0')} / ${String(pages.length).padStart(2, '0')}</span></div>
   </div>`; };
   $('#printArea').innerHTML = pages.map(page).join('');
+  paperName = `${d.number || d.type + '-draft'} ${p.name || ''}`.trim();
   document.body.classList.add('printing');
   printWhenReady();
 }
@@ -1292,7 +1323,7 @@ function itemForm(it, locked = false) {
     if (!fd.name || !fd.code) throw new Error('Code and name are required');
     if (!it.id && S.items.some((i) => i.code.toLowerCase() === fd.code.toLowerCase())) throw new Error('This code already exists');
     const sim = similarNames(fd.name, S.items.filter((i) => i.id !== it.id));
-    if (sim.length && !confirm(`Similar item exists: ${sim.map((x) => x.code + ' ' + x.name).join(', ')}. Add anyway?`)) return;
+    if (sim.length && !await okBox(`Similar item exists: ${sim.map((x) => x.code + ' ' + x.name).join(', ')}. Add anyway?`)) return;
     for (const k of ['buyPrice', 'pricePublic', 'pricePharmacist']) fd[k] = fd[k] === '' ? '' : Number(fd[k]);
     fd.active = fd.active === 'true';
     await db.saveMaster('items', { ...it, ...fd }, S.user); toast('Saved'); render();
@@ -1311,7 +1342,7 @@ async function partiesPage(kind) {
   const ctl = kind === 'customer' ? '1200' : '2100';
   $('#main').innerHTML = `<h1>${title}</h1><p class="sub"><span>Account</span> <b dir="ltr">${esc(acctCode(ctl))}</b> · ${esc(acctName(ctl))} · ${list.length} <span>${title.toLowerCase()}</span> · <span>Codes are permanent.</span></p>
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>
-    ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(location.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
+    ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(H.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
     ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
     <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its card.'} <kbd>Enter</kbd> <span>opens the only match.</span></p>
     <div class="tablewrap"><table class="t deflist"><tbody id="tb">
@@ -1352,12 +1383,12 @@ function partyForm(p, locked = false) {
     if (!fd.name || !fd.code) throw new Error('Code and name are required');
     if (!p.id && S.parties.some((x) => x.code.toLowerCase() === fd.code.toLowerCase())) throw new Error('This code already exists');
     const sim = similarNames(fd.name, S.parties.filter((x) => x.id !== p.id));
-    if (sim.length && !confirm(`Similar name exists: ${sim.map((x) => x.code + ' ' + x.name).join(', ')}. Add anyway?`)) return;
+    if (sim.length && !await okBox(`Similar name exists: ${sim.map((x) => x.code + ' ' + x.name).join(', ')}. Add anyway?`)) return;
     const ob = Number(fd.openingBalance || 0); delete fd.openingBalance;
     if (fd.active !== undefined) fd.active = fd.active === 'true';
     if (p.id && fd.active === false && p.active !== false) {
       const bal = await partyBalanceC(p.id);
-      if (bal !== 0 && !confirm(`${p.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) return;
+      if (bal !== 0 && !await okBox(`${p.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) return;
     }
     if (fd.creditLimit !== undefined) fd.creditLimit = fd.creditLimit === '' ? '' : Number(fd.creditLimit);
     const rec = await db.saveMaster('parties', { ...p, ...fd }, S.user);
@@ -1457,7 +1488,7 @@ function statementOptions(cur = {}) {
   });
 }
 routes.statement = async (pid) => {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const q = new URLSearchParams(H.hash.split('?')[1] || '');
   const party = partyById(pid);
   const o = { pid, region: q.get('region') || '', from: q.get('from') || '', to: q.get('to') || '', detail: q.get('detail') === '1', saved: q.get('saved') === '1' };
   const open = async () => {
@@ -1534,7 +1565,7 @@ routes.stock = async () => {
 };
 
 routes.sales = async () => {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const q = new URLSearchParams(H.hash.split('?')[1] || '');
   const kind = q.get('kind') === 'purchases' ? 'purchases' : 'sales';
   const from = q.get('from') || today().slice(0, 8) + '01', to = q.get('to') || today(), by = q.get('by') || 'item';
   const [plus, minus] = kind === 'purchases' ? ['PI', 'PR'] : ['SI', 'SR'];
@@ -1569,7 +1600,7 @@ routes.sales = async () => {
       <tr class="det" data-d="${i}" hidden><td colspan="${cols}">${miniTable(['Number', 'Date', by === 'item' ? partyWord : 'Item', 'Qty', 'Bonus', 'Price', 'Amount'], r.det.map((x) => [`<a href="#/doc/${x.id}" dir="ltr">${esc(x.number)}</a>`, esc(x.date), `<span dir="auto">${esc(x.who)}</span>`, fmt(x.qty, 0), fmt(x.bonus, 0), fmt(x.price, 3), money(x.amt)]))}</td></tr>`).join('')}
     </tbody><tfoot><tr><td ${by === 'item' ? 'colspan="2"' : ''}>Totals</td><td class="n">${fmt(tsum.q, 0)}</td><td class="n">${fmt(tsum.b, 0)}</td><td class="n">${fmt(tsum.q + tsum.b, 0)}</td><td class="n">${money(tsum.a)}</td></tr></tfoot></table></div>`;
   $$('#rep tr.grp').forEach((tr) => (tr.onclick = () => { const d = $(`#rep tr.det[data-d="${tr.dataset.i}"]`); d.hidden = !d.hidden; }));
-  $('#show').onclick = () => (location.hash = `#/sales?kind=${kind}&by=${$('#by').value}&from=${$('#from').value}&to=${$('#to').value}`);
+  $('#show').onclick = () => (H.hash = `#/sales?kind=${kind}&by=${$('#by').value}&from=${$('#from').value}&to=${$('#to').value}`);
   $('#xl').onclick = () => toExcel(`${kind}-${by}.xlsx`, [[by, 'Name', 'Qty', 'Bonus', 'Total qty', 'Total ILS'], ...rows.map((r) => [r.key, r.name, r.qty, r.bonus, r.qty + r.bonus, r.amountC / 100])]);
   $('#pr').onclick = () => { $$('#rep tr.det').forEach((d) => (d.hidden = false)); printHtml(`<h2>${title}</h2><p dir="ltr">${from} – ${to}</p>` + $('.tablewrap').outerHTML); };
 };
@@ -1720,16 +1751,16 @@ async function runImport(obj) {
 
 // ---------- backup ----------
 routes.backup = async () => {
-  const last = localStorage.getItem('lastBackup');
-  $('#main').innerHTML = `<h1>Backup</h1><p class="sub">Your books live in this browser and in every backup file you keep. Keep one copy in your own Google Drive or Dropbox.</p>
+  const last = LS.get('lastBackup');
+  $('#main').innerHTML = `<h1>Backup</h1><p class="sub">${CLOUD ? 'Your books live online with this program, and Claude keeps a copy after every change. A backup file is one more copy in your own hands.' : 'Your books live in this browser and in every backup file you keep. Keep one copy in your own Google Drive or Dropbox.'}</p>
     ${!last || Date.now() - Number(last) > 864e5 ? '<div class="note warn">No backup in the last 24 hours.</div>' : `<div class="note">Last backup: ${new Date(Number(last)).toLocaleString('en-GB')}</div>`}
     <div class="actions"><button class="btn primary" id="json">Download full backup (.json)</button><button class="btn" id="xlsx">Download everything as Excel</button></div>
-    <h2>Restore</h2><p class="muted">Restore works only into an empty app (new device or new browser), so it can never overwrite existing books. The file checksum is verified first.</p>
-    <input type="file" id="restore" accept=".json" ${isAdmin() ? '' : 'disabled'}>`;
+    ${CLOUD ? '<h2>Restore</h2><p class="muted">The online books are never overwritten from a file. To go back to a backup, ask Claude.</p>' : `<h2>Restore</h2><p class="muted">Restore works only into an empty app (new device or new browser), so it can never overwrite existing books. The file checksum is verified first.</p>
+    <input type="file" id="restore" accept=".json" ${isAdmin() ? '' : 'disabled'}>`}`;
   $('#json').onclick = () => guard(async () => {
     const data = await db.exportAll();
-    download(new Blob([JSON.stringify(data)], { type: 'application/json' }), `ledger-backup-${today()}.json`);
-    localStorage.setItem('lastBackup', String(Date.now())); render();
+    await saveFile(new Blob([JSON.stringify(data)], { type: 'application/json' }), `ledger-backup-${today()}.json`);
+    LS.set('lastBackup', String(Date.now())); render();
   });
   $('#xlsx').onclick = () => guard(async () => {
     const wb = XLSX.utils.book_new();
@@ -1739,12 +1770,12 @@ routes.backup = async () => {
     add('Lines', S.docs.flatMap((d) => (d.lines || []).map((l) => ({ number: d.number || 'DRAFT', type: d.type, status: d.status, code: itemById(l.itemId)?.code, ...l }))));
     add('Ledger', (await ledger()).map((e) => ({ ...e, debit: e.debitC / 100, credit: e.creditC / 100 })));
     add('Stock', await db.all('stock')); add('Audit', await db.all('audit'));
-    XLSX.writeFile(wb, `ledger-${today()}.xlsx`);
+    if (CLOUD) await saveFile(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })]), `ledger-${today()}.xlsx`); else XLSX.writeFile(wb, `ledger-${today()}.xlsx`);
   });
-  $('#restore').onchange = () => guard(async () => {
+  $('#restore') && ($('#restore').onchange = () => guard(async () => {
     const f = $('#restore').files[0]; if (!f) return;
     await db.restoreAll(JSON.parse(await f.text())); toast('Restored'); go('#/dashboard');
-  });
+  }));
 };
 
 // ---------- settings ----------
@@ -1757,7 +1788,7 @@ routes.settings = async () => {
       <label class="f" id="sec-lang">Language<select id="lang"><option value="en">English</option><option value="ar" ${getLang() === 'ar' ? 'selected' : ''}>العربية</option></select></label>
       <button class="btn" id="saveMe">Save</button></div>
     <h2>Role</h2><p class="muted">Admin adds items, customers and suppliers, voids documents, imports and restores. Accountant enters and posts documents.</p>
-    <div class="actions">${isAdmin() ? '<button class="btn" id="toAcc">Switch to accountant</button>' : '<button class="btn primary" id="toAdmin">Switch to admin</button>'}</div>
+    <div class="actions">${CLOUD && !cloudAdmin ? '' : isAdmin() ? '<button class="btn" id="toAcc">Switch to accountant</button>' : '<button class="btn primary" id="toAdmin">Switch to admin</button>'}</div>
     <h2>Company</h2><form id="co" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
       ${f('companyName', 'Company name')}${f('companyNameAr', 'Company name (Arabic)')}${f('city', 'City')}${f('monogram', 'Monogram (2–3 letters)')}
       <label class="f" style="grid-column:1/-1">Letterhead contacts · one per line: department | person | phone<textarea name="contacts" dir="auto" rows="3" ${isAdmin() ? '' : 'readonly'}>${esc(s.contacts || '')}</textarea></label>
@@ -1770,20 +1801,21 @@ routes.settings = async () => {
     <h2 id="sec-cur">Currency</h2><div class="row"><label class="f grow">Currency<input value="${esc(T('Israeli new shekel (₪, NIS)'))}" readonly></label></div>
     <p class="muted">One currency in this version: every amount, statement and report is in shekels.</p>
     ${isAdmin() ? '' : '<h2 id="sec-pin">Password</h2><p class="muted">Switch to admin to set or change the admin PIN.</p>'}
-    <div class="note" style="margin-top:24px">This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.</div>`;
+    <div class="note" style="margin-top:24px">${CLOUD ? 'Online books: the data lives with this program on claude.ai, not in this browser. Claude reads and writes the same books.' : 'This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.'}</div>`;
   const prev = () => { const fd = Object.fromEntries(new FormData($('#co'))); const keep = S.settings; S.settings = { ...keep, ...fd }; $('#lhPrev').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}</div>`; S.settings = keep; };
   $('#co').addEventListener('input', prev); prev();
-  const fq = new URLSearchParams(location.hash.split('?')[1] || '').get('f');
+  const fq = new URLSearchParams(H.hash.split('?')[1] || '').get('f');
   if (fq) setTimeout(() => { const el = $('#sec-' + fq); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); (el.querySelector('select,input') || el.nextElementSibling?.querySelector?.('input'))?.focus(); } }, 60);
   $('#saveMe').onclick = () => guard(async () => {
-    S.user = $('#uname').value.trim() || 'User'; sessionStorage.setItem('user', S.user); await db.setSetting('fontScale', $('#size').value, S.user);
+    S.user = $('#uname').value.trim() || 'User'; SS.set('user', S.user); await db.setSetting('fontScale', $('#size').value, S.user);
     if ($('#lang').value !== getLang()) { setLang($('#lang').value); location.reload(); return; }
     toast('Saved'); render();
   });
-  $('#toAcc') && ($('#toAcc').onclick = () => { S.role = 'accountant'; sessionStorage.setItem('role', 'accountant'); render(); });
+  $('#toAcc') && ($('#toAcc').onclick = () => { S.role = 'accountant'; SS.set('role', 'accountant'); render(); });
   $('#toAdmin') && ($('#toAdmin').onclick = () => guard(async () => {
-    if (S.settings.adminPin) { const pin = prompt('Admin PIN'); if (pin !== S.settings.adminPin) throw new Error('Wrong PIN'); }
-    S.role = 'admin'; sessionStorage.setItem('role', 'admin'); toast(S.settings.adminPin ? 'Admin' : 'Admin. Set a PIN now.'); render();
+    if (CLOUD && !cloudAdmin) throw new Error('Only the owner of the books is admin');
+    if (S.settings.adminPin && !CLOUD) { const pin = await textBox('Admin PIN'); if (pin !== S.settings.adminPin) throw new Error('Wrong PIN'); }
+    S.role = 'admin'; SS.set('role', 'admin'); toast(S.settings.adminPin ? 'Admin' : 'Admin. Set a PIN now.'); render();
   }));
   $('#saveCo') && ($('#saveCo').onclick = () => guard(async () => {
     const fd = Object.fromEntries(new FormData($('#co')));
@@ -1793,7 +1825,7 @@ routes.settings = async () => {
     toast('Saved'); render();
   }));
   $('#logoFile') && ($('#logoFile').onchange = (e) => guard(async () => { const f = e.target.files[0]; if (!f) return; await db.setSetting('logo', await logoFromFile(f), S.user); toast('Logo saved'); render(); }));
-  $('#logoDel') && ($('#logoDel').onclick = () => guard(async () => { if (!confirm(T('Remove the logo? The monogram is printed again.'))) return; await db.setSetting('logo', '', S.user); toast('Logo removed'); render(); }));
+  $('#logoDel') && ($('#logoDel').onclick = () => guard(async () => { if (!await okBox(T('Remove the logo? The monogram is printed again.'))) return; await db.setSetting('logo', '', S.user); toast('Logo removed'); render(); }));
   $('#savePin') && ($('#savePin').onclick = () => guard(async () => { const p = $('#pin').value.trim(); if (p.length < 4) throw new Error('At least 4 digits'); await db.setSetting('adminPin', p, S.user); toast('PIN set'); }));
 };
 
@@ -1834,6 +1866,14 @@ function logoFromFile(file) {
 }
 
 // ---------- utils ----------
+// online: files are handed to the host, which asks the viewer before saving
+async function saveFile(blob, name) {
+  if (!CLOUD) return download(blob, name);
+  const dl = await window.claude.use('downloads');
+  if (!dl) throw new Error('Saving files is not available in this view');
+  try { await dl.save({ filename: name, data: blob }); }
+  catch (e) { if (e?.code === 'declined') return; throw new Error(e?.code === 'rate_limited' ? 'A save is already waiting. Answer it first.' : `The file could not be saved (${e?.code || e?.message || e})`); }
+}
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 // Excel export: left to right like the archive files, one clear font (Arial: on every computer and phone),
 // the title row and the column-header rows in bold. SheetJS community writes no styles, so the font and the
@@ -1864,6 +1904,7 @@ function excelBytes(aoa, { cols, merges, sheet = 'Sheet1' } = {}) {
 }
 function toExcel(name, aoa, opts = {}) {
   const blob = new Blob([excelBytes(aoa, opts)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  if (CLOUD) { saveFile(blob, name).catch((e) => toast(e.message, true)); return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
@@ -1899,19 +1940,66 @@ function printStatement(party, o, st) {
     <div class="wbox"><div class="wl">${esc(T('Amount in words'))}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(Math.abs(st.closing))))}</div></div>
     <div class="sign"><span>${esc(T('Signature'))}</span><span>${esc(T('Received by'))}</span></div>
     <div class="meta"><span>${esc(T('Printed by'))} <span dir="auto">${esc(S.user)}</span> · <span dir="ltr">${new Date().toLocaleString('en-GB')}</span></span><span></span></div></div>`;
+  paperName = `statement-${party.code}-${today()}`;
   document.body.classList.add('printing'); printWhenReady();
 }
 // print only once the bundled print font is loaded (it lives offline in vendor/fonts), so paper and PDF look the same everywhere
 async function printWhenReady() {
   try { await Promise.all(['400', '600', '700'].map((w) => document.fonts.load(`${w} 12px "Plex Arabic"`, 'ابت Abc 123'))); await document.fonts.ready; } catch {}
+  if (CLOUD) { document.body.classList.remove('printing'); return showPaper(); }
   setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 30);
 }
+// Online there is no printer behind the frame: the page is shown as it prints, and saved as a PDF (A4).
+let paperName = 'document';
+function showPaper() {
+  $$('dialog.paper').forEach((d) => d.remove());
+  const dlg = document.createElement('dialog'); dlg.className = 'paper';
+  dlg.innerHTML = `<div class="paper-bar"><button class="btn" data-v="close">Close</button><button class="btn ink" data-v="pdf">${ic('saved')}<span>Save PDF</span></button></div><div class="paper-scroll"><div class="paper-sheet">${$('#printArea').innerHTML}</div></div>`;
+  document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+  const fit = () => { const w = $('.paper-scroll', dlg).clientWidth - 24; $('.paper-sheet', dlg).style.zoom = Math.min(1, w / 703); }; fit();
+  $('[data-v=close]', dlg).onclick = () => dlg.remove();
+  $('[data-v=pdf]', dlg).onclick = (e) => guard(async () => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await saveFile(await paperPdf(), paperName.replace(/[^\w\u0600-\u06FF .-]+/g, '-') + '.pdf'); } finally { b.disabled = false; }
+  });
+}
+const loadScript = (src) => new Promise((res, rej) => { if (document.querySelector(`script[data-src="${src}"]`)) return res(); const sc = document.createElement('script'); sc.src = src; sc.dataset.src = src; sc.onload = res; sc.onerror = () => { sc.remove(); rej(new Error('Could not load ' + src)); }; document.head.appendChild(sc); });
+// every printed page is drawn as the browser shows it, then cut into A4 sheets between rows
+async function paperPdf() {
+  await loadScript('vendor/html2canvas.min.js'); await loadScript('vendor/jspdf.umd.min.js');
+  const area = $('#printArea'); area.classList.add('shoot');
+  try {
+    try { await document.fonts.ready; } catch {}
+    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const W = 186, HH = 273, M = 12; let first = true;
+    for (const el of $$('#printArea .doc-print')) {
+      const box = el.getBoundingClientRect();
+      const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false });
+      const k = canvas.width / box.width, perMm = canvas.width / W, pageH = Math.floor(HH * perMm);
+      const cuts = $$('tr, .tb, .wbox, .sign, .meta', el).map((n) => Math.round((n.getBoundingClientRect().bottom - box.top) * k)).sort((a, b) => a - b);
+      let y = 0;
+      while (y < canvas.height - 2) {
+        let end = Math.min(canvas.height, y + pageH);
+        if (end < canvas.height) { const c = cuts.filter((v) => v > y + pageH * 0.3 && v <= end).pop(); if (c) end = c; }
+        const part = document.createElement('canvas'); part.width = canvas.width; part.height = end - y;
+        const g = part.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, part.width, part.height); g.drawImage(canvas, 0, y, canvas.width, end - y, 0, 0, canvas.width, end - y);
+        if (!first) pdf.addPage(); first = false;
+        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, M, W, (end - y) / perMm);
+        y = end;
+      }
+    }
+    return pdf.output('blob');
+  } finally { area.classList.remove('shoot'); }
+}
 function printHtml(html) {
+  paperName = `report-${today()}`;
   $('#printArea').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}${html}<div class="meta"><span dir="ltr">${new Date().toLocaleString('en-GB')}</span><span></span></div></div>`;
   document.body.classList.add('printing'); printWhenReady();
 }
 
 // ---------- boot ----------
+let cloudAdmin = false, remoteT = null;
+const bootMsg = (html) => { $('#main').innerHTML = `<div class="bootmsg">${html}</div>`; translate($('#main')); };
 (async () => {
   applyLang();
   $$('[data-ic]').forEach((el) => (el.innerHTML = ic(el.dataset.ic)));
@@ -1923,7 +2011,45 @@ function printHtml(html) {
   $('#langBtnM').textContent = lb.textContent; $('#langBtnM').onclick = lb.onclick;
   $('#menuBtn').onclick = () => document.body.classList.toggle('menu-open');
   $('#app').addEventListener('click', (e) => { if (document.body.classList.contains('menu-open') && !e.target.closest('#nav')) document.body.classList.remove('menu-open'); });
-  await db.open();
-  if (!location.hash) location.hash = '#/dashboard';
-  await render();
+  await start();
 })();
+
+// ---------- opening the books: online when the page runs inside claude.ai, otherwise in this browser ----------
+async function start() {
+  try {
+    bootMsg('<p>Opening the books…</p>');
+    const cdb = await cloud.connect();
+    if (cdb) {
+      CLOUD = true; document.documentElement.dataset.cloud = '1';
+      const me = await cloud.who(); cloudAdmin = me.admin; S.role = me.admin ? 'admin' : 'accountant'; if (me.name && !SS.get('user')) S.user = me.name;
+      const o = await cloud.openBooks(db.STORES);
+      db.useMemory(o.mem, cloud.refresh);
+      if (o.empty) await firstRun(me);
+      cloud.watch(remoteChanged);
+    } else await db.open();
+    if (CLOUD && location.hash.startsWith('#/')) H.replace(location.hash);
+    if (!H.hash) H.replace('#/dashboard');
+    currentHash = H.hash;
+    await render();
+  } catch (e) {
+    console.warn(e);
+    bootMsg(`<p><b>The books could not be opened.</b></p><p class="muted" dir="auto">${esc(e?.message || String(e))}</p><div class="actions"><button class="btn primary" id="retryBoot">Try again</button></div>`);
+    $('#retryBoot').onclick = () => start();
+  }
+}
+// the first time online: move the prepared books in (owner only), or start empty books
+async function firstRun(me) {
+  if (!me.admin) throw new Error('The books are not set up yet. The owner opens the program first.');
+  let seed = null; try { seed = (await import('../seed/books.js')).default; } catch {}
+  if (!seed) return cloud.startEmpty();
+  bootMsg('<p><b>Moving the books online…</b></p><p class="muted">Once only. Keep this page open.</p><p id="seedN" dir="ltr">0</p>');
+  const r = await cloud.seed(seed, (n, t) => { const el = $('#seedN'); if (el) el.textContent = `${n} / ${t}`; });
+  bootMsg(`<p><b>The books are online.</b></p><p dir="ltr">${r.records} / ${r.records}</p>`);
+}
+// Claude, or this program on another device, wrote to the books: read them again and show the page afresh
+function remoteChanged() {
+  clearTimeout(remoteT);
+  remoteT = setTimeout(async () => {
+    try { await cloud.refresh(); if (!guardEditor && !document.querySelector('dialog[open]')) await render(); else await reload(); toast('Books updated'); } catch (e) { console.warn(e); }
+  }, 700);
+}
