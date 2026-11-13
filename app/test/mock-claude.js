@@ -8,6 +8,8 @@
   const subs = []; const fire = () => subs.slice().forEach((f) => f());
   window.addEventListener('storage', (e) => { if (e.key === KEY) fire(); });
   const delay = () => new Promise((r) => setTimeout(r, 2));
+  // like the real store: a document's fields come back in alphabetical order
+  const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
   const meta = { fromCache: false, hasPendingWrites: false };
   const snap = (path, o) => ({ id: path.split('/').pop(), exists: path in o, data: () => (path in o ? Object.freeze(o[path]) : undefined), metadata: meta });
   const check = (path, even) => { if ((path.split('/').length % 2 === 0) !== even) throw new TypeError('bad path: ' + path); if (!/^[\w\-.~:@+/]+$/.test(path)) throw new TypeError('bad segment: ' + path); };
@@ -15,7 +17,7 @@
   window.__dbCalls = 0;
   const docRef = (path) => { check(path, true); return { id: path.split('/').pop(), path,
     get: async () => { window.__dbCalls++; await delay(); return snap(path, read()); },
-    set: async (d) => { window.__dbCalls++; await delay(); if (window.__failWrites) throw { code: 'unavailable', message: 'mock failure' }; big(d); const o = read(); o[path] = JSON.parse(JSON.stringify(d)); write(o); fire(); },
+    set: async (d) => { window.__dbCalls++; await delay(); if (window.__failWrites) throw { code: 'unavailable', message: 'mock failure' }; big(d); const o = read(); o[path] = sortKeys(JSON.parse(JSON.stringify(d))); write(o); fire(); },
     update: async (d) => { await delay(); const o = read(); if (!(path in o)) throw { code: 'invalid_argument', message: 'missing' }; o[path] = { ...o[path], ...JSON.parse(JSON.stringify(d)) }; write(o); fire(); },
     delete: async () => { await delay(); const o = read(); delete o[path]; write(o); fire(); },
     acquire: async ({ holder, ttlMs }) => { const k = KEY + ':lease:' + path; const L = JSON.parse(localStorage.getItem(k) || 'null'); const now = Date.now();

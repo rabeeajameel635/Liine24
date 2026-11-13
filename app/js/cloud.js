@@ -5,7 +5,7 @@
 // Every write goes through `commit`: check that nobody changed the books since this page read them
 // (meta/clock.rev), write the one document, move the clock. A posting is a single document write.
 import { createMem } from './memidb.js';
-import { toCloud, fromCloud, docBody, checkBooks, LAYOUT, COLLECTIONS } from './cloudmap.js';
+import { toCloud, fromCloud, docBody, checkBooks, canon, LAYOUT, COLLECTIONS } from './cloudmap.js';
 
 let cdb = null, mem = null, rev = 0, owner = new Map(), onRemote = null, unsub = null, inflight = 0;
 // this page's name on the clock and on the write lease; kept for the tab, so a reload is still the same writer
@@ -142,7 +142,7 @@ export async function seed(backup, report = () => {}) {
   const al = await call(() => cdb.doc('meta/auditlog').get()); if (al.exists) cols.auditlog = al.data();
   const back = fromCloud(cols);
   const want = fromCloud(regroup(toCloud(backup.data))).data;
-  const diff = Object.keys(want).filter((k) => JSON.stringify(want[k]) !== JSON.stringify(back.data[k]));
+  const diff = Object.keys(want).filter((k) => canon(want[k]) !== canon(back.data[k]));
   const bad = checkBooks(back.data);
   if (diff.length || bad.length) throw new Error('The online copy does not match the file: ' + [...diff, ...bad].join(', '));
   await call(() => clockRef().set({ rev: 1, pending: '', seeded: true, seed: { sha256: backup.sha256 || '', exportedAt: backup.exportedAt || '', records: docs.length }, ...stamp }));

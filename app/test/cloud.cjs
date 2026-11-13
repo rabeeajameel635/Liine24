@@ -19,6 +19,7 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   await p.goto(URL); await booted(p); return p; };
 
 (async () => {
+  const { checkBooks, fromCloud, canon } = await import(path.join(__dirname, '..', 'js', 'cloudmap.js'));
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 1200, height: 900 } }); await ctx.addInitScript(MOCK);
   console.log('▶ empty online books');
@@ -51,7 +52,7 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   const before = await dbx(p, async (db) => (await db.exportAll()).data);
   await p.reload(); await booted(p);
   const after = await dbx(p, async (db) => (await db.exportAll()).data);
-  ok('reload reads the same books back', JSON.stringify(before) === JSON.stringify(after), Object.keys(before).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).join(','));
+  ok('reload reads the same books back', canon(before) === canon(after), Object.keys(before).filter((k) => canon(before[k]) !== canon(after[k])).join(','));
   ok('number sequences come back from the documents', JSON.stringify(after.seqs.map((s) => [s.series, s.next])) === JSON.stringify(before.seqs.map((s) => [s.series, s.next])), JSON.stringify(after.seqs));
 
   console.log('▶ the program\'s own boxes, and paper as PDF');
@@ -87,7 +88,7 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   ok('failed posting: still a draft, no entries', r.err === 'mock failure' && r.status === 'draft' && r.same, r.err);
   const r2 = await dbx(q, async (db, a) => { const d = await db.post(a.draftId, 'T', await db.getSettings(), { allowBackdate: true, backdateReason: 'test' }); return d.number; }, made);
   ok('and it posts afterwards with the next number', r2.endsWith('000004'), r2);
-  const { checkBooks, fromCloud } = await import(path.join(__dirname, '..', 'js', 'cloudmap.js'));
+
   const regroup = (m) => { const c = { settings: [], items: [], parties: [], docs: [] }; for (const [k, v] of Object.entries(m)) { const col = k.split('/')[0]; if (col === 'meta') { if (k === 'meta/auditlog') c.auditlog = v; } else c[col].push(v); } return c; };
   st = await store(q);
   ok('books sound after all of it', checkBooks(fromCloud(regroup(st)).data).length === 0, checkBooks(fromCloud(regroup(st)).data).join('; '));
@@ -100,13 +101,13 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
     const c2 = await b.newContext({ viewport: { width: 420, height: 860 } }); await c2.addInitScript(MOCK);
     const m = await open(c2, seed);
     const got = await dbx(m, async (db) => (await db.exportAll()).data);
-    const diff = Object.keys(seed.data).filter((k) => JSON.stringify(seed.data[k]) !== JSON.stringify(got[k]));
+    const diff = Object.keys(seed.data).filter((k) => canon(seed.data[k]) !== canon(got[k]));
     ok('every store identical to the file', diff.length === 0, diff.join(','));
     const s2 = await store(m);
     ok('seed recorded on the clock', s2['meta/clock'].seeded === true && s2['meta/clock'].rev === 1 && s2['meta/clock'].seed.records === Object.keys(s2).length - 1, JSON.stringify(s2['meta/clock'].seed));
     await m.reload(); await booted(m);
     const got2 = await dbx(m, async (db) => (await db.exportAll()).data);
-    ok('second visit does not move anything again', JSON.stringify(got2) === JSON.stringify(got) && (await store(m))['meta/clock'].rev === 1);
+    ok('second visit does not move anything again', canon(got2) === canon(got) && (await store(m))['meta/clock'].rev === 1);
     ok('home shows', (await m.locator('#main h1').count()) === 1 && !m.errors.length, m.errors.join(' | '));
     await m.screenshot({ path: `/tmp/cloud-home-${BOOKS && label !== 'the test books' ? 'real' : 'test'}.png` });
     await c2.close();

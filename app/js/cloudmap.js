@@ -12,6 +12,9 @@
 // all there or not there at all. Number sequences are not stored: they are read from the posted documents.
 export const LAYOUT = 1;
 export const COLLECTIONS = ['settings', 'items', 'parties', 'docs'];
+// The store hands a document's fields back in its own order (alphabetical), so two records are compared
+// by content, never by the order of their fields.
+export const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((f) => [f, x[f]])) : x));
 const bySeq = (a, b) => a.seq - b.seq;
 const byKey = (f) => (a, b) => (a[f] < b[f] ? -1 : a[f] > b[f] ? 1 : 0);
 

@@ -15,7 +15,7 @@ const rows = (f) => text(f).split('\n').map((l) => l.trim()).filter((l) => l.sta
 const one = (f) => { const t = text(f); const v = /"version":\s*(\d+)/.exec(t); const line = t.split('\n').map((l) => l.trim()).find((l) => l.startsWith('{') && !l.startsWith('{"exists"') && !l.startsWith('{"notice"'));
   return /"exists":\s*false/.test(t) || !line ? null : { data: line.startsWith('{"data"') ? JSON.parse(line).data : JSON.parse(line), version: v ? Number(v[1]) : null }; };
 (async () => {
-  const { toCloud, fromCloud, checkBooks, LAYOUT, COLLECTIONS } = await import(path.join(__dirname, '..', 'js', 'cloudmap.js'));
+  const { toCloud, fromCloud, checkBooks, canon, LAYOUT, COLLECTIONS } = await import(path.join(__dirname, '..', 'js', 'cloudmap.js'));
   const cmd = process.argv[2];
   if (cmd === 'pull') {
     const src = Object.fromEntries(process.argv.slice(3).filter((a) => /^\w+=/.test(a)).map((a) => [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)]));
@@ -35,7 +35,7 @@ const one = (f) => { const t = text(f); const v = /"version":\s*(\d+)/.exec(t); 
     const bad = checkBooks(B); if (bad.length) throw new Error('result not sound: ' + bad.join('; '));
     const a = toCloud(A, owner), b = toCloud(B, owner);
     for (const p of Object.keys(a)) if (!b[p]) throw new Error('a record disappeared: ' + p + ' (records are never deleted)');
-    const ops = Object.keys(b).filter((p) => JSON.stringify(a[p]) !== JSON.stringify(b[p])).map((p) => ({ op: 'set', path: p, data: b[p], ...(st.versions[p] ? { ifVersion: st.versions[p] } : {}) }));
+    const ops = Object.keys(b).filter((p) => canon(a[p]) !== canon(b[p])).map((p) => ({ op: 'set', path: p, data: b[p], ...(st.versions[p] ? { ifVersion: st.versions[p] } : {}) }));
     const records = ops.length;
     if (records) ops.push({ op: 'set', path: 'meta/clock', data: { ...st.clock, rev: st.clock.rev + 1, pending: '', at: new Date().toISOString(), by: 'claude', layout: LAYOUT, seeded: true }, ifVersion: st.clockVersion });
     if (ops.length > 50) throw new Error(`${ops.length} documents changed: more than one db_write call holds (50). Split the work.`);
