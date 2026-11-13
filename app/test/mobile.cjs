@@ -1,0 +1,154 @@
+// Phone run: iPhone 13 emulation, taps only (no F-keys)
+const { chromium, devices } = require('playwright');
+const OUT = process.env.SHOTS || require('os').tmpdir() + '/ledger-mobile';
+require('fs').mkdirSync(OUT, { recursive: true });
+(async () => {
+  const b = await chromium.launch();
+  for (const lang of ['ar', 'en']) {
+    const ctx = await b.newContext({ ...devices[process.env.PHONE || 'iPhone 13'] });
+    const p = await ctx.newPage();
+    const errors = []; p.on('pageerror', (e) => errors.push(e.message));
+    p.on('dialog', (d) => d.accept());
+    await p.addInitScript((l) => { localStorage.setItem('lang', l); sessionStorage.setItem('role', 'admin'); window.print = () => { window.__printed = (window.__printed || 0) + 1; }; }, lang);
+    // ONLINE=1: the same phone run on online books (stand-in runtime); the program's own boxes are answered yes
+    if (process.env.ONLINE) await p.addInitScript(require('fs').readFileSync(require('path').join(__dirname, 'mock-claude.js'), 'utf8') + `;
+      new MutationObserver(() => { const pp = document.querySelector('dialog.paper[open]'); if (pp && !pp.dataset.auto) { pp.dataset.auto = 1; window.__printed = (window.__printed || 0) + 1; setTimeout(() => pp.querySelector('[data-v=close]')?.click(), 120); }
+        const d = document.querySelector('dialog.ask[open]:not(.lmenu)'); if (!d || d.dataset.auto) return; d.dataset.auto = 1; const i = d.querySelector('.ans'); if (i) i.value = 'test reason'; setTimeout(() => d.querySelector('[data-v=yes]')?.click(), 60); }).observe(document, { childList: true, subtree: true });`);
+    const U = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
+    await p.goto(U + '#/import'); await p.waitForSelector('#json');
+    await p.fill('#json', JSON.stringify({ items: [{ name: 'PARACETAMOL 500MG 20T', pricePharmacist: 12.5, buyPrice: 9, openingQty: 500 }, { name: 'OMEPRAZOLE 20MG 28CAP', pricePharmacist: 18.25, buyPrice: 14, openingQty: 300 }],
+      customers: [{ name: 'صيدلية الشفاء', region: 'gaza', openingBalance: 1000 }, { name: 'صيدلية النور', region: 'middle' }] }));
+    await p.tap('#importJson'); await p.tap('#doImport'); await p.waitForTimeout(700);
+    await p.goto(U + '#/dashboard'); await p.waitForTimeout(400);
+    await p.locator('.hsec[data-k=vch] > summary').tap(); await p.locator('.hsec[data-k=dir] > summary').tap(); await p.waitForTimeout(300);
+    await p.locator('.hsec[data-k=sys] > summary').tap(); await p.waitForTimeout(200);
+    await p.locator('.hsec[data-k=sys] a[href="#/settings?f=cur"]').tap(); await p.waitForTimeout(500);
+    console.log(lang, 'system → currency:', await p.inputValue('#sec-cur + .row input'), '| tabs:', (await p.locator('#tabs a span').allTextContents()).join(' | '));
+    await p.goto(U + '?s=4#/dashboard'); await p.waitForTimeout(500);
+    console.log(lang, 'home sections:', (await p.locator('.hsec > summary b').allTextContents()).join(' | '), '| open:', await p.locator('.hsec[open]').count(), '| groups in invoices:', await p.locator('.hsec[data-k=inv] .hgrp').count());
+    await p.screenshot({ path: `${OUT}/${lang}-1-home.png`, fullPage: true });
+    await p.tap('#menuBtn'); await p.waitForTimeout(400);
+    await p.screenshot({ path: `${OUT}/${lang}-2-menu.png` });
+    await p.tap('#nav a[href="#/docs?type=SI"]'); await p.waitForTimeout(500);
+    await p.screenshot({ path: `${OUT}/${lang}-2b-list.png` });
+    await p.tap('#newDoc'); await p.waitForTimeout(500);
+    console.log(lang, 'menu closed after tap:', !(await p.evaluate(() => document.body.classList.contains('menu-open'))));
+    await p.tap('.lkbtn[data-lk=party]'); await p.waitForTimeout(400);
+    console.log(lang, 'party list rows:', await p.locator('dialog.lookup tbody tr').count()); await p.screenshot({ path: `${OUT}/${lang}-2c-party-list.png` });
+    await p.locator('dialog.lookup tbody tr').first().tap(); await p.waitForTimeout(400);
+    console.log(lang, 'party:', await p.inputValue('#party'), '| region:', await p.textContent('#pRegion'));
+    // fill the line itself: the search button in the empty row opens the item list
+    await p.locator('#lines tbody tr:not(.found) .lkbtn').first().tap(); await p.waitForTimeout(400);
+    await p.locator('dialog.lookup tbody tr').nth(1).tap(); await p.waitForTimeout(300);
+    const rA = p.locator('#lines tbody tr.found').last();
+    await rA.locator('[data-k=qty]').fill('40'); await rA.locator('[data-k=bonus]').fill('8'); await rA.locator('[data-k=bonus]').press('Enter'); await p.waitForTimeout(300);
+    await p.keyboard.type('1001'); await p.keyboard.press('Enter'); await p.keyboard.press('Enter'); await p.keyboard.type('10'); await p.keyboard.press('Enter'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
+    await p.keyboard.press('Enter'); await p.keyboard.type('omep'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
+    console.log(lang, 'name search fills the line:', await p.locator('#lines tbody tr.found').last().locator('[data-k=name]').inputValue());
+    for (const q of ['3', '4']) { await p.locator('#lines tbody tr.found').last().locator('[data-k=qty]').fill(q); await p.locator('#lines tbody tr.found').last().locator('[data-k=bonus]').press('Enter'); await p.keyboard.type('1001'); await p.keyboard.press('Enter'); await p.waitForTimeout(150); }
+    await p.locator('#lines tbody tr.found').last().locator('[data-k=qty]').fill('5'); await p.locator('#invdisc').fill('10'); await p.waitForTimeout(200);
+    await p.screenshot({ path: `${OUT}/${lang}-3a-five-lines.png` });
+    const box = await p.evaluate(() => { const w = document.querySelector('#lines').closest('.tablewrap'); return { h: w.clientHeight, scrolls: w.scrollHeight > w.clientHeight, fitsScreen: Math.round(document.querySelector('#finish').getBoundingClientRect().bottom) + ' / ' + window.innerHeight }; });
+    console.log(lang, 'grid box:', JSON.stringify(box));
+    await p.evaluate(() => window.scrollTo(0, 9999)); await p.waitForTimeout(150); await p.screenshot({ path: `${OUT}/${lang}-3c-bottom.png` });
+    console.log(lang, 'buttons:', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#finish .rb')].map((b) => [b.id, Math.round(b.getBoundingClientRect().left)]))));
+    await p.fill('#invdisc', '');
+    { // capsule → item card → Edit sale price: saved on the item, the line follows; then put it back
+      const rL = p.locator('#lines tbody tr.found').last();
+      const setSale = async (v) => { await rL.locator('[data-cap]').tap(); await p.waitForTimeout(200); await p.tap('dialog.lmenu [data-v=card]'); await p.waitForTimeout(250);
+        await p.tap('dialog.card-dlg [data-v=quick]'); await p.waitForTimeout(150);
+        const shown = await p.locator('dialog.card-dlg [data-ek]').evaluateAll((els) => els.map((e) => e.dataset.ek).join(','));
+        const el = p.locator('dialog.card-dlg [data-ek=pricePharmacist]'); const was = await el.inputValue();
+        if (v === 'shot') await p.screenshot({ path: `${OUT}/${lang}-3d-sale-price.png` });
+        await el.fill(v === 'shot' ? '13' : v); await p.tap('dialog.card-dlg [data-v=save]'); await p.waitForTimeout(400); return { shown, was }; };
+      const before = await rL.locator('[data-k=price]').inputValue();
+      const { shown, was } = await setSale('shot');
+      console.log(lang, 'sale price from the card: fields', shown, '| line', before, '→', await rL.locator('[data-k=price]').inputValue());
+      await setSale(was); console.log(lang, 'sale price put back, line:', await rL.locator('[data-k=price]').inputValue());
+    }
+    for (let i = 0; i < 3; i++) { await p.locator('#lines tbody tr.found').last().locator('[data-cap]').tap(); await p.waitForTimeout(250); await p.screenshot({ path: `${OUT}/${lang}-3b-line-menu.png` }); await p.tap('dialog.lmenu [data-v=delete]'); await p.waitForTimeout(150); }
+    const r1 = p.locator('#lines tbody tr.found').first();
+    await r1.locator('[data-k=expiry]').fill('2026-12');
+    console.log(lang, 'lines:', await p.locator('#lines tbody tr.found').count(), '| first:', await r1.locator('[data-k=code]').inputValue(), await r1.locator('[data-k=name]').inputValue(), '| total:', await p.textContent('#gTotal'));
+    console.log(lang, 'approved balance:', (await p.textContent('#balAfter')).trim(), '|', (await p.textContent('#balBefore')).trim(), '| on hand on line:', (await r1.locator('.oh').textContent()).trim());
+    console.log(lang, 'totals box:', (await p.textContent('#totals')).replace(/\s+/g, ' ').trim());
+    console.log(lang, 'page scrolls sideways:', await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
+    await p.screenshot({ path: `${OUT}/${lang}-3-invoice.png` });
+    await p.tap('#postprint'); await p.waitForTimeout(1200);
+    console.log(lang, 'posted:', (await p.textContent('h1')).replace(/\s+/g, ' '), '| printed:', await p.evaluate(() => window.__printed));
+    await p.screenshot({ path: `${OUT}/${lang}-4-posted.png` });
+    await p.tap('#tabs a[data-tab=inv]'); await p.waitForTimeout(400);
+    await p.screenshot({ path: `${OUT}/${lang}-5-docs.png` });
+    await p.goto(U + '#/new/RV'); await p.waitForTimeout(600);
+    await p.tap('.lkbtn[data-lk=party]'); await p.waitForTimeout(400); await p.locator('dialog.lookup tbody tr').first().tap(); await p.waitForTimeout(400);
+    await p.fill('#amount', '250'); await p.waitForTimeout(200);
+    console.log(lang, 'voucher balance:', (await p.textContent('#balAfter')).trim(), '|', (await p.textContent('#balBefore')).trim(), '| total:', await p.textContent('#gTotal'));
+    await p.screenshot({ path: `${OUT}/${lang}-6-voucher.png` });
+    // long press: price → last price with Approve; code → item list, hold a row → its card, edit a spelling
+    const hold = async (loc) => { const b = await loc.boundingBox(); const x = b.x + b.width / 2, y = b.y + b.height / 2;
+      await loc.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }); await p.waitForTimeout(650); await loc.dispatchEvent('pointerup', { pointerType: 'touch', clientX: x, clientY: y }); await p.waitForTimeout(350); };
+    await p.goto(U + '?s=2#/new/SI'); await p.waitForTimeout(600);
+    await p.tap('.lkbtn[data-lk=party]'); await p.waitForTimeout(400); await p.locator('dialog.lookup tbody tr').first().tap(); await p.waitForTimeout(400);
+    const e1 = p.locator('#lines tbody tr:not(.found) [data-k=code]').first(); await e1.fill('1002'); await p.waitForTimeout(200);
+    const fr = p.locator('#lines tbody tr.found').first(); await fr.locator('[data-k=price]').fill('20');
+    await fr.locator('[data-k=qty]').fill('400'); await p.waitForTimeout(200);
+    console.log(lang, 'selling more than the count:', (await fr.locator('.oh').textContent()).trim(), '| marked:', await fr.locator('.oh.short').count());
+    await fr.locator('[data-k=qty]').fill('');
+    await hold(fr.locator('[data-k=price]'));
+    console.log(lang, 'hold price →', (await p.textContent('dialog.pricedlg .lp')).replace(/\s+/g, ' ').trim());
+    await p.screenshot({ path: `${OUT}/${lang}-8-last-price.png` });
+    await p.tap('dialog.pricedlg .actions [data-p]'); await p.waitForTimeout(300);
+    console.log(lang, 'approved price:', await fr.locator('[data-k=price]').inputValue());
+    await hold(fr.locator('[data-k=name]'));
+    console.log(lang, 'hold code → list rows:', await p.locator('dialog.lookup tbody tr').count());
+    await hold(p.locator('dialog.lookup tbody tr').nth(1)); await p.waitForTimeout(300);
+    console.log(lang, 'hold row → card over the list:', await p.locator('dialog[open]').count(), '|', (await p.textContent('dialog.card-dlg h2')).trim());
+    await p.screenshot({ path: `${OUT}/${lang}-9-item-card.png` });
+    await p.tap('dialog.card-dlg [data-v=edit]'); await p.waitForTimeout(200);
+    await p.fill('dialog.card-dlg [data-ek=name]', 'OMEPRAZOLE 20 MG 28CAP'); await p.fill('dialog.card-dlg [data-ek=brand]', 'Test Pharma');
+    await p.tap('dialog.card-dlg [data-v=save]'); await p.waitForTimeout(500);
+    console.log(lang, 'spelling fix saved, list still open:', await p.locator('dialog.lookup[open]').count(), '| line shows:', await fr.locator('[data-k=name]').inputValue());
+    await p.tap('dialog.lookup [data-x]'); await p.waitForTimeout(300);
+    await hold(fr.locator('[data-k=qty]'));
+    await p.tap('dialog.card-dlg [data-v=edit]'); await p.waitForTimeout(200);
+    await p.fill('dialog.card-dlg [data-ek=name]', 'IBUPROFEN 400MG'); await p.tap('dialog.card-dlg [data-v=save]'); await p.waitForTimeout(500);
+    console.log(lang, 'a different name is refused:', await p.locator('dialog.card-dlg[open]').count() === 1, '|', (await p.textContent('#toast')).slice(0, 60));
+    await p.tap('dialog.card-dlg [data-x]'); await p.waitForTimeout(200);
+    await p.tap('#balBefore'); await p.waitForTimeout(500);
+    console.log(lang, 'tap "before" → statement sheet:', await p.locator('dialog.stsheet[open]').count(), '| rows:', await p.locator('dialog.stsheet tbody tr').count());
+    await p.screenshot({ path: `${OUT}/${lang}-10-before-statement.png` });
+    await p.tap('dialog.stsheet [data-x]'); await p.waitForTimeout(200);
+    await p.goto(U + '?s=1#/balances'); await p.waitForTimeout(700);
+    await p.locator('table.bal a[href^="#/statement/"]').first().tap(); await p.waitForTimeout(500);
+    await p.screenshot({ path: `${OUT}/${lang}-7-statement.png` });
+    await p.tap('#stOpts'); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${lang}-7b-options.png` });
+    await p.tap('dialog.stopts [data-m=all]'); await p.waitForTimeout(600);
+    console.log(lang, 'statement including saved:', (await p.locator('#out td.ss').allTextContents()).map((t) => t.trim()).join(','));
+    await p.screenshot({ path: `${OUT}/${lang}-7c-with-saved.png` });
+    await p.locator('.chain a').first().tap(); await p.waitForTimeout(600);
+    console.log(lang, 'chain statement → receipt, party filled:', await p.inputValue('#party'));
+    await p.goto(U + '?s=9#/docs?type=SI'); await p.waitForTimeout(500); await p.screenshot({ path: `${OUT}/${lang}-16-archive.png` });
+    console.log(lang, 'capsule:', (await p.locator('.modecap a').allTextContents()).map((t) => t.trim()).join(' | '));
+    await p.goto(U + '?s=10#/accounts'); await p.waitForSelector('table.acct'); await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${lang}-17-accounts.png` });
+    await p.goto(U + '?s=11#/dashboard'); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${lang}-18-home.png` });
+    await p.goto(U + '?s=8#/customers'); await p.waitForSelector('table.deflist'); await p.waitForTimeout(400);
+    console.log(lang, 'customers page scroll:', JSON.stringify(await p.evaluate(() => ({ sx: scrollX, sw: document.documentElement.scrollWidth, w: innerWidth, open: document.body.classList.contains('menu-open'), wide: [...document.querySelectorAll('#main *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 3).map((e) => e.tagName + '.' + e.className) }))));
+    await p.screenshot({ path: `${OUT}/${lang}-15-customers.png` });
+    console.log(lang, 'customer lines:', (await p.locator('table.deflist td.dl').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()).join(' | '));
+    await p.goto(U + '?s=6#/regions'); await p.waitForSelector('table.regs'); await p.screenshot({ path: `${OUT}/${lang}-13-regions.png` });
+    await p.goto(U + '?s=7#/balances'); await p.waitForSelector('table.bal'); await p.screenshot({ path: `${OUT}/${lang}-14-balances.png` });
+    console.log(lang, 'balances sideways:', await p.evaluate(() => document.documentElement.scrollWidth > innerWidth));
+    await p.goto(U + '?s=5#/accounts'); await p.waitForSelector('table.acct'); await p.screenshot({ path: `${OUT}/${lang}-12-accounts.png`, fullPage: true });
+    await p.goto(U + '?s=3#/items'); await p.waitForTimeout(500);
+    if (await p.locator('#add').count()) { await p.tap('#add'); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${lang}-11-item-form.png` });
+      console.log(lang, 'definition card is centered, 1 cm in:', JSON.stringify(await p.evaluate(() => { const r = document.querySelector('dialog[open]').getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(innerWidth - r.right) }; }))); }
+    await p.goto(U + '?s=4#/items'); await p.waitForTimeout(500); await p.locator('#tb tr').first().tap(); await p.waitForTimeout(500);
+    console.log(lang, 'definitions open the same item card:', await p.locator('dialog.card-dlg').count(), '| price button:', (await p.locator('dialog.card-dlg [data-v=quick]').textContent().catch(() => 'none')).trim());
+    await p.screenshot({ path: `${OUT}/${lang}-19-item-card-definitions.png` });
+    await p.goto(U + '?s=6#/customers'); await p.waitForTimeout(500); await p.locator('#tb tr[data-id]').first().tap(); await p.waitForTimeout(500);
+    console.log(lang, 'definitions open the same customer card:', await p.locator('dialog.card-dlg').count(), '|', (await p.textContent('dialog.card-dlg h2')).trim());
+    console.log(lang, 'errors:', errors.length ? errors : 'none');
+    await ctx.close();
+  }
+  await b.close();
+})();
