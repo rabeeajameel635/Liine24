@@ -351,9 +351,19 @@ function docTable(docs) {
       <span class="dthumb s-${d.status}">${ic(TYPE_ICON[d.type] || 'doc')}</span>
       <span class="dmain"><span class="dtop"><b dir="ltr">${esc(docLabel(d))}</b><span class="dtype">${DOC_TYPES[d.type].name}</span>${d.backdated ? '<span class="pill bad">Backdated</span>' : ''}</span>
         <span class="dsub"><span dir="auto">${esc(docPartyName(d) || '—')}</span> · <span dir="ltr">${esc(d.date)}</span>${d.reference ? ` · <span dir="ltr">${esc(d.reference)}</span>` : ''}</span></span>
-      <span class="dend"><b class="n">${d.status === 'draft' || d.status === 'cancelled' ? money(draftTotalC(d)) : money(d.totalC)}</b><span class="pill ${d.status}">${d.status}</span></span>
+      <span class="dend"><b class="n">${d.status === 'draft' || d.status === 'cancelled' ? money(draftTotalC(d)) : money(d.totalC)}</b><span class="pill ${d.status}">${d.status}</span></span>${d.status === 'draft' ? `<button class="dx" type="button" data-del="${esc(d.id)}" title="Delete saved document" aria-label="Delete saved document">${ic('x')}</button>` : ''}
     </a>`).join('')}</div>`;
 }
+// X on a saved row: the draft leaves the Saved list. It never had a number, so nothing in the books moves;
+// it is kept in the records as cancelled (the same as the X inside the document).
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('[data-del]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  guard(async () => {
+    if (!await okBox(T('Delete this saved document?'))) return;
+    await db.cancelDraft(b.dataset.del, S.user); toast('Saved document deleted'); render();
+  });
+}, true);
 function draftTotalC(d) {
   if (!DOC_TYPES[d.type].lines) return toCents(d.amount);
   return computeTotals(d.lines || [], docTotalsOpts(d, S.settings)).totalC;

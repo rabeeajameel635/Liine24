@@ -1268,3 +1268,8 @@ dialog.stopts .sochk input { width: 20px; height: 20px; accent-color: #A4161A; }
 .pill.voided { background: #FBE9E9; color: #A4161A; }
 table.st tr.isvoid td { color: #8a8780; }
 table.st tr.isvoid td.sn a { text-decoration: line-through; }
+
+/* X on a saved row: delete the saved document */
+.drow .dx { flex: none; width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--bad-soft); color: var(--bad); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.drow .dx svg { width: 16px; height: 16px; }
+.drow .dx:hover { filter: brightness(.95); }
