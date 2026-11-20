@@ -142,6 +142,35 @@ export async function takeRoutes(app: FastifyInstance, db: DB, tools: Record<str
     return { frames };
   });
 
+  // الغرفة: a segment as a room. One row per shot: its newest real take, the check as stars, and two lamps:
+  // Claude's (the take arrived and passed the check: a recommendation) and Rabee's (his «اعتمد» on that take; only he sets it).
+  // Percent = shots whose take Rabee approved. Test takes never count. Read-only.
+  const roomOf = (segmentId: string) => {
+    const shots = db.prepare('SELECT code, title, start_s, end_s FROM shot WHERE segment_id = ? ORDER BY start_s, idx').all(segmentId) as { code: string; title: string; start_s: number; end_s: number }[];
+    const all = takesOf(db, segmentId);
+    const real = all.filter(t => !t.test);
+    const rows = shots.map(sh => {
+      const mine = real.filter(t => String(t.shot_code ?? '').toUpperCase() === sh.code.toUpperCase());
+      const take = mine.find(t => t.status === 'approved') ?? mine[mine.length - 1] ?? null;
+      const qc = take?.qc as { score: number | null; status: string } | null | undefined;
+      // stars only from a complete check: while the face check is missing there is no honest number
+      const stars = qc && qc.status !== 'pending' && qc.score != null ? Math.max(1, Math.round(Number(qc.score) / 20)) : null;
+      return { code: sh.code, title: sh.title, start_s: sh.start_s, end_s: sh.end_s, take_id: take?.id ?? null, thumb: take?.thumb ?? null, takes: mine.length,
+        stars, checked: qc ? (qc.status === 'pending' ? 'partial' : 'full') : 'none', claude: !!qc && qc.status === 'pass', approved: take?.status === 'approved' };
+    });
+    const approved = rows.filter(r => r.approved).length;
+    return { shots: rows, total: rows.length, approved, percent: rows.length ? Math.round(approved / rows.length * 100) : 0,
+      waiting: rows.filter(r => r.take_id && !r.approved).length, takes_ready: real.filter(t => t.status === 'approved').length, tests: all.length - real.length };
+  };
+  app.get('/api/segments/:id/room', async req => roomOf((req.params as { id: string }).id));
+  // every room of a song at a glance, and what arrived and waits for Rabee («إيه اللي جهز»)
+  app.get('/api/songs/:id/rooms', async req => {
+    const segs = db.prepare('SELECT id, idx FROM segment WHERE song_id = ? ORDER BY start_s').all((req.params as { id: string }).id) as { id: string; idx: number }[];
+    const rooms = segs.map(g => { const r = roomOf(g.id); return { segment_id: g.id, idx: g.idx, total: r.total, approved: r.approved, percent: r.percent, waiting: r.waiting }; });
+    const total = rooms.reduce((n, r) => n + r.total, 0), approved = rooms.reduce((n, r) => n + r.approved, 0);
+    return { rooms, total, approved, percent: total ? Math.round(approved / total * 100) : 0, ready: rooms.filter(r => r.waiting > 0) };
+  });
+
   // المعرض: approved, non-test takes only, in song order. Internal page: nothing is published or shared.
   app.get('/api/gallery', async () => {
     const rows = db.prepare(`SELECT t.*, s.start_s, s.end_s, s.label AS seg_label, s.group_label, s.idx AS seg_idx, s.song_id, g.title AS song_title

@@ -8,6 +8,7 @@ import { api, type Asset } from './api.ts';
 import type { Inspo } from './Inspiration.tsx';
 import { useCover, InspoSheet, shortWork, type Fit } from './Inspo.tsx';
 import { Pic } from './Lens.tsx';
+import { useRooms, Percent } from './Room.tsx';
 
 export type SongCard = { id: string; title: string; bpm: number; bpm_approved: boolean; duration: number; poster: string | null; total: number; done: number; resume: string | null; has_audio: boolean };
 export const arNum = (n: number) => n.toLocaleString('ar-EG');
@@ -48,6 +49,10 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
   };
 
   const song = songs?.[0];
+  const rooms = useRooms(song?.id);
+  // what arrived and waits for me comes first; else the room I stopped at
+  const ready = rooms?.ready[0];
+  const cur = rooms?.rooms.find(r => r.segment_id === song?.resume);
   const when = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) : '';
 
   return (
@@ -69,9 +74,9 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
 
         {/* كمّل من حيث وقفت */}
         {song && <section className="next-head">
-          <span className="ring-ink" aria-label={`${song.done} من ${song.total}`}><ProgressRing done={song.done} total={song.total} size={56} />{song.done > 0 && <b>{arNum(song.done)}</b>}</span>
-          <div className="next-text"><h2>كمّل من حيث وقفت</h2>{song.done > 0 && <p>{arNum(song.done)} من {arNum(song.total)} خلص</p>}</div>
-          <button className="gbtn primary icon" onClick={() => open(song.id, song.resume ?? undefined)} aria-label="كمّل" title="كمّل"><ArrowLeft size={26} weight="bold" /></button>
+          <Percent value={rooms?.percent ?? 0} size={56} />
+          <div className="next-text"><h2>{ready ? `غرفة ${arNum(ready.idx)} جاهزة` : cur ? `كمّل غرفة ${arNum(cur.idx)}` : 'كمّل من حيث وقفت'}</h2></div>
+          <button className="gbtn primary icon" onClick={() => open(song.id, ready?.segment_id ?? song.resume ?? undefined)} aria-label="افتح" title="افتح"><ArrowLeft size={26} weight="bold" /></button>
         </section>}
 
         {/* الاكتشافات: a living magazine under the cover. One strip per area (clips, shorts, music, tools); each card: picture, short title,

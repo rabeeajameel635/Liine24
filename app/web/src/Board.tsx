@@ -10,6 +10,7 @@ import { ProgressRing, arNum } from './Songs.tsx';
 import { useTakes, useStoryboard, StoryboardPanel, TakesPanel, FrameStrip, TakeStrip, tcode } from './Takes.tsx';
 import { useLens, LensPair, LensPanel } from './Lens.tsx';
 import { useFits, FitStrip } from './Inspo.tsx';
+import { useRoom, useRooms, Percent, RoomTable, RoomFolders } from './Room.tsx';
 
 type Seg = { id: string; idx: number; start_s: number; end_s: number; label: string | null; group_label: string | null; lyric: string; status: Status; direction: string; prompt_partial: string;
   tool: string; backup: { tool?: string; direction?: string; prompt_partial?: string }; refs: string[]; video_asset_id: string | null; kit_code: string | null; notes: string; updated_at: string; draft: number };
@@ -48,7 +49,10 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
   useEffect(() => { load(); api.assets('all').then(d => setAssets(Object.fromEntries(d.items.map(a => [a.id, a])))); }, [load]);
   // real pictures for segments that have none yet: approved images of the character, never an empty grey box
   const fallback = useMemo(() => { const all = Object.values(assets).filter(a => a.kind === 'image' && !a.no_generation && a.thumb); const looks = all.filter(a => a.role === 'look'); return (looks.length ? looks : all.filter(a => a.approved)).map(a => a.thumb!); }, [assets]);
+  const rooms = useRooms(song?.id);
   if (!song) return <div className="work" />;
+  const pctOf = (id: string) => rooms?.rooms.find(r => r.segment_id === id)?.percent ?? 0;
+  const secs = (s: Seg) => Math.round(s.end_s - s.start_s);
 
   const segs = song.segments, done = segs.filter(s => s.status === 'done' || s.status === 'editing').length;
   const resume = segs.find(s => s.status !== 'done' && s.status !== 'editing');
@@ -80,7 +84,7 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
         {song.audio && !song.bpm_approved && song.bpm_candidates.length > 0 && <BpmCompare song={song} reload={load} />}
         <NotesCard song={song} conflicts={conflicts} hasShots={shots.length > 0} />
         {view === 'cards' ? <>
-          <div className="section-h"><h2>المقاطع</h2><span>{arNum(segs.length)}</span></div>
+          <div className="section-h"><h2>الغرف</h2><span>{arNum(segs.length)}{rooms ? ` · ${arNum(rooms.percent)}٪ جاهز` : ''}</span></div>
           {Object.keys(counts).length > 1 && <div className="chips-row flush">
             <button className="chip-f" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>الكل</button>
             {(Object.keys(STATUS) as Status[]).filter(k => counts[k]).map(k => <button key={k} className="chip-f" aria-pressed={filter === k} onClick={() => setFilter(k)}><i className="dot" style={{ background: STATUS[k].c }} />{STATUS[k].t}</button>)}
@@ -89,10 +93,10 @@ export function Board({ songId, segId, go }: { songId: string; segId?: string; g
             {list.map(s => (
               <button key={s.id} className="seg-tile" onClick={() => go(s.id)}>
                 <span className="seg-pic"><img src={picOf(s) ?? ''} alt="" loading="lazy" className={thumbOf(s) ? '' : 'stand-in'} />
-                  <i className="seg-dot" style={{ background: STATUS[s.status].c }} title={STATUS[s.status].t} />
+                  <Percent value={pctOf(s.id)} size={52} onPicture />
                   {warnOf(s) && <span className="seg-warn"><Warning size={22} weight="fill" /></span>}</span>
-                <b className="ltr">{s.label ?? arNum(s.idx)}</b>
-                <span className="seg-line">{secShort(s.group_label)} · {STATUS[s.status].t}</span>
+                <b>غرفة {arNum(s.idx)}</b>
+                <span className="seg-line">{secShort([...song.sections].reverse().find(x => x.start <= s.start_s + 0.01)?.name ?? s.group_label)} · {arNum(secs(s))} ث</span>
               </button>
             ))}
           </div>
@@ -251,6 +255,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const frames = useStoryboard(seg.id);
   const { lens } = useLens(seg.id);
   const fits = useFits(seg.id);
+  const { room, reload: reloadRoom } = useRoom(seg.id);
   const audio = useRef<HTMLAudioElement>(null);
   const { saved, mark } = useSaved();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -318,7 +323,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
         <div className="grab" />
         {!panel ? <>
           <header className="ss-head">
-            <div className="ph-text"><h1>{secShort(section?.name ?? s.group_label)}</h1></div>
+            {room && <Percent value={room.percent} size={56} />}
+            <div className="ph-text"><h1>غرفة {arNum(s.idx)}</h1></div>
             <button className="gbtn icon soft" onClick={() => setPanel('notes')} aria-label="الحالة والملاحظات"><NotePencil size={24} /></button>
             <button className="gbtn icon soft" onClick={close} aria-label="اقفل"><X size={24} /></button>
           </header>
@@ -355,15 +361,14 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
           </div>
 
-          <section className="ss-sec">
-            <button className="sec-h" data-panel="board" onClick={() => { setPick({}); setPanel('board'); }}><h2>الكادرات</h2><CaretLeft size={22} /></button>
-            {frames && (frames.length ? <FrameStrip frames={frames} fallback={firstPic ?? null} caps={false} pick={i => { setPick({ frame: i }); setPanel('board'); }} /> : <p className="panel-line">ضيف مراجع للمقطع</p>)}
-          </section>
-
-          <section className="ss-sec">
-            <button className="sec-h" data-panel="takes" onClick={() => { setPick({}); setPanel('takes'); }}><h2>النسخ</h2><span>{takes?.length ? `${arNum(takes.filter(t => t.status === 'approved').length)} معتمدة` : ''}</span><CaretLeft size={22} /></button>
-            {takes && (takes.length ? <TakeStrip takes={takes} pick={t => { setPick({ take: t.id }); setPanel('takes'); }} /> : <p className="panel-line">الفيديو يوصل على الاستقبال</p>)}
-          </section>
+          {/* the room: its shots as a table (stars from the check, Claude's lamp, Rabee's lamp), then its folders */}
+          {room && room.shots.length > 0 && <section className="ss-sec">
+            <div className="sec-h static"><h2>اللقطات</h2><span>{arNum(room.approved)} من {arNum(room.total)}</span></div>
+            <RoomTable room={room} stand={heroPoster} reload={() => { reloadRoom(); loadTakes(); reload(); }}
+              open={(x, i) => { if (x.take_id) { setPick({ take: x.take_id }); setPanel('takes'); } else { setPick({ frame: i }); setPanel('board'); } }} />
+          </section>}
+          <RoomFolders pics={frames?.length ?? 0} ready={room?.takes_ready ?? 0} left={room ? room.total - room.approved : 0}
+            go={p => { setPick({}); if (p === 'prompt') setPlan('backup'); setPanel(p); }} />
 
           {/* الزاوية: one reference beside our frame, read-only; set on the Mac by scripts/study.ts */}
           {lens && <section className="ss-sec">
@@ -372,7 +377,6 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </section>}
 
           <div className="ss-rows ss-group">
-            {shots.length > 0 && <Row icon={FilmSlate} title="اللقطات" line={`${arNum(shots.length)} لقطات${redo ? ` · ${arNum(redo)} محتاجة شغل` : ''}`} onClick={() => setPanel('shots')} />}
             <Row icon={At} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
             {video ? <VideoRow id={video.id} thumb={null} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
