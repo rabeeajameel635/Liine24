@@ -69,7 +69,9 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   await p.waitForSelector('#void'); await p.click('#void'); await p.waitForSelector('dialog.ask .ans');
   await p.fill('dialog.ask .ans', 'test void'); await p.click('dialog.ask [data-v=yes]'); await p.waitForTimeout(1200);
   st = await store(p);
-  ok('void: reversal inside the same document, number kept', st['docs/' + made.siId].r.status === 'voided' && st['docs/' + made.siId].ledger.length >= 4 && st['docs/' + made.siId].r.number === made.si);
+  { const si = st['docs/' + made.siId]; const jvp = 'docs/' + si.r.voidJvId; const jv = st[jvp];
+    const bal = (rows) => rows.reduce((x, e) => x + e.debitC - e.creditC, 0);
+    ok('void: a journal voucher document carries the reversal, the invoice keeps its number', si.r.status === 'voided' && si.r.number === made.si && !!jv && jv.r.type === 'JV' && /^JV-/.test(jv.r.number) && jv.r.voidOf === made.siId && jv.ledger.length === si.ledger.length && bal(jv.ledger) === 0 && bal([...si.ledger, ...jv.ledger]) === 0, jv ? jv.r.number : 'no voucher'); }
   ok('browser boxes never called', !(await p.evaluate(() => window.__refused)));
 
   console.log('▶ two pages, one set of books');
@@ -79,7 +81,7 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   ok('the second page takes the next number, never the same one', n1 !== n2 && n1.endsWith('000002') && n2.endsWith('000003'), n1 + ' ' + n2);
   await p.waitForTimeout(1800);
   const seenByP = await dbx(p, async (db) => (await db.all('docs')).filter((d) => d.number).length);
-  ok('the first page sees the other page\'s posting', seenByP === 4, String(seenByP));
+  ok('the first page sees the other page\'s posting (two invoices each, the voided one and its journal voucher)', seenByP === 5, String(seenByP));
 
   console.log('▶ a write that fails changes nothing');
   const r = await dbx(q, async (db, a) => { window.__failWrites = true; let err = ''; const n0 = (await db.all('ledger')).length;

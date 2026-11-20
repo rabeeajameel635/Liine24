@@ -1247,3 +1247,24 @@ dialog.paper .paper-sheet .doc-print { background: #fff; padding: 22px; margin: 
 #printArea.shoot { display: block; position: absolute; left: -12000px; top: 0; width: 703px; background: #fff; }
 #printArea.shoot .doc-print { position: relative; overflow: hidden; }
 #printArea.shoot * { letter-spacing: 0 !important; }
+/* ---------- the account statement button (Rabee, Nov 2026): two circles, crimson ---------- */
+.stbtn { --crim: #A4161A; display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 40px; height: 40px; min-height: 40px; padding: 0; border: none; border-radius: 50%; background: var(--crim); color: #fff; cursor: pointer; flex: none; box-shadow: 0 2px 6px rgba(164,22,26,.28); }
+.stbtn .st2 { position: relative; width: 22px; height: 22px; border: 2.5px solid #fff; border-radius: 50%; display: block; box-sizing: border-box; }
+.stbtn .st2::after { content: ""; position: absolute; inset: 3.5px; border: 2.5px solid #fff; border-radius: 50%; }
+.stbtn:active { transform: scale(.94); }
+.stbtn.wide { width: auto; border-radius: 999px; padding: 0 16px 0 9px; margin: 6px 0 10px; height: 44px; font-weight: 600; font-size: .95em; }
+#mbar .stbtn { margin-inline-start: auto; margin-inline-end: 8px; }
+@media (max-width: 860px) { #nav .stbtn.wide { display: none; } }
+@media (min-width: 861px) { #mbar .stbtn { display: none; } }
+@media print { .stbtn { display: none !important; } }
+/* statement card */
+dialog.stopts .sowho { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: start; padding: 12px 44px 12px 14px; border: 1px solid var(--cl-line, #E2DFD6); border-radius: 16px; background: #fff; cursor: pointer; position: relative; margin: 4px 0 12px; }
+dialog.stopts .sowho b { font-size: 1.08em; }
+dialog.stopts .sowho > span { color: var(--cl-muted, #75736C); font-size: .9em; }
+dialog.stopts .sowho i { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--cl-btn, #EAE8E2); display: flex; align-items: center; justify-content: center; }
+dialog.stopts .sowho i .ic { width: 14px; height: 14px; }
+dialog.stopts .sochk { display: flex; align-items: center; gap: 8px; font-size: .95em; min-height: 40px; cursor: pointer; }
+dialog.stopts .sochk input { width: 20px; height: 20px; accent-color: #A4161A; }
+.pill.voided { background: #FBE9E9; color: #A4161A; }
+table.st tr.isvoid td { color: #8a8780; }
+table.st tr.isvoid td.sn a { text-decoration: line-through; }

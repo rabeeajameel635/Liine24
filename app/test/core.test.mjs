@@ -223,3 +223,20 @@ test('purchase stock value equals the inventory debit, rounding and invoice disc
     assert.ok(isBalanced(r.entries));
   }
 });
+
+test('statement: a voided invoice and its journal voucher stay out unless voided is asked for; a return shows', () => {
+  const docs = [
+    { id: 'si1', type: 'SI', status: 'posted', number: 'SI-1' },
+    { id: 'si2', type: 'SI', status: 'voided', number: 'SI-2', voidJvId: 'jv1' },
+    { id: 'jv1', type: 'JV', status: 'posted', number: 'JV-1', voidOf: 'si2' },
+    { id: 'sr1', type: 'SR', status: 'posted', number: 'SR-1' },
+  ];
+  const e = (docId, date, d, c) => ({ account: '1200', partyId: 'c1', docId, date, debitC: d, creditC: c });
+  const entries = [e('si1', '2026-01-05', 10000, 0), e('si2', '2026-01-06', 5000, 0), e('jv1', '2026-02-01', 0, 5000), e('sr1', '2026-02-02', 0, 2000)];
+  const plain = statement(entries, docs, 'c1', 'customer', { from: '2026-01-01', to: '2026-12-31' });
+  assert.deepEqual(plain.rows.map((r) => r.docId), ['si1', 'sr1']);
+  assert.equal(plain.closing, 8000); assert.equal(plain.opening, 0);
+  const all = statement(entries, docs, 'c1', 'customer', { from: '2026-01-01', to: '2026-12-31', voided: true });
+  assert.deepEqual(all.rows.map((r) => [r.docId, r.voided]), [['si1', false], ['si2', true], ['jv1', true], ['sr1', false]]);
+  assert.equal(all.closing, 8000);
+});

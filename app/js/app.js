@@ -66,7 +66,7 @@ async function reload() {
 
 // ---------- router ----------
 const routes = {};
-const GROUPS = { inv: ['SI', 'SR', 'CN', 'DN'], pur: ['PI', 'PR'], vch: ['RV', 'PV'] };
+const GROUPS = { inv: ['SI', 'SR', 'CN', 'DN'], pur: ['PI', 'PR'], vch: ['RV', 'PV', 'JV'] };
 // The open editor registers itself here so leaving it can be guarded.
 let guardEditor = null, currentHash = '', bypass = false;
 // Bisan keys: F2 lookup · F4 save · F9 print (posts, so it asks) · Esc exit back to where you were
@@ -243,7 +243,7 @@ const MAP = [
   { k: 'pur', title: 'Purchases', icon: 'cart', groups: [
     [['#/docs?type=PI', 'cart', 'Purchase invoices', 'PI'], ['#/docs?type=PR', 'undo', 'Purchase returns', 'PR']]] },
   { k: 'vch', title: 'Vouchers', icon: 'wallet', groups: [
-    [['#/docs?type=RV', 'in', 'Receipt vouchers', 'RV']], [['#/docs?type=PV', 'out', 'Payment vouchers', 'PV']], [['', 'journal', 'Journal vouchers']]] },
+    [['#/docs?type=RV', 'in', 'Receipt vouchers', 'RV']], [['#/docs?type=PV', 'out', 'Payment vouchers', 'PV']], [['#/docs?type=JV', 'journal', 'Journal vouchers', 'JV']]] },
   { k: 'dir', title: 'Definitions', icon: 'book', groups: [
     [['#/customers', 'users', 'Customers directory'], ['#/suppliers', 'truck', 'Suppliers directory']], [['#/items', 'box', 'Items']], [['', 'users', 'Employees']], [['#/regions', 'pin', 'Regions']], [['#/accounts', 'book', 'Accounts setup']]] },
   { k: 'rep', title: 'Reports', icon: 'bars', groups: [
@@ -698,7 +698,7 @@ function editor(doc) {
 }
 // Lookup list like Bisan's F2: type to filter, ↑ ↓ to move, Enter to pick, Esc to close.
 // rows: [{ id, code, name, extra: [...] }] ; resolves the picked id or null
-function lookup({ title, headers, rows, filter = '', onHold }) {
+function lookup({ title, headers, rows, filter = '', onHold, focus = false }) {
   const getRows = typeof rows === 'function' ? rows : () => rows;
   let all = getRows();
   return new Promise((resolve) => {
@@ -733,17 +733,18 @@ function lookup({ title, headers, rows, filter = '', onHold }) {
     $('[data-x]', dlg).onclick = () => end(null);
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
     dlg.showModal(); draw();
-    if (!window.matchMedia('(max-width: 860px)').matches || filter) { q.focus(); q.select(); } else dlg.focus();
+    // the keyboard comes up at once when the list is the first step (the statement button), or on a computer
+    if (focus || !window.matchMedia('(max-width: 860px)').matches || filter) { q.focus(); q.select(); } else dlg.focus();
   });
 }
-async function lookupParty(list, filter = '') {
+async function lookupParty(list, filter = '', { focus = false, title = '' } = {}) {
   const entries = await ledger();
   const bal = {};
   for (const e of entries) if (e.partyId) bal[e.partyId] = (bal[e.partyId] || 0) + e.debitC - e.creditC;
   // hold a row: the same customer / supplier card as everywhere; the list redraws after an edit
   const ids = new Set(list.map((p) => p.id));
-  const id = await lookup({ title: list[0]?.kind === 'supplier' ? 'Suppliers' : 'Customers', headers: ['Region', 'Balance'], filter,
-    rows: () => S.parties.filter((p) => ids.has(p.id)).map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [regionLabel(p.region), money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })),
+  const id = await lookup({ title: title || (list[0]?.kind === 'supplier' ? 'Suppliers' : 'Customers'), headers: ['Region', 'Balance'], filter, focus,
+    rows: () => S.parties.filter((p) => ids.has(p.id)).map((p) => ({ id: p.id, code: p.code, name: p.name, extra: [p.kind === 'supplier' ? T('Supplier') : regionLabel(p.region), money(p.kind === 'supplier' ? -(bal[p.id] || 0) : bal[p.id] || 0)] })),
     onHold: (pid) => partyCard(partyById(pid), { change: false }) });
   return id ? partyById(id) : null;
 }
@@ -1150,7 +1151,7 @@ function voucherUI(doc) {
 function smartEntry(doc, readDoc) {
   const dlg = document.createElement('dialog');
   dlg.innerHTML = `<h2 style="margin-top:0">Smart entry</h2>
-    <p class="muted">Paste JSON produced by Claude, ChatGPT or Gemini (see the prompt on the Import page), or simple lines like <code>1001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
+    <p class="muted">Paste JSON produced by Claude (see the prompt on the Import page), or simple lines like <code>1001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
     <textarea id="smartText" dir="auto"></textarea>
     <div class="actions"><button class="btn primary" id="smartGo">Add to draft</button><button class="btn" id="smartClose">Close</button></div>`;
   document.body.appendChild(dlg); dlg.showModal();
@@ -1194,10 +1195,12 @@ async function viewDoc(d) {
   const prints = await db.byIndex('printlog', 'docId', d.id);
   const tot = t.lines ? computeTotals(d.lines, docTotalsOpts(d, S.settings)) : null;
   const R = t.lines && docTotalsOpts(d, S.settings).roundTotals;
+  const jv = d.type === 'JV' ? await jvEntries(d) : [];
   $('#main').innerHTML = `
     <h1><span>${t.name}</span> <span dir="ltr">${esc(d.number)}</span> <span class="pill ${d.status}">${d.status}</span>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</h1>
     <p class="sub">${esc(d.date)} · ${esc(partyLabel(p))}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
-    ${d.status === 'voided' ? `<div class="note bad">Voided by ${esc(d.voidedBy)} on ${esc(d.voidedAt?.slice(0, 10))}: ${esc(d.voidReason)}. A reversing entry was posted; the number stays used.</div>` : ''}
+    ${d.status === 'voided' ? `<div class="note bad" data-notr><span>${esc(T('Voided by'))}</span> <bdi>${esc(d.voidedBy)}</bdi> · <span dir="ltr">${esc(d.voidedAt?.slice(0, 10))}</span> · <bdi>${esc(d.voidReason)}</bdi><br>${d.voidJvNumber ? `<span>${esc(T('Journal voucher'))}</span> <a href="#/doc/${esc(d.voidJvId)}" dir="ltr">${esc(d.voidJvNumber)}</a> <span>${esc(T('reverses it; the number stays used.'))}</span>` : `<span>${esc(T('A reversing entry was posted; the number stays used.'))}</span>`}</div>` : ''}
+    ${d.type === 'JV' && d.voidOf ? `<div class="note" data-notr><span>${esc(T('Void of'))}</span> <a href="#/doc/${esc(d.voidOf)}"><span>${esc(T(DOC_TYPES[d.voidOfType]?.name || ''))}</span> <span dir="ltr">${esc(d.voidOfNumber || '')}</span></a> · <bdi>${esc(d.notes || '')}</bdi><br><span>${esc(T('Neither shows in the account statement unless Voided is ticked.'))}</span></div>` : ''}
     ${t.lines ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Code</th><th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead><tbody>
       ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${pricef(l.price, R)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${amt(l.amountC, R)}</td></tr>`; }).join('')}
       </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${fmt(tot.qtyTotal, 0)}</td><td class="n">${fmt(tot.bonusTotal, 0)}</td><td></td><td></td><td class="n">${amt(tot.subtotalC, R)}</td></tr></tfoot></table></div>
@@ -1205,6 +1208,9 @@ async function viewDoc(d) {
         ${tot.discC ? `<div><span>Invoice discount</span><span>−${amt(tot.discC, R)}</span></div>` : ''}${tot.roundC ? `<div><span>Rounding</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), R)}</span></div>` : ''}
         <div><span>Net</span><span>${money(tot.netC)}</span></div><div><span>VAT</span><span>${money(tot.vatC)}</span></div>
         <div class="grand"><span>Total ₪</span><span>${amt(tot.totalC, R)}</span></div><div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div></div></div>`
+    : d.type === 'JV' ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Account</th><th>Name</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>
+        ${jv.map((e) => `<tr><td dir="ltr">${esc(acctCode(e.account))}${e.partyId ? ' / ' + esc(partyById(e.partyId)?.code || '') : ''}</td><td><span>${esc(acctName(e.account))}</span>${e.partyId ? ` · <span dir="auto">${esc(partyById(e.partyId)?.name || '')}</span>` : ''}</td><td class="n">${e.debitC ? money(e.debitC) : ''}</td><td class="n">${e.creditC ? money(e.creditC) : ''}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="2">Totals</td><td class="n">${money(jv.reduce((x, e) => x + e.debitC, 0))}</td><td class="n">${money(jv.reduce((x, e) => x + e.creditC, 0))}</td></tr></tfoot></table></div>`
     : `<div class="card" style="margin-top:16px"><div class="kpi"><div class="label">Amount</div><div class="value">${money(d.totalC)} ₪</div></div>
         <p class="words">${esc(amountInWords(fromCents(d.totalC)))}</p>
         ${d.method ? `<p>${PAY_METHODS[d.method] || ''} → ${d.cashAccount ? `${esc(acctCode(d.cashAccount))} ${esc(acctName(d.cashAccount))}` : ''}${d.chequeNo ? ` · Cheque ${esc(d.chequeNo)} ${esc(d.chequeBank)} due ${esc(d.dueDate)}` : ''}</p>` : ''}</div>`}
@@ -1213,8 +1219,8 @@ async function viewDoc(d) {
       <button class="btn ink" id="printBtn">${prints.length ? `Print copy ${prints.length + 1}` : 'Print original'} <kbd>F9</kbd></button>
       <button class="btn" id="backBtn">Back <kbd>Esc</kbd></button>
       ${t.party !== 'none' && d.type !== 'OB' ? '<button class="btn tonal" id="dup">Duplicate as new draft</button>' : ''}
-      ${d.status === 'posted' && isAdmin() ? '<button class="btn danger" id="void">Void (reversing entry)</button>' : ''}
-      ${d.status === 'posted' && !isAdmin() ? '<span class="muted">Only the admin can void.</span>' : ''}
+      ${d.status === 'posted' && d.type !== 'JV' && isAdmin() ? '<button class="btn danger" id="void">Void (journal voucher)</button>' : ''}
+      ${d.status === 'posted' && d.type !== 'JV' && !isAdmin() ? '<span class="muted">Only the admin can void.</span>' : ''}
     </div>
     <h2>Print history</h2>
     ${prints.length ? `<table class="t"><tbody>${prints.map((x) => `<tr><td>${x.copyNo === 1 ? '<b>Original</b>' : 'Copy ' + x.copyNo}</td><td>${esc(x.user)}</td><td>${esc(x.at.slice(0, 16).replace('T', ' '))}</td><td>${esc(x.reason || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Not printed yet. The first print will be marked Original, once only.</p>'}`;
@@ -1235,13 +1241,17 @@ async function viewDoc(d) {
     toast('Draft created'); go('#/doc/' + r.id);
   }));
   $('#void') && ($('#void').onclick = () => guard(async () => {
-    const reason = await textBox(`Void ${d.number}? A reversing entry will be posted and the number stays used.\n\nReason:`);
+    const reason = await textBox(`${T('Void')} ${d.number}?\n${T('A journal voucher will reverse it, the number stays used, and neither shows in the statement.')}\n\n${T('Reason:')}`);
     if (!reason) return;
-    await db.voidDoc(d.id, reason, S.user); toast('Voided with reversing entry'); render();
+    const jvDoc = await db.voidDoc(d.id, reason, S.user, S.settings);
+    await reload(); toast(T('Voided') + ': ' + jvDoc.number); go('#/doc/' + jvDoc.id);
   }));
 }
 
 // ---------- printing ----------
+const AR_TYPE = { SI: 'فاتورة مبيعات', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة', JV: 'سند قيد' };
+// the entries a journal voucher posted, in the order they were written
+const jvEntries = async (d) => (await db.byIndex('ledger', 'docId', d.id)).sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
 async function printDoc(d, reason = '', copies = 1) {
   const pages = [];
   for (let i = 0; i < (d.status === 'draft' ? 1 : copies); i++) pages.push(await db.logPrint(d.id, S.user, 'print', reason));
@@ -1249,9 +1259,10 @@ async function printDoc(d, reason = '', copies = 1) {
   const p = partyById(d.partyId) || {};
   const s = S.settings;
   const opt = docTotalsOpts(d, s);
-  const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: toCents(d.amount) };
+  const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: d.type === 'JV' ? d.totalC || 0 : toCents(d.amount) };
+  const jvRows = d.type === 'JV' ? await jvEntries(d) : [];
   const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
-  const ar = { SI: 'فاتورة مبيعات', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة' }[d.type];
+  const ar = { SI: 'فاتورة مبيعات', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة', JV: 'سند قيد' }[d.type];
   // Print layout: company head with a monogram, grey title block, black table head, zebra rows,
   // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
   const A = getLang() === 'ar';
@@ -1264,7 +1275,7 @@ async function printDoc(d, reason = '', copies = 1) {
     <div class="tb"><div class="tbh"><div><div class="t1">${L(t.name, ar)}</div>
         <div class="tno">${L('No.', 'الرقم')}${C} <b dir="ltr">${esc(d.number || (A ? 'مسودة' : 'DRAFT'))}</b> · ${L('Date', 'التاريخ')}${C} <b dir="ltr">${esc(d.date)}</b>${d.reference ? ` · ${L('Ref.', 'مرجع')}${C} <b><bdi>${esc(d.reference)}</bdi></b>` : ''}</div></div>
         <div class="stamp">${stamp}</div></div>
-      ${t.party !== 'none' ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}${C} <b><span dir="ltr">${esc(p.code)}</span> — <bdi>${esc(p.name)}</bdi></b>${[p.address, p.region ? regionName(p.region) : ''].filter(Boolean).length ? ` — ${L('Address', 'العنوان')}${C} <b><bdi>${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</bdi></b>` : ''}</div>
+      ${t.party !== 'none' || (d.type === 'JV' && p.id) ? `<div class="pl">${p.kind === 'supplier' ? L('Supplier', 'المورد') : L('Customer', 'الزبون')}${C} <b><span dir="ltr">${esc(p.code)}</span> — <bdi>${esc(p.name)}</bdi></b>${[p.address, p.region ? regionName(p.region) : ''].filter(Boolean).length ? ` — ${L('Address', 'العنوان')}${C} <b><bdi>${esc([p.address, p.region ? regionName(p.region) : ''].filter(Boolean).join(' · '))}</bdi></b>` : ''}</div>
       <div class="ps">${[p.taxNo ? `${L('Tax no.', 'رقم المشتغل')} ${esc(p.taxNo)}` : '', d.salesman ? `${L('Salesman', 'المندوب')} ${esc(d.salesman)}` : '', (t.lines && opt.pricesIncludeVat && Number(opt.vatRate) ? L('All amounts in NIS, VAT included', 'جميع المبالغ بالشيكل، الأسعار تشمل ض.ق.م') : L('All amounts in NIS', 'جميع المبالغ بالشيكل'))].filter(Boolean).join(' · ')}</div>` : ''}</div>
     ${t.lines ? `<table><thead><tr><th class="c">${L('#', 'م.')}</th><th>${L('Code', 'الكود')}</th><th>${L('Item', 'الصنف')}</th><th class="c">${L('Qty', 'الكمية')}</th><th class="c">${L('Bonus', 'بونص')}</th><th class="c">${L('Price', 'السعر')}</th><th class="c">${L('Disc.', 'خصم')}</th><th class="n">${L('Amount', 'المجموع')}</th></tr></thead><tbody>
       ${tot.lines.map((l, k) => { const it = lineItem(l); return `<tr><td class="c">${String(k + 1).padStart(2, '0')}</td><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}${l.batch || l.expiry ? `<div class="batch">${[l.batch ? `${L('Batch', 'دفعة')} <span dir="ltr">${esc(l.batch)}</span>` : '', l.expiry ? `<span dir="ltr">Exp. ${esc(expShow(l.expiry))}</span>` : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
@@ -1275,6 +1286,11 @@ async function printDoc(d, reason = '', copies = 1) {
           ${tot.discC ? `<div><span>${L('Invoice discount', 'خصم على الفاتورة')}</span><span>−${amt(tot.discC, opt.roundTotals)}</span></div>` : ''}${tot.roundC ? `<div><span>${L('Rounding', 'تقريب')}</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), opt.roundTotals)}</span></div>` : ''}
           ${Number(opt.vatRate) ? `<div><span>${L('Net before VAT', 'الصافي قبل الضريبة')}</span><span>${money(tot.netC)}</span></div><div><span>${L('VAT', 'الضريبة')} ${opt.vatRate}%</span><span>${money(tot.vatC)}</span></div>` : ''}</div>
         <div class="g"><span>${L('Total (NIS)', 'المبلغ (شيكل)')}</span><span>${amt(tot.totalC, opt.roundTotals)}</span></div></div>`
+    : d.type === 'JV' ? `<div class="jvof">${L('Void of', 'إلغاء')} <b><bdi>${esc(L(DOC_TYPES[d.voidOfType]?.name || '', AR_TYPE[d.voidOfType] || ''))}</bdi> <span dir="ltr">${esc(d.voidOfNumber || '')}</span></b></div>
+       <table><thead><tr><th>${L('Account', 'الحساب')}</th><th>${L('Name', 'الاسم')}</th><th class="n">${L('Debit', 'مدين')}</th><th class="n">${L('Credit', 'دائن')}</th></tr></thead><tbody>
+       ${jvRows.map((e) => `<tr><td dir="ltr">${esc(acctCode(e.account))}${e.partyId ? ' / ' + esc(partyById(e.partyId)?.code || '') : ''}</td><td><bdi>${esc(acctName(e.account))}</bdi>${e.partyId ? ` · <bdi>${esc(partyById(e.partyId)?.name || '')}</bdi>` : ''}</td><td class="n">${e.debitC ? money(e.debitC) : ''}</td><td class="n">${e.creditC ? money(e.creditC) : ''}</td></tr>`).join('')}
+       </tbody><tfoot><tr><td colspan="2">${L('Totals', 'المجموع')}</td><td class="n">${money(jvRows.reduce((x, e) => x + e.debitC, 0))}</td><td class="n">${money(jvRows.reduce((x, e) => x + e.creditC, 0))}</td></tr></tfoot></table>
+       <div class="tot"><div class="g"><span>${L('Amount (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`
     : `${d.method ? `<table><tbody><tr><td>${L('Method', 'طريقة الدفع')}</td><td><b>${esc(T(PAY_METHODS[d.method] || ''))}</b></td></tr>${d.chequeNo ? `<tr><td>${L('Cheque', 'شيك')}</td><td><b><span dir="ltr">${esc(d.chequeNo)}</span> · <span dir="auto">${esc(d.chequeBank)}</span> · <span dir="ltr">${esc(d.dueDate)}</span></b></td></tr>` : ''}</tbody></table>` : ''}
        <div class="tot"><div class="g"><span>${L('Amount (NIS)', 'المبلغ (شيكل)')}</span><span>${money(tot.totalC)}</span></div></div>`}
     <div class="wbox"><div class="wl">${L('Amount in words', 'المبلغ كتابةً')}</div><div class="words" dir="rtl">${esc(amountInWords(fromCents(tot.totalC)))}</div>${d.notes ? `<div class="nt" dir="auto">${esc(d.notes)}</div>` : ''}</div>
@@ -1404,10 +1420,10 @@ async function postOpening(party, amount) {
 // ---------- reports ----------
 // ---------- account statement (Bisan's way: a refresh button opens the choice screen) ----------
 // options: party, region (narrows the party list), from / to, brief or detailed, posted only or including saved
-async function statementOf(party, { from = '', to = '', saved = false, except = null } = {}) {
+async function statementOf(party, { from = '', to = '', saved = false, voided = false, except = null } = {}) {
   const entries = await ledger();
   const extra = saved ? draftEntries(S.docs, S.settings, { partyId: party.id, except }) : [];
-  return statement([...entries, ...extra], S.docs, party.id, party.kind, { from, to });
+  return statement([...entries, ...extra], S.docs, party.id, party.kind, { from, to, voided });
 }
 const stLines = (d) => {
   if (!d || !DOC_TYPES[d.type]?.lines) return '';
@@ -1424,22 +1440,26 @@ function stDesc(r, link = true) {
   const no = num ? (link ? `<a href="#/doc/${r.docId}" dir="ltr">${esc(num)}</a>` : `<span dir="ltr">${esc(num)}</span>`)
     : (link ? `<a href="#/doc/${r.docId}">${esc(T('saved, no number yet'))}</a>` : esc(T('saved, no number yet')));
   const bits = [];
-  if (d.reference) bits.push(`${esc(T('Ref.'))} <span dir="auto">${esc(d.reference)}</span>`);
+  if (d.reference && r.type !== 'JV') bits.push(`${esc(T('Ref.'))} <span dir="auto">${esc(d.reference)}</span>`);
   if (['RV', 'PV'].includes(r.type) && d.method) bits.push(d.method === 'cheque' && d.chequeNo
     ? `${esc(T('Cheque'))} <span dir="ltr">${esc(d.chequeNo)}</span>${d.chequeBank ? ` · <span dir="auto">${esc(d.chequeBank)}</span>` : ''}${d.dueDate ? ` · ${esc(T('due'))} <span dir="ltr">${esc(d.dueDate)}</span>` : ''}`
     : esc(T(PAY_METHODS[d.method] || '')));
   if (DOC_TYPES[r.type]?.lines) { const n = (d.lines || []).filter((l) => l.itemId).length; if (n) bits.push(`${n} ${esc(T(n === 1 ? 'item' : 'items'))}`); }
   if (d.notes && r.type !== 'OB') bits.push(`<span dir="auto">${esc(d.notes.slice(0, 60))}</span>`);
-  const head = r.type === 'OB' ? `${esc(T('Opening balance'))} ${no}` : `${r.reversal ? esc(T('Void of')) + ' ' : ''}${esc(T(t))} ${esc(T('no.'))} ${no}`;
+  // a journal voucher says which document it voids; an old-style reversal (inside the voided document) says «void of»
+  const jvOf = r.type === 'JV' && d.voidOf ? ` · ${esc(T('Void of'))} ${esc(T(DOC_TYPES[d.voidOfType]?.name || ''))} <span dir="ltr">${esc(d.voidOfNumber || '')}</span>` : '';
+  const head = r.type === 'OB' ? `${esc(T('Opening balance'))} ${no}` : `${r.reversal && r.type !== 'JV' ? esc(T('Void of')) + ' ' : ''}${esc(T(t))} ${esc(T('no.'))} ${no}${jvOf}`;
   return `<span class="dh">${head}</span>${bits.length ? `<span class="dx">${bits.join(' · ')}</span>` : ''}`;
 }
-function statementTable(st, { saved = false, detail = false, print = false } = {}) {
-  const status = (r) => (saved ? `<td class="ss"><span class="pill ${r.draft ? 'draft' : 'posted'}">${esc(T(r.draft ? 'Saved (draft)' : 'Posted'))}</span></td>` : '');
-  const span = saved ? 3 : 2;
+function statementTable(st, { detail = false, print = false } = {}) {
+  // every line says what it is: posted, saved (draft) or voided (Rabee, Nov 2026)
+  const word = (r) => (r.draft ? ['draft', 'Saved'] : r.voided ? ['voided', 'Voided'] : ['posted', 'Posted']);
+  const status = (r) => { const [c, w] = word(r); return `<td class="ss"><span class="pill ${c}">${esc(T(w))}</span></td>`; };
+  const span = 3;
   const dr = st.rows.reduce((s, r) => s + r.debitC, 0), cr = st.rows.reduce((s, r) => s + r.creditC, 0);
-  return `<div class="${print ? '' : 'tablewrap'}"><table class="${print ? 'pst' : `t st${saved ? ' withst' : ''}`}"><thead><tr><th>${esc(T('Date'))}</th><th>${esc(T('Description'))}</th>${saved ? `<th>${esc(T('Status'))}</th>` : ''}<th class="n">${esc(T('Debit'))}</th><th class="n">${esc(T('Credit'))}</th><th class="n">${esc(T('Balance'))}</th></tr></thead><tbody>
-    ${st.opening ? `<tr class="sop"><td class="sd"></td><td class="sn"><span class="dh">${esc(T('Balance brought forward'))}</span></td>${saved ? '<td class="ss"></td>' : ''}<td class="n sdb"></td><td class="n scr"></td><td class="n sb"><b>${money(st.opening)}</b></td></tr>` : ''}
-    ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : ''}"><td class="sd" dir="ltr">${esc(r.date)}</td><td class="sn">${stDesc(r, !print)}</td>${status(r)}
+  return `<div class="${print ? '' : 'tablewrap'}"><table class="${print ? 'pst' : 't st withst'}"><thead><tr><th>${esc(T('Date'))}</th><th>${esc(T('Description'))}</th><th>${esc(T('Status'))}</th><th class="n">${esc(T('Debit'))}</th><th class="n">${esc(T('Credit'))}</th><th class="n">${esc(T('Balance'))}</th></tr></thead><tbody>
+    <tr class="sop"><td class="sd"></td><td class="sn"><span class="dh">${esc(T('Balance at start of period'))}</span></td><td class="ss"></td><td class="n sdb"></td><td class="n scr"></td><td class="n sb"><b>${money(st.opening)}</b></td></tr>
+    ${st.rows.map((r) => `<tr class="${r.draft ? 'isdraft' : r.voided ? 'isvoid' : ''}"><td class="sd" dir="ltr">${esc(r.date)}</td><td class="sn">${stDesc(r, !print)}</td>${status(r)}
       <td class="n sdb">${r.debitC ? money(r.debitC) : ''}</td><td class="n scr">${r.creditC ? money(r.creditC) : ''}</td><td class="n sb"><b>${money(r.balanceC)}</b></td></tr>
       ${detail && !r.reversal && stLines(r.doc) ? `<tr class="sdet"><td></td><td colspan="${span + 3}">${stLines(r.doc)}</td></tr>` : ''}`).join('')}
     </tbody><tfoot><tr><td colspan="${span}">${esc(T('Total balance'))}</td><td class="n">${money(dr)}</td><td class="n">${money(cr)}</td><td class="n">${money(st.closing)}</td></tr></tfoot></table></div>`;
@@ -1450,57 +1470,66 @@ function statementHead(party, o, st) {
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
   return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
       <div class="sths" dir="ltr"><bdi>${esc(T('Account'))}</bdi> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
-      <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} – ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}</div></div>
+      <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} – ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}${o.voided ? ` · ${esc(T('Including voided'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
 }
-function statementOptions(cur = {}) {
-  return new Promise((resolve) => {
-    const dlg = document.createElement('dialog'); dlg.className = 'lookup card-dlg stopts';
+// Statement choice (Rabee, Nov 2026, like Bisan): the customer list comes first with the keyboard up, typing
+// marks the name; then one card: name, number, region, from/to (this year by default), «saved» and «voided»
+// unticked, OK. The statement shows posted lines only unless a box is ticked.
+const yearStart = () => `${new Date().getFullYear()}-01-01`, yearEnd = () => `${new Date().getFullYear()}-12-31`;
+async function pickStatementParty(current = null) {
+  const all = [...S.parties.filter((p) => p.kind === 'customer'), ...S.parties.filter((p) => p.kind === 'supplier')];
+  if (!all.length) { toast('Add a customer or supplier first', true); return null; }
+  return lookupParty(all, '', { focus: true, title: 'Account statement' });
+}
+function statementOptions(cur = {}, { pickFirst = false } = {}) {
+  return new Promise(async (resolve) => {
     let party = partyById(cur.pid);
-    const regionSel = `<select id="soRegion">${regionOptions(cur.region, 'All regions')}</select>`;
+    if (pickFirst || !party) { const p = await pickStatementParty(party); if (!p) return resolve(null); party = p; }
+    const dlg = document.createElement('dialog'); dlg.className = 'lookup card-dlg stopts';
+    const who = () => `<button type="button" class="sowho" id="soWho"><b dir="auto">${esc(party.name)}</b><span><span dir="ltr">${esc(party.code)}</span>${party.kind === 'customer' && party.region ? ` · ${esc(regionLabel(party.region))}` : ` · ${esc(T(party.kind === 'supplier' ? 'Supplier' : 'Customer'))}`}</span><i>${ic('search')}</i></button>`;
     dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">Account statement</h2>
+      <div id="soWhoBox">${who()}</div>
       <div class="sog">
-        <label class="f wide">Customer or supplier<div class="namewrap"><input id="soParty" dir="auto" readonly placeholder="Tap to choose" value="${esc(partyLabel(party))}"><button type="button" class="lkbtn" id="soLook" title="Lookup">${ic('search')}</button></div></label>
-        <label class="f">Region${regionSel}</label>
-        <label class="f">From<input id="soFrom" type="date" value="${esc(cur.from || '')}"></label>
-        <label class="f">To<input id="soTo" type="date" value="${esc(cur.to || '')}"></label>
+        <label class="f">From<input id="soFrom" type="date" value="${esc(cur.from || yearStart())}"></label>
+        <label class="f">To<input id="soTo" type="date" value="${esc(cur.to || yearEnd())}"></label>
+        <label class="sochk"><input type="checkbox" id="soSaved" ${cur.saved ? 'checked' : ''}><span>Including saved</span></label>
+        <label class="sochk"><input type="checkbox" id="soVoided" ${cur.voided ? 'checked' : ''}><span>Including voided</span></label>
         <div class="f wide"><span>Display</span><div class="seg2"><button type="button" data-d="0" class="${cur.detail ? '' : 'on'}">Brief</button><button type="button" data-d="1" class="${cur.detail ? 'on' : ''}">Detailed</button></div></div>
       </div>
-      <div class="actions sobtn" style="margin-bottom:0"><button class="btn tonal" data-m="all">Including saved</button><button class="btn ink" data-m="posted">Posted only</button></div>`;
+      <div class="actions sobtn" style="margin-bottom:0"><button class="btn" data-v="cancel">Cancel</button><button class="btn ink" id="soOk">Show statement</button></div>`;
     document.body.appendChild(dlg); translate(dlg); dlg.showModal();
     let detail = !!cur.detail;
     const end = (v) => { dlg.remove(); resolve(v); };
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
-    $('[data-x]', dlg).onclick = () => end(null);
+    $('[data-x]', dlg).onclick = () => end(null); $('[data-v=cancel]', dlg).onclick = () => end(null);
     $$('[data-d]', dlg).forEach((b) => (b.onclick = () => { detail = b.dataset.d === '1'; $$('[data-d]', dlg).forEach((x) => x.classList.toggle('on', x === b)); }));
-    const choose = async () => {
-      const reg = $('#soRegion', dlg).value;
-      const list = S.parties.filter((p) => !reg || p.region === reg);
-      const cust = list.filter((p) => p.kind === 'customer'), sup = list.filter((p) => p.kind === 'supplier');
-      const p = await lookupParty(party?.kind === 'supplier' && sup.length ? sup : cust.length ? cust : sup, '');
-      if (p) { party = p; $('#soParty', dlg).value = partyLabel(p); }
-    };
-    $('#soLook', dlg).onclick = choose; $('#soParty', dlg).onclick = choose;
-    $$('[data-m]', dlg).forEach((b) => (b.onclick = () => {
-      if (!party) { toast('Choose a customer or supplier', true); return; }
-      end({ pid: party.id, region: $('#soRegion', dlg).value, from: $('#soFrom', dlg).value, to: $('#soTo', dlg).value, detail, saved: b.dataset.m === 'all' });
-    }));
+    const rewire = () => ($('#soWho', dlg).onclick = async () => { const p = await pickStatementParty(party); if (p) { party = p; $('#soWhoBox', dlg).innerHTML = who(); translate($('#soWhoBox', dlg)); rewire(); } });
+    rewire();
+    const ok = () => end({ pid: party.id, from: $('#soFrom', dlg).value, to: $('#soTo', dlg).value, detail, saved: $('#soSaved', dlg).checked, voided: $('#soVoided', dlg).checked });
+    $('#soOk', dlg).onclick = ok;
+    dlg.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); ok(); } });
+    setTimeout(() => $('#soOk', dlg).focus(), 30);
   });
 }
+// the statement button (two circles, crimson): from anywhere, straight to the customer list
+async function openStatementFlow() {
+  const r = await statementOptions({}, { pickFirst: true }); if (!r) return;
+  go(stUrl(r));
+}
+const stUrl = (r) => `#/statement/${r.pid}?from=${r.from}&to=${r.to}&detail=${r.detail ? 1 : 0}&saved=${r.saved ? 1 : 0}&voided=${r.voided ? 1 : 0}`;
 routes.statement = async (pid) => {
   const q = new URLSearchParams(H.hash.split('?')[1] || '');
   const party = partyById(pid);
-  const o = { pid, region: q.get('region') || '', from: q.get('from') || '', to: q.get('to') || '', detail: q.get('detail') === '1', saved: q.get('saved') === '1' };
-  const open = async () => {
-    const r = await statementOptions(o); if (!r) return;
-    go(`#/statement/${r.pid}?from=${r.from}&to=${r.to}&region=${r.region}&detail=${r.detail ? 1 : 0}&saved=${r.saved ? 1 : 0}`);
-  };
+  // default period: this year, beginning to end
+  const o = { pid, from: q.has('from') ? q.get('from') : yearStart(), to: q.has('to') ? q.get('to') : yearEnd(), detail: q.get('detail') === '1', saved: q.get('saved') === '1', voided: q.get('voided') === '1' };
+  const open = async (first = false) => { const r = await statementOptions(o, { pickFirst: first }); if (r) go(stUrl(r)); };
   $('#main').innerHTML = `<div class="sthead"><div><h1>Account statement</h1>
-      <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(regionName(party.region))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${o.saved ? 'Including saved' : 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
+      <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(regionName(party.region))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${[o.saved ? 'Including saved' : '', o.voided ? 'Including voided' : ''].filter(Boolean).join(' · ') || 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
       <div class="stbtns"><button class="rb main" id="stOpts" title="Statement options" aria-label="Statement options">${ic('undo')}</button><button class="rb" id="pr" title="Print / PDF" aria-label="Print / PDF">${ic('printer')}</button><button class="rb" id="xl" title="Excel" aria-label="Excel">${ic('in')}</button></div></div>
     <div id="out" style="margin-top:16px"></div>`;
-  $('#stOpts').onclick = open;
-  if (!party) { $('#pr').disabled = $('#xl').disabled = true; setTimeout(open, 60); return; }
+  $('#stOpts').onclick = () => open(false);
+  if (!party) { $('#pr').disabled = $('#xl').disabled = true; setTimeout(() => open(true), 60); return; }
   const mk = party.kind === 'supplier' ? [['PV', 'Payment voucher'], ['PI', 'Purchase invoice']] : [['RV', 'Receipt voucher'], ['SI', 'Sales invoice']];
   $('#out').insertAdjacentHTML('beforebegin', `<div class="chain">${mk.map(([k, n], i) => `<a class="btn ${i ? '' : 'ink'}" href="#/new/${k}?party=${party.id}">${ic('plus')}<span>${n}</span></a>`).join('')}</div>`);
   const st = await statementOf(party, o);
@@ -1508,15 +1537,15 @@ routes.statement = async (pid) => {
   const plain = (r) => { const el = document.createElement('div'); el.innerHTML = stDesc(r, false); return el.textContent.replace(/\s+/g, ' ').trim(); };
   // export in the same order as the paper: company, customer, required balance, the table, the total
   $('#xl').onclick = () => {
-    const w = o.saved ? 6 : 5; const pad = (row) => [...row, ...Array(Math.max(0, w - row.length)).fill('')];
+    const w = 6; const pad = (row) => [...row, ...Array(Math.max(0, w - row.length)).fill('')];
     const head = [pad([S.settings.companyName]), pad([`${party.code} — ${party.name}`]), pad([`${party.region ? regionName(party.region) + ' · ' : ''}${o.from || '…'} → ${o.to || today()} · ${T('NIS')}${o.saved ? ' · ' + T('Including saved') : ''}`]),
       pad([T('Required balance'), fromCents(st.closing)]), pad([])];
-    const body = [['Date', 'Description', ...(o.saved ? ['Status'] : []), 'Debit', 'Credit', 'Balance'].map(T),
-      ...(st.opening ? [['', T('Balance brought forward'), ...(o.saved ? [''] : []), '', '', fromCents(st.opening)]] : []),
-      ...st.rows.map((r) => [r.date, plain(r), ...(o.saved ? [T(r.draft ? 'Saved (draft)' : 'Posted')] : []), r.debitC ? fromCents(r.debitC) : '', r.creditC ? fromCents(r.creditC) : '', fromCents(r.balanceC)]),
-      [T('Total balance'), '', ...(o.saved ? [''] : []), fromCents(st.rows.reduce((a, r) => a + r.debitC, 0)), fromCents(st.rows.reduce((a, r) => a + r.creditC, 0)), fromCents(st.closing)],
+    const body = [['Date', 'Description', 'Status', 'Debit', 'Credit', 'Balance'].map(T),
+      ['', T('Balance at start of period'), '', '', '', fromCents(st.opening)],
+      ...st.rows.map((r) => [r.date, plain(r), T(r.draft ? 'Saved' : r.voided ? 'Voided' : 'Posted'), r.debitC ? fromCents(r.debitC) : '', r.creditC ? fromCents(r.creditC) : '', fromCents(r.balanceC)]),
+      [T('Total balance'), '', '', fromCents(st.rows.reduce((a, r) => a + r.debitC, 0)), fromCents(st.rows.reduce((a, r) => a + r.creditC, 0)), fromCents(st.closing)],
       [], [amountInWords(fromCents(Math.abs(st.closing)))]];
-    toExcel(`statement-${party.code}.xlsx`, [...head, ...body], { cols: [12, 58, ...(o.saved ? [10] : []), 14, 14, 14], sheet: T('Account statement').slice(0, 31),
+    toExcel(`statement-${party.code}.xlsx`, [...head, ...body], { cols: [12, 58, 10, 14, 14, 14], sheet: T('Account statement').slice(0, 31),
       merges: [0, 1, 2].map((r) => ({ s: { r, c: 0 }, e: { r, c: w - 1 } })) });
   };
   $('#pr').onclick = () => printStatement(party, o, st);
@@ -1652,7 +1681,7 @@ routes.import = async () => {
     <div class="row"><label class="f">What<select id="kind"><option value="items">Items</option><option value="customers">Customers</option><option value="suppliers">Suppliers</option></select></label>
       <label class="f grow">File<input id="file" type="file" accept=".xlsx,.xls,.csv,.json"></label><button class="btn" id="tpl">Download template</button></div>
     <div id="preview" style="margin-top:14px"></div>
-    <h2>2 · From an AI assistant (Claude, ChatGPT, Gemini)</h2>
+    <h2>2 · From Claude</h2>
     <p class="muted">Copy this prompt, add your Excel sheet, photo or message under it, and paste the JSON answer below.</p>
     <textarea readonly id="prompt" style="min-height:160px;font-family:ui-monospace,monospace;font-size:.8em">${esc(AI_PROMPT)}</textarea>
     <div class="actions"><button class="btn" id="copy">Copy prompt</button></div>
@@ -2010,6 +2039,8 @@ const bootMsg = (html) => { $('#main').innerHTML = `<div class="bootmsg">${html}
   lb.onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); };
   $('#langBtnM').textContent = lb.textContent; $('#langBtnM').onclick = lb.onclick;
   $('#menuBtn').onclick = () => document.body.classList.toggle('menu-open');
+  // the account statement button (two circles, crimson): from any screen, straight to the customer list
+  $$('[data-st]').forEach((b) => (b.onclick = () => { document.body.classList.remove('menu-open'); if (!document.querySelector('dialog[open]')) guard(openStatementFlow); }));
   $('#app').addEventListener('click', (e) => { if (document.body.classList.contains('menu-open') && !e.target.closest('#nav')) document.body.classList.remove('menu-open'); });
   await start();
 })();

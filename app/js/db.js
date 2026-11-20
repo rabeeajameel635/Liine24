@@ -151,21 +151,38 @@ async function post_(docId, user, settings, { allowBackdate = false, backdateRea
   return rec;
 }
 
-async function voidDoc_(docId, reason, user) {
+// A void is posted as its own numbered journal voucher (JV): the voucher carries the reversing entries and
+// stock moves, the voided document keeps its number and is marked voided with a link to the voucher.
+// One transaction: the voucher, its entries, the voided mark and the audit line together or nothing.
+async function voidDoc_(docId, reason, user, settings = {}) {
   if (!reason || reason.trim().length < 3) throw new Error('A reason is required');
-  const tx = db.transaction(['docs', 'ledger', 'stock', 'audit'], 'readwrite');
-  const doc = await req(tx.objectStore('docs').get(docId));
-  if (!doc || doc.status !== 'posted') throw new Error('Only posted documents can be voided');
-  const entries = await req(tx.objectStore('ledger').index('docId').getAll(docId));
-  const moves = await req(tx.objectStore('stock').index('docId').getAll(docId));
+  const tx = db.transaction(['docs', 'ledger', 'stock', 'seqs', 'audit'], 'readwrite');
+  const docs = tx.objectStore('docs');
+  const doc = await req(docs.get(docId));
+  if (!doc || doc.status !== 'posted') { tx.abort(); throw new Error('Only posted documents can be voided'); }
+  if (doc.type === 'JV') { tx.abort(); throw new Error('A journal voucher is not voided; post a new one'); }
+  const entries = (await req(tx.objectStore('ledger').index('docId').getAll(docId))).filter((e) => !e.reversal);
+  const moves = (await req(tx.objectStore('stock').index('docId').getAll(docId))).filter((m) => !m.reversal);
   const strip = ({ seq, ...r }) => r;
   const rev = reverse({ entries: entries.map(strip), moves: moves.map(strip) });
   const date = new Date().toISOString().slice(0, 10);
-  for (const e of rev.entries) tx.objectStore('ledger').add({ ...e, date, at: now() });
-  for (const m of rev.moves) tx.objectStore('stock').add({ ...m, date, at: now() });
-  tx.objectStore('docs').put({ ...doc, status: 'voided', voidedAt: now(), voidedBy: user, voidReason: reason });
-  tx.objectStore('audit').add({ at: now(), user, action: 'void', ref: doc.number, detail: reason });
+  const series = seriesKey('JV', date, settings.branch);
+  const seq = (await req(tx.objectStore('seqs').get(series))) || { series, next: 1, lastDate: '' };
+  const number = formatNumber(series, seq.next);
+  const jvId = uid();
+  const jv = {
+    id: jvId, type: 'JV', status: 'posted', date, series, seqNo: seq.next, number, postedAt: now(), postedBy: user,
+    createdAt: now(), createdBy: user, partyId: doc.partyId || '', reference: doc.number, notes: reason.trim(),
+    voidOf: doc.id, voidOfNumber: doc.number, voidOfType: doc.type, totalC: doc.totalC || 0, netC: doc.netC ?? doc.totalC ?? 0, vatC: 0,
+  };
+  docs.put(jv);
+  tx.objectStore('seqs').put({ series, next: seq.next + 1, lastDate: date > seq.lastDate ? date : seq.lastDate });
+  for (const e of rev.entries) tx.objectStore('ledger').add({ ...e, docId: jvId, date, number, type: 'JV', at: now() });
+  for (const m of rev.moves) tx.objectStore('stock').add({ ...m, docId: jvId, date, number, type: 'JV', at: now() });
+  docs.put({ ...doc, status: 'voided', voidedAt: now(), voidedBy: user, voidReason: reason.trim(), voidJvId: jvId, voidJvNumber: number });
+  tx.objectStore('audit').add({ at: now(), user, action: 'void', ref: doc.number, detail: `${number}: ${reason.trim()}` });
   await done(tx);
+  return jv;
 }
 
 // Draft prints carry a watermark. The first output of a posted document is "Original", once in its life.

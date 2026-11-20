@@ -55,6 +55,9 @@ export const DOC_TYPES = {
   DN: { name: 'Debit note', party: 'customer', lines: false },
   OB: { name: 'Opening balance', party: 'any', lines: false },
   OS: { name: 'Opening stock', party: 'none', lines: true, stock: +1 },
+  // journal voucher (Rabee, Nov 2026): every void is posted as its own numbered journal voucher that reverses
+  // the voided document; the voucher and the voided document stay out of statements unless asked for
+  JV: { name: 'Journal voucher', party: 'none', lines: false },
 };
 
 export const REGIONS = { gaza: 'Gaza', middle: 'Middle Area', south: 'South' };
@@ -306,12 +309,16 @@ export function draftEntries(docs, settings = {}, { partyId = null, except = nul
   return out;
 }
 
-export function statement(entries, docs, partyId, kind = 'customer', { from, to } = {}) {
+// A voided document and the journal voucher that reverses it cancel each other out: by default neither shows
+// in a statement (a return or a credit note does show). voided: true brings both in, each marked as voided.
+export const isVoidRow = (doc) => !!doc && (doc.status === 'voided' || (doc.type === 'JV' && !!doc.voidOf));
+export function statement(entries, docs, partyId, kind = 'customer', { from, to, voided = false } = {}) {
   const account = kind === 'supplier' ? '2100' : '1200';
   const byDoc = new Map(docs.map((d) => [d.id, d]));
   const rows = entries
     .filter((e) => e.account === account && e.partyId === partyId)
-    .map((e) => ({ ...e, doc: byDoc.get(e.docId) }))
+    .map((e) => { const doc = byDoc.get(e.docId); return { ...e, doc, voided: isVoidRow(doc) }; })
+    .filter((r) => voided || !r.voided)
     .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.seq ?? 0) - (b.seq ?? 0));
   let bal = 0, opening = 0;
   const out = [];
@@ -423,7 +430,7 @@ export function amountInWords(x) {
 }
 
 // ---------- AI / Excel import validation ----------
-// The contract any assistant (Claude, ChatGPT, Gemini) must produce. See app/AI-IMPORT.md
+// The contract Claude must produce (Rabee: only Claude works on these books, never ChatGPT). See app/AI-IMPORT.md
 export function validateImport(obj) {
   const errors = [];
   if (!obj || typeof obj !== 'object') return { ok: false, errors: ['Not a JSON object'] };
