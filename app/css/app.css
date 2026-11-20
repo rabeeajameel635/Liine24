@@ -1273,3 +1273,25 @@ table.st tr.isvoid td.sn a { text-decoration: line-through; }
 .drow .dx { flex: none; width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--bad-soft); color: var(--bad); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
 .drow .dx svg { width: 16px; height: 16px; }
 .drow .dx:hover { filter: brightness(.95); }
+/* ---------- windows over the statement (Rabee, Nov 2026): the screen below shows through, the document sits on top ---------- */
+#under { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; padding: inherit; opacity: .5; filter: saturate(.6); }
+#under .sheet { transform: scale(.985); transform-origin: top center; }
+body.win main { position: relative; }
+body.win #main { position: relative; z-index: 2; background: var(--surface, #fff); border-radius: 22px; box-shadow: 0 18px 60px rgba(31,30,28,.22), 0 0 0 1px rgba(31,30,28,.06); margin-top: 22px; }
+.winbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line, #e2dfd6); }
+.wcrumb { display: inline-flex; align-items: center; gap: 6px; min-width: 0; border: none; background: transparent; padding: 4px 2px; font-size: .86em; color: var(--muted, #75736C); cursor: pointer; text-align: start; }
+.wcrumb span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+.wcrumb i { font-style: normal; opacity: .6; }
+.wcrumb b { color: var(--cl-ink, #1F1E1C); font-weight: 600; white-space: nowrap; }
+.winx { flex: none; width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--cl-btn, #EAE8E2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.winx .ic { width: 16px; height: 16px; }
+.wl0 .wcrumb { margin-inline-start: auto; background: var(--cl-btn, #EAE8E2); border-radius: 999px; padding: 4px 12px; font-size: .78em; max-width: 52%; }
+.wl0 .wcrumb span:not(:last-child) { display: none; }
+button.inq { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+#out tbody tr { cursor: pointer; }
+@media (max-width: 860px) {
+  #under { padding: 10px; }
+  body.win #main { margin-top: 14px; border-radius: 20px 20px 0 0; }
+  .wcrumb span { max-width: 52vw; }
+}
+@media print { #under, .winbar { display: none !important; } }

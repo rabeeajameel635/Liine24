@@ -197,6 +197,12 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   console.log('  posted only again, statuses:', (await page.locator('#out td.ss').allTextContents()).map((t) => t.trim()).filter(Boolean).join(','), '| opening row:', (await page.textContent('#out tr.sop')).replace(/\s+/g, ' ').trim());
   console.log('  descriptions:', (await page.locator('#out td.sn').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim()).slice(0, 6));
   console.log('  required balance box:', (await page.textContent('#out .sthb')).replace(/\s+/g, ' ').trim());
+  // a document opened from the statement is a window on top of it; ✕ brings the statement back
+  const stHash = await page.evaluate(() => location.hash);
+  await page.locator('#out tbody tr').filter({ hasText: /SI-/ }).first().click(); await page.waitForSelector('.winbar .winx');
+  console.log('  posted invoice opens as a window over the statement:', await page.evaluate(() => document.body.classList.contains('win') && !!document.querySelector('#under')), '| editable fields:', await page.locator('#main input:not([type=hidden]), #main textarea').count(), '| inquiry taps:', await page.locator('#main button.inq').count());
+  await page.click('.winx'); await page.waitForSelector('#out table');
+  console.log('  ✕ returns to the same statement:', await page.evaluate((h) => location.hash === h && !document.body.classList.contains('win'), stHash));
   await page.screenshot({ path: OUT + '/4-statement.png', fullPage: true });
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#xl')]);
   const xp = OUT + '/statement.xlsx'; await dl.saveAs(xp);

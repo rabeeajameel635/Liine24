@@ -304,7 +304,11 @@ export function draftEntries(docs, settings = {}, { partyId = null, except = nul
     if (d.status !== 'draft' || !d.partyId || d.id === except || (partyId && d.partyId !== partyId)) continue;
     let posting;
     try { posting = buildPosting(d, { settings }); } catch { continue; }
-    for (const e of posting.entries) if (e.partyId) out.push({ ...e, docId: d.id, date: d.date, number: '', type: d.type, draft: true, seq: 1e15 });
+    const mine = posting.entries.filter((e) => e.partyId);
+    for (const e of mine) out.push({ ...e, docId: d.id, date: d.date, number: '', type: d.type, draft: true, seq: 1e15 });
+    // a saved document with nothing to post yet (no quantity, no amount) still shows, at zero, so it can be opened
+    const side = DOC_TYPES[d.type]?.party;
+    if (!mine.length && (side === 'customer' || side === 'supplier')) out.push({ account: side === 'supplier' ? '2100' : '1200', debitC: 0, creditC: 0, partyId: d.partyId, docId: d.id, date: d.date, number: '', type: d.type, draft: true, seq: 1e15 });
   }
   return out;
 }

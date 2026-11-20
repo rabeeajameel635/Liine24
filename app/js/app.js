@@ -77,12 +77,26 @@ let guardEditor = null, currentHash = '', bypass = false;
 let pageKeys = null, lastPlace = '#/dashboard';
 const isDocRoute = (h) => /^#\/(new|doc)\//.test(h || '');
 document.addEventListener('keydown', (e) => { if (pageKeys && !e.defaultPrevented) pageKeys(e); });
-const backToPlace = () => go(lastPlace || '#/dashboard');
+// Windows over the statement (Rabee, Nov 2026, like Bisan): a document opened from an account statement opens
+// as a window on top of it. The statement stays underneath (a still picture of it); ✕ closes the top window only
+// and the screen below comes back fresh, so the statement shows any change just saved. Windows stack:
+// statement → invoice → voucher, each ✕ takes one off.
+const WIN = [];            // [{ hash, label, snap }]
+let winBack = null;        // the hash a ✕ is going back to
+const openWin = (target, label) => {
+  WIN.push({ hash: H.hash, label, snap: $('#main').innerHTML.replace(/\sid="[^"]*"/g, '') });
+  go(target);
+};
+const closeWin = () => { const top = WIN.pop(); if (!top) return go(lastPlace || '#/dashboard'); winBack = top.hash; go(top.hash); };
+const winLabel = () => ($('.ws .wtype')?.textContent || $('#main h1')?.textContent || '').replace(/\s+/g, ' ').trim();
+const backToPlace = () => (WIN.length ? closeWin() : go(lastPlace || '#/dashboard'));
 async function render() {
   $$('dialog').forEach((d) => d.remove());   // a sheet never outlives its screen
   guardEditor = null; pageKeys = null; onMasters = null; document.onvisibilitychange = null; document.body.classList.remove('editing', 'sheet-open');
   $('#main').onbeforeinput = null; $('#main').onclick = null;
   if (!isDocRoute(H.hash)) lastPlace = H.hash || '#/dashboard';
+  if (WIN.length && !isDocRoute(H.hash) && H.hash !== winBack) WIN.length = 0;   // went somewhere else: the windows close
+  winBack = null;
   const hash = H.hash.replace(/^#\//, '') || 'dashboard';
   const [name, ...args] = hash.split('?')[0].split('/');
   const navKey = name === 'new' ? `docs?type=${args[0]}` : hash;
@@ -102,8 +116,43 @@ async function render() {
   $('#main').innerHTML = '';
   await guard(() => fn(...args));
   translate(document.body);
+  dressWindow();                 // after the translation: the window's title is read from the translated heading
   window.scrollTo(0, 0);
 }
+// the screen below shows through as a still picture; the document on top says where it was opened from
+function dressWindow() {
+  const inWin = WIN.length > 0 && isDocRoute(H.hash);
+  document.body.classList.toggle('win', inWin);
+  $('#under')?.remove();
+  if (!inWin) return;
+  const under = document.createElement('div'); under.id = 'under'; under.setAttribute('aria-hidden', 'true'); under.inert = true;
+  under.innerHTML = `<div class="sheet">${WIN[WIN.length - 1].snap}</div>`;
+  $('#main').before(under);
+  const trail = WIN.map((w) => `<span>${esc(w.label)}</span>`).join('<i>‹</i>');
+  if ($('.ws')) {                                   // a document being written: its own bar, ✕ for back
+    $('.wl0 .modecap')?.remove();
+    const b = $('#eBack'); if (b) { b.innerHTML = ic('x'); b.title = T('Close'); }
+    $('.wl0')?.insertAdjacentHTML('beforeend', `<button type="button" class="wcrumb" data-winx>${trail}</button>`);
+  } else {
+    $('#main').insertAdjacentHTML('afterbegin', `<div class="winbar"><button type="button" class="wcrumb" data-winx>${trail}<i>‹</i><b>${esc(winLabel())}</b></button><button type="button" class="winx" data-winx title="Close" aria-label="Close">${ic('x')}</button></div>`);
+  }
+}
+// one listener for the windows: ✕ closes the top one; a document opened from a statement (any row) or from a
+// window opens as a new window on top
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-winx]')) {
+    e.preventDefault(); e.stopPropagation();
+    if (guardEditor?.isDirty?.()) guardEditor.leave().then(() => { guardEditor = null; closeWin(); }); else closeWin();
+    return;
+  }
+  const inStatement = /^#\/statement\//.test(H.hash) && e.target.closest('#out tbody tr');
+  const inWindow = document.body.classList.contains('win') && e.target.closest('#main a[href^="#/doc/"]');
+  if (!inStatement && !inWindow) return;
+  const a = inWindow || e.target.closest('tr').querySelector('a[href^="#/doc/"]'); if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  const p = /^#\/statement\/([^?]+)/.exec(H.hash); const party = p && partyById(p[1]);
+  openWin(a.getAttribute('href'), inStatement ? `${T('Account statement')} · ${party?.name || ''}` : winLabel());
+}, true);
 async function onHash() {
   if (bypass) { bypass = false; currentHash = H.hash; return; }
   if (guardEditor && guardEditor.isDirty()) {
@@ -453,7 +502,7 @@ function editor(doc) {
         ${t.lines ? `<div class="sr"><span>Items total</span><b id="tSub">0.00</b></div>
         <div class="sr"><span>Invoice discount</span><input id="invdisc" inputmode="decimal" value="${esc(doc.invoiceDiscount || '')}" placeholder="0.00"></div>
         <div class="sr" id="tRoundRow" hidden><span>Rounding</span><b id="tRound" dir="ltr"></b></div>
-        <div class="sr"${Number(S.settings.vatRate) ? '' : ' hidden'}><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : ''}
+        ${Number(S.settings.vatRate) ? `<div class="sr"><span>VAT ${S.settings.vatRate}%</span><b id="tVat">0.00</b></div>` : '<b id="tVat" hidden></b>'}` : ''}
         <div class="sr grand"><span>${t.lines ? 'Grand total' : 'Amount'}</span><b id="gTotal">0.00</b></div>
         <div class="wwords" id="tWords"></div></div>
     </footer>
@@ -1223,15 +1272,15 @@ async function viewDoc(d) {
   const jv = d.type === 'JV' ? await jvEntries(d) : [];
   $('#main').innerHTML = `
     <h1><span>${t.name}</span> <span dir="ltr">${esc(d.number)}</span> <span class="pill ${d.status}">${d.status}</span>${d.backdated ? ' <span class="pill bad">Backdated</span>' : ''}</h1>
-    <p class="sub">${esc(d.date)} · ${esc(partyLabel(p))}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
+    <p class="sub">${esc(d.date)} · ${p ? `<button type="button" class="inq" data-pcard="${esc(p.id)}">${esc(partyLabel(p))}</button>` : ''}${d.reference ? ` · Ref. ${esc(d.reference)}` : ''} · posted by ${esc(d.postedBy)} ${esc((d.postedAt || '').slice(0, 16).replace('T', ' '))}</p>
     ${d.status === 'voided' ? `<div class="note bad" data-notr><span>${esc(T('Voided by'))}</span> <bdi>${esc(d.voidedBy)}</bdi> · <span dir="ltr">${esc(d.voidedAt?.slice(0, 10))}</span> · <bdi>${esc(d.voidReason)}</bdi><br>${d.voidJvNumber ? `<span>${esc(T('Journal voucher'))}</span> <a href="#/doc/${esc(d.voidJvId)}" dir="ltr">${esc(d.voidJvNumber)}</a> <span>${esc(T('reverses it; the number stays used.'))}</span>` : `<span>${esc(T('A reversing entry was posted; the number stays used.'))}</span>`}</div>` : ''}
     ${d.type === 'JV' && d.voidOf ? `<div class="note" data-notr><span>${esc(T('Void of'))}</span> <a href="#/doc/${esc(d.voidOf)}"><span>${esc(T(DOC_TYPES[d.voidOfType]?.name || ''))}</span> <span dir="ltr">${esc(d.voidOfNumber || '')}</span></a> · <bdi>${esc(d.notes || '')}</bdi><br><span>${esc(T('Neither shows in the account statement unless Voided is ticked.'))}</span></div>` : ''}
     ${t.lines ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Code</th><th>Item</th><th>Batch</th><th>Expiry</th><th class="n">Qty</th><th class="n">Bonus</th><th class="n">Price</th><th class="n">Disc %</th><th class="n">Amount</th></tr></thead><tbody>
-      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${pricef(l.price, R)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${amt(l.amountC, R)}</td></tr>`; }).join('')}
+      ${tot.lines.map((l) => { const it = lineItem(l); return `<tr><td>${esc(it.code)}</td><td dir="auto">${l.itemId ? `<button type="button" class="inq" data-icard="${esc(l.itemId)}">${esc(it.name)}</button>` : esc(it.name)}</td><td>${esc(l.batch)}</td><td>${esc(l.expiry)}</td><td class="n">${fmt(l.qty || 0, 0)}</td><td class="n">${l.bonus ? fmt(l.bonus, 0) : ''}</td><td class="n">${pricef(l.price, R)}</td><td class="n">${l.disc ? l.disc + '%' : ''}</td><td class="n">${amt(l.amountC, R)}</td></tr>`; }).join('')}
       </tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">${fmt(tot.qtyTotal, 0)}</td><td class="n">${fmt(tot.bonusTotal, 0)}</td><td></td><td></td><td class="n">${amt(tot.subtotalC, R)}</td></tr></tfoot></table></div>
       <div class="row" style="margin-top:14px"><div class="totals card">
         ${tot.discC ? `<div><span>Invoice discount</span><span>−${amt(tot.discC, R)}</span></div>` : ''}${tot.roundC ? `<div><span>Rounding</span><span dir="ltr">${tot.roundC > 0 ? '+' : '−'}${amt(Math.abs(tot.roundC), R)}</span></div>` : ''}
-        <div><span>Net</span><span>${money(tot.netC)}</span></div><div><span>VAT</span><span>${money(tot.vatC)}</span></div>
+        ${Number(docTotalsOpts(d, S.settings).vatRate) ? `<div><span>Net</span><span>${money(tot.netC)}</span></div><div><span>VAT</span><span>${money(tot.vatC)}</span></div>` : ''}
         <div class="grand"><span>Total ₪</span><span>${amt(tot.totalC, R)}</span></div><div class="words">${esc(amountInWords(fromCents(tot.totalC)))}</div></div></div>`
     : d.type === 'JV' ? `<div class="tablewrap" style="margin-top:16px"><table class="t"><thead><tr><th>Account</th><th>Name</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>
         ${jv.map((e) => `<tr><td dir="ltr">${esc(acctCode(e.account))}${e.partyId ? ' / ' + esc(partyById(e.partyId)?.code || '') : ''}</td><td><span>${esc(acctName(e.account))}</span>${e.partyId ? ` · <span dir="auto">${esc(partyById(e.partyId)?.name || '')}</span>` : ''}</td><td class="n">${e.debitC ? money(e.debitC) : ''}</td><td class="n">${e.creditC ? money(e.creditC) : ''}</td></tr>`).join('')}
@@ -1260,6 +1309,10 @@ async function viewDoc(d) {
     await printDoc(d, reason); render();
   });
   $('#backBtn').onclick = backToPlace;
+  // a posted document is never edited: its customer and its items open as inquiry (their own cards); a spelling
+  // fix there changes the definition, never a price or an amount on this document
+  $$('[data-pcard]').forEach((b) => (b.onclick = () => guard(async () => { if ((await partyCard(partyById(b.dataset.pcard), { change: false })) === 'saved') render(); })));
+  $$('[data-icard]').forEach((b) => (b.onclick = () => guard(async () => { if ((await itemCard(itemById(b.dataset.icard), d.partyId, d.type, { change: false })) === 'saved') render(); })));
   $('#dup') && ($('#dup').onclick = () => guard(async () => {
     const { id, number, series, seqNo, status, postedAt, postedBy, voidedAt, voidedBy, voidReason, backdated, backdateReason, totalC, vatC, netC, qtyTotal, bonusTotal, settingsAtPost, createdAt, createdBy, updatedAt, cancelledAt, cancelledBy, ...rest } = d;
     const r = await db.saveDraft({ ...rest, date: today(), reference: '', notes: rest.notes ? rest.notes : '' }, S.user);
@@ -1551,7 +1604,7 @@ routes.statement = async (pid) => {
   const open = async (first = false) => { const r = await statementOptions(o, { pickFirst: first }); if (r) go(stUrl(r)); };
   $('#main').innerHTML = `<div class="sthead"><div><h1>Account statement</h1>
       <p class="sub">${party ? `<b dir="auto">${esc(partyLabel(party))}</b>${party.region ? ` · <span>${esc(regionName(party.region))}</span>` : ''} · <span dir="ltr">${esc(o.from || '…')} → ${esc(o.to || today())}</span> · <span>${[o.saved ? 'Including saved' : '', o.voided ? 'Including voided' : ''].filter(Boolean).join(' · ') || 'Posted only'}</span> · <span>${o.detail ? 'Detailed' : 'Brief'}</span>` : 'Choose a customer or supplier'}</p></div>
-      <div class="stbtns"><button class="rb main" id="stOpts" title="Statement options" aria-label="Statement options">${ic('undo')}</button><button class="rb" id="pr" title="Print / PDF" aria-label="Print / PDF">${ic('printer')}</button><button class="rb" id="xl" title="Excel" aria-label="Excel">${ic('in')}</button></div></div>
+      <div class="stbtns"><button class="rb main" id="stOpts" title="Refresh the statement" aria-label="Refresh the statement">${ic('refresh')}</button><button class="rb" id="pr" title="Print / PDF" aria-label="Print / PDF">${ic('printer')}</button><button class="rb" id="xl" title="Excel" aria-label="Excel">${ic('in')}</button></div></div>
     <div id="out" style="margin-top:16px"></div>`;
   $('#stOpts').onclick = () => open(false);
   if (!party) { $('#pr').disabled = $('#xl').disabled = true; setTimeout(() => open(true), 60); return; }
