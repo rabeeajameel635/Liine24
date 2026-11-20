@@ -1,0 +1,8 @@
+{
+  "name": "Ledger",
+  "short_name": "Ledger",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}
