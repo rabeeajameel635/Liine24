@@ -145,6 +145,8 @@ document.addEventListener('click', (e) => {
     if (guardEditor?.isDirty?.()) guardEditor.leave().then(() => { guardEditor = null; closeWin(); }); else closeWin();
     return;
   }
+  const stc = e.target.closest('#main [data-stcard]');
+  if (stc) { e.preventDefault(); e.stopPropagation(); guard(async () => { if ((await partyCard(partyById(stc.dataset.stcard), { change: false })) === 'saved') render(); }); return; }
   const inStatement = /^#\/statement\//.test(H.hash) && e.target.closest('#out tbody tr');
   const inWindow = document.body.classList.contains('win') && e.target.closest('#main a[href^="#/doc/"]');
   if (!inStatement && !inWindow) return;
@@ -208,6 +210,21 @@ function ask(question, yes = 'Yes', no = 'Cancel') {
     setTimeout(() => $('[data-v=no]', dlg).focus(), 30);
   });
 }
+// a changed definition card is being closed: 'save' | 'discard' | 'stay'
+function askSave() {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'ask';
+    dlg.innerHTML = `<p class="q">Save the changes?</p><div class="actions"><button class="btn" data-v="stay">Continue editing</button><button class="btn danger" data-v="discard">Discard changes</button><button class="btn ink" data-v="save">Save</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end('stay'); });
+    $$('[data-v]', dlg).forEach((b) => (b.onclick = () => end(b.dataset.v)));
+    setTimeout(() => $('[data-v=save]', dlg).focus(), 30);
+  });
+}
+// where a card was opened from, as a trail: statement › invoice › definition inquiry
+const crumbTrail = () => [...WIN.map((w) => w.label), winLabel()].filter(Boolean);
 // a yes/no question and a one-line answer: the browser's own boxes on a computer, the program's own online
 const okBox = (q) => (CLOUD ? ask(q, 'Yes', 'Cancel') : Promise.resolve(confirm(q)));
 function textBox(q) {
@@ -770,8 +787,9 @@ function lookup({ title, headers, rows, filter = '', onHold, focus = false }) {
     dlg.className = 'lookup'; dlg.dir = 'ltr';
     dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0">${esc(title)}</h2>
       <input class="lk-q" placeholder="Type a code or a name…" dir="auto" autocomplete="off" enterkeyhint="search" value="${esc(filter)}">
+      ${onHold ? '<div class="lk-mark"><span class="lk-who" dir="auto"></span><button type="button" class="btn ink small" data-lk="pick">Choose</button><button type="button" class="btn tonal small" data-lk="inq">Inquiry</button></div>' : ''}
       <div class="lk-list"><table class="t"><thead><tr><th>Code</th><th>Name</th>${headers.map((h) => `<th class="n">${esc(h)}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
-      <p class="hint" style="margin:10px 0 0"><kbd>↑</kbd> <kbd>↓</kbd> <span>move</span> · <kbd>Enter</kbd> <span>pick</span> · <kbd>Esc</kbd> <span>close</span>${onHold ? ' · <span>hold a row: its card</span>' : ''}</p>`;
+      <p class="hint" style="margin:10px 0 0"><kbd>↑</kbd> <kbd>↓</kbd> <span>move</span> · <kbd>Enter</kbd> <span>pick</span> · <kbd>Esc</kbd> <span>close</span>${onHold ? ' · <span>right-click or hold a row: inquiry</span>' : ''}</p>`;
     document.body.appendChild(dlg);
     const q = $('.lk-q', dlg), tb = $('tbody', dlg);
     let shown = [], idx = 0;
@@ -783,9 +801,13 @@ function lookup({ title, headers, rows, filter = '', onHold, focus = false }) {
       tb.innerHTML = shown.slice(0, 200).map((r, i) => `<tr data-i="${i}" class="${i === idx ? 'sel' : ''}"><td><b dir="ltr">${esc(r.code)}</b></td><td dir="auto">${esc(r.name)}</td>${r.extra.map((x) => `<td class="n">${x}</td>`).join('')}</tr>`).join('')
         || `<tr><td colspan="${2 + headers.length}" class="muted">Nothing matches</td></tr>`;
       $('tr.sel', tb)?.scrollIntoView({ block: 'nearest' });
+      const mk = $('.lk-mark', dlg); if (mk) { const r = shown[idx]; mk.classList.toggle('none', !r); $('.lk-who', mk).textContent = r ? `${r.code} — ${r.name}` : ''; }
       translate(dlg);
     };
     const end = (v) => { dlg.remove(); resolve(v); };
+    const inquire = async (r) => { if (!r) return; const keep = r.id; await onHold(r.id); all = getRows(); draw(); const i = shown.findIndex((x) => x.id === keep); if (i >= 0) { idx = i; draw(); } };
+    $('[data-lk=pick]', dlg)?.addEventListener('click', () => shown[idx] && end(shown[idx].id));
+    $('[data-lk=inq]', dlg)?.addEventListener('click', () => inquire(shown[idx]));
     q.addEventListener('input', () => { idx = 0; draw(); });
     q.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, shown.length - 1); draw(); }
@@ -793,7 +815,7 @@ function lookup({ title, headers, rows, filter = '', onHold, focus = false }) {
       else if (e.key === 'Enter') { e.preventDefault(); if (shown[idx]) end(shown[idx].id); }
     });
     tb.addEventListener('click', (e) => { const tr = e.target.closest('tr[data-i]'); if (tr) end(shown[Number(tr.dataset.i)].id); });
-    if (onHold) holdable(tb, 'tr[data-i]', async (tr) => { const r = shown[Number(tr.dataset.i)]; if (!r) return; await onHold(r.id); all = getRows(); draw(); });
+    if (onHold) holdable(tb, 'tr[data-i]', (tr) => { idx = Number(tr.dataset.i); draw(); return inquire(shown[idx]); });
     $('[data-x]', dlg).onclick = () => end(null);
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
     dlg.showModal(); draw();
@@ -840,7 +862,8 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
       return `<div class="ed"><span>${esc(k)}</span>${inp}</div>`;
     }).join('');
     const draw = () => {
-      dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button><h2 style="margin-top:0" dir="auto">${esc(title)}</h2>
+      dlg.innerHTML = `<button class="dlg-x" data-x type="button" title="Close" aria-label="Close">${ic('x')}</button>
+        <p class="ctrail">${trail.map((t) => `<span dir="auto">${esc(t)}</span><i>‹</i>`).join('')}<b>Definition inquiry</b></p><h2 style="margin-top:0" dir="auto">${esc(title)}</h2>
         <div class="kv">${body()}</div>
         ${editing && note && !only ? `<p class="muted" style="margin:10px 2px 0">${esc(note)}</p>` : ''}
         ${editing ? '' : sections.map(([h, html]) => `<h3>${esc(h)}</h3>${html}`).join('')}
@@ -848,15 +871,25 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
           ? '<button class="btn ink" data-v="save">Save</button><button class="btn" data-v="view">Cancel</button>'
           : `${onSave && quick ? `<button class="btn ink" data-v="quick">${esc(quick.label)}</button>` : ''}${onSave ? '<button class="btn tonal" data-v="edit">Edit</button>' : ''}${change ? '<button class="btn tonal" data-v="list">Change <kbd>F2</kbd></button>' : ''}<button class="btn" data-v="close">Close <kbd>Esc</kbd></button>`}</div>`;
       translate(dlg);
-      $('[data-x]', dlg).onclick = () => end(null);
+      $('[data-x]', dlg).onclick = () => leave(() => end(null));
       $$('[data-v]', dlg).forEach((b) => (b.onclick = () => act(b.dataset.v)));
       setTimeout(() => (editing ? (only && $(`[data-ek=${only[0]}]`, dlg)) || $('[data-ek]', dlg) : $('[data-v=close]', dlg))?.focus(), 20);
     };
     const end = (v) => { dlg.remove(); resolve(v); };
+    const trail = crumbTrail();
+    // what was typed differs from what is saved
+    const changed = () => editing && $$('[data-ek]', dlg).some((el) => { const ed = fields.find((f) => f[2]?.k === el.dataset.ek)[2]; return String(el.value).trim() !== String(ed.v ?? '').trim(); });
+    // leaving the edit (✕, Esc, Cancel): a change is never dropped or saved without asking
+    const leave = async (then) => {
+      if (!changed()) return then();
+      const a = await askSave();
+      if (a === 'save') return act('save');
+      if (a === 'discard') return then();
+    };
     const act = async (v) => {
       if (v === 'edit') { editing = true; only = null; draw(); return; }
       if (v === 'quick') { editing = true; only = quick.keys; draw(); return; }
-      if (v === 'view') { editing = false; only = null; draw(); return; }
+      if (v === 'view') { return leave(() => { editing = false; only = null; draw(); }); }
       if (v === 'save') {
         const vals = {};
         $$('[data-ek]', dlg).forEach((el) => { const ed = fields.find((f) => f[2]?.k === el.dataset.ek)[2]; vals[ed.k] = ed.type === 'number' ? (el.value.trim() === '' ? '' : num(el.value)) : el.value.trim(); });
@@ -1385,17 +1418,17 @@ async function printDoc(d, reason = '', copies = 1) {
 routes.items = async () => {
   $('#main').innerHTML = `<h1>Items</h1><p class="sub">${S.items.length} items. Codes are permanent. Items are never deleted, only deactivated.</p>
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}</div>
-    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : ''} <kbd>Enter</kbd> <span>opens the only match.</span></p>
+    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : ''} <kbd>Enter</kbd> <span>opens the marked one.</span></p>
     <div class="tablewrap"><table class="t deflist"><tbody id="tb">
     ${S.items.map((i) => `<tr data-id="${i.id}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td class="dl"><b dir="ltr">${esc(i.code)}</b> <span dir="auto">${esc(i.name)}</span>${i.active === false ? ` <span class="pill">inactive</span>` : ''}</td>
       <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
-  $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); };
+  $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); markFirst(); };
   $('#add') && ($('#add').onclick = () => itemForm({}));
   // the same item card as in the invoice: one card per item, everywhere
   const openItem = (id, edit = false) => guard(async () => { if ((await itemCard(itemById(id), null, 'SI', { change: false, edit })) === 'saved') render(); });
   $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.edit, true); }));
   $$('#tb tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openItem(tr.dataset.id); });
-  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openItem(vis[0].dataset.id); };
+  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const m = $('#tb tr.sel'); if (m) openItem(m.dataset.id); };
   $('#q').focus();
 };
 function itemForm(it, locked = false) {
@@ -1424,6 +1457,13 @@ function itemForm(it, locked = false) {
   }));
 }
 
+// a definitions list: once something is typed, the first match is the marked one and Enter opens its definition
+function markFirst() {
+  $$('#tb tr.sel').forEach((tr) => tr.classList.remove('sel'));
+  if (!$('#q')?.value.trim()) return;
+  $$('#tb tr').find((tr) => tr.style.display !== 'none')?.classList.add('sel');
+}
+
 // ---------- customers / suppliers ----------
 routes.customers = () => partiesPage('customer');
 routes.suppliers = () => partiesPage('supplier');
@@ -1438,12 +1478,12 @@ async function partiesPage(kind) {
     <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>
     ${kind === 'customer' ? `<select id="reg">${regionOptions(new URLSearchParams(H.hash.split('?')[1] || '').get('region') || '', 'All regions')}</select>` : ''}
     ${isAdmin() ? `<button class="btn primary" id="add">Add ${kind}</button>` : ''}</div>
-    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its card.'} <kbd>Enter</kbd> <span>opens the only match.</span></p>
+    <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : 'Click a row for its card.'} <kbd>Enter</kbd> <span>opens the marked one.</span></p>
     <div class="tablewrap"><table class="t deflist"><tbody id="tb">
     ${(kind === 'customer' ? [...list].sort((a, b) => (regionOf(a.region)?.code || '99').localeCompare(regionOf(b.region)?.code || '99') || a.code.localeCompare(b.code, undefined, { numeric: true })) : [...list].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true })))
       .map((p) => `<tr data-id="${p.id}" data-s="${esc((p.code + ' ' + p.name + ' ' + (p.phone || '')).toLowerCase())}" data-r="${p.region || ''}"><td class="dl"><b dir="ltr">${esc(p.code)}</b> <span dir="auto">${esc(p.name)}</span>${kind === 'customer' && regionName(p.region) ? ` <span class="dreg">- ${esc(regionName(p.region))}</span>` : ''}${p.active === false ? ` <span class="pill">inactive</span>` : ''}</td>
       <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${p.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
-  const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); };
+  const filt = () => { const s = $('#q').value.toLowerCase(); const r = $('#reg')?.value || ''; $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!r || tr.dataset.r === r) ? '' : 'none')); markFirst(); };
   $('#q').oninput = filt; $('#reg') && ($('#reg').onchange = filt);
   $('#add') && ($('#add').onclick = () => partyForm({ kind }));
   // the same customer / supplier card as in the invoice
@@ -1451,7 +1491,7 @@ async function partiesPage(kind) {
   $$('[data-edit]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openParty(b.dataset.edit, true); }));
   $$('#tb tr a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
   $$('#tb tr[data-id]').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => openParty(tr.dataset.id); });
-  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const vis = $$('#tb tr[data-id]').filter((tr) => tr.style.display !== 'none'); if (vis.length === 1) openParty(vis[0].dataset.id); };
+  $('#q').onkeydown = (e) => { if (e.key !== 'Enter') return; const m = $('#tb tr.sel'); if (m) openParty(m.dataset.id); };
   filt(); $('#q').focus();
 }
 function partyForm(p, locked = false) {
@@ -1546,7 +1586,7 @@ function statementTable(st, { detail = false, print = false } = {}) {
 function statementHead(party, o, st) {
   const owes = st.closing >= 0;
   const word = party.kind === 'supplier' ? (owes ? 'We owe' : 'They owe us') : (owes ? 'Required balance' : 'Credit balance');
-  return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto">${esc(party.code)} — ${esc(party.name)}</div>
+  return `<div class="sthd"><div class="sthp"><div class="sthn" dir="auto"><button type="button" class="inq" data-stcard="${esc(party.id)}">${esc(party.code)} — ${esc(party.name)}</button></div>
       <div class="sths" dir="ltr"><bdi>${esc(T('Account'))}</bdi> <span dir="ltr">${esc(acctCode(party.kind === 'supplier' ? '2100' : '1200'))} / ${esc(party.code)}</span></div>
       <div class="sths">${party.region ? `${esc(regionName(party.region))} · ` : ''}<span dir="ltr">${esc(o.from || '…')} – ${esc(o.to || today())}</span> · ${esc(T('NIS'))}${o.saved ? ` · ${esc(T('Including saved'))}` : ''}${o.voided ? ` · ${esc(T('Including voided'))}` : ''}</div></div>
     <div class="sthb"><span>${esc(T(word))}</span><b dir="ltr">${money(Math.abs(st.closing))}</b></div></div>`;
