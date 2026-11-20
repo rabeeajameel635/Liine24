@@ -21,7 +21,8 @@ try {
     const lp = path.join(LIVE, f); if (!fs.existsSync(lp)) { console.log('MISSING', f); continue; }
     let a = fs.readFileSync(path.join(out, f), 'utf8'), b = fs.readFileSync(lp, 'utf8');
     if (f === 'js/app.js') { const re = /const BUILD = \{[^\n]*\};/; a = a.replace(re, ''); b = b.replace(re, ''); }   // the build time differs, the code must not
-    if (f === 'index.html') { const re = /<title>[^<]*<\/title>/; a = a.replace(re, ''); b = b.replace(re, ''); }      // the page title is kept by the host
+    if (f === 'index.html') { const re = /<title>[^<]*<\/title>/; a = a.replace(re, '').trim(); b = b.replace(re, '');      // the host keeps the title
+      if (b.includes(a)) b = a; }                                                                                         // and serves the page inside its own frame
     if (a === b) console.log('SAME   ', f); else { bad++; console.log('DIFF   ', f); }
   }
   console.log(bad ? `\n${bad} file(s) changed outside Claude and the repository since ${commit}. Do not publish over them: bring them in first.` : `\nThe live page is exactly commit ${commit}${m ? ' (sealed ' + m[2] + ')' : ''}.`);
