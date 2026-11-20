@@ -58,6 +58,9 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   console.log('▶ the program\'s own boxes, and paper as PDF');
   await p.click('#nav a[href="#/docs?type=SI"]'); await p.waitForTimeout(700);
   ok('links route inside the program', (await p.locator('#dl .drow, .drow').count()) > 0 && await p.evaluate(() => location.hash === ''));
+  await p.click('#nav a[href="#/import"]'); await p.waitForTimeout(600);
+  ok('Claude only: the official program has no box for pasted AI answers', (await p.locator('#json, #importJson, #prompt').count()) === 0 && (await p.locator('#file').getAttribute('accept')) === '.xlsx,.xls,.csv');
+  await p.click('#nav a[href="#/docs?type=SI"]'); await p.waitForTimeout(700);
   await p.evaluate((id) => { const a = document.createElement('a'); a.href = '#/doc/' + id; a.id = 'tlink'; a.textContent = 'open'; document.querySelector('#main').prepend(a); }, made.siId); await p.click('#tlink'); await p.waitForSelector('#printBtn');
   await p.click('#printBtn'); await p.waitForSelector('dialog.paper[open]');
   ok('paper preview opens', (await p.locator('dialog.paper .doc-print').count()) >= 1, await p.locator('dialog.paper .stamp').first().textContent());

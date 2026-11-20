@@ -12,6 +12,10 @@ import * as cloud from './cloud.js';
 // in the browser, asks its questions in its own boxes, routes without the address bar, and saves files and
 // PDFs through the host, because the frame it runs in refuses confirm/prompt/print/downloads.
 let CLOUD = false;
+// The seal of the published program: tools/build-online.cjs writes the code commit it was built from. Claude
+// checks the live page against that exact commit before every publish (tools/check-live.cjs), so a change that
+// did not come through Claude and the repository shows up at once.
+const BUILD = { commit: 'local', at: '' };
 const safeStore = (st) => ({ get: (k) => { try { return st().getItem(k); } catch { return null; } }, set: (k, v) => { try { st().setItem(k, v); } catch {} } });
 const SS = safeStore(() => sessionStorage), LS = safeStore(() => localStorage);
 const H = (() => { let cur = '';
@@ -604,7 +608,8 @@ function editor(doc) {
       return;
     }
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-    if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); printAndPost(); }
+    // P = post & print, from a computer keyboard only; on a phone a stray letter never asks to post
+    if (!typing && e.code === 'KeyP' && !e.ctrlKey && !e.metaKey && !window.matchMedia('(max-width: 860px)').matches) { e.preventDefault(); printAndPost(); }
   };
 
   const firstEntry = () => (t.lines ? ($('#lines tbody tr:not(.found) [data-k=code]') || $('#lines tbody tr [data-k=code]')) : $('#amount'));
@@ -1044,12 +1049,18 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
     $('#main').dispatchEvent(new Event('change'));
   });
   tbody.addEventListener('change', (e) => { if (e.target.dataset.k === 'expiry') e.target.value = expShow(expParse(e.target.value)); });
+  // while a list is on its way, keys wait: nothing typed fast (or by a barcode scanner) lands outside the line
+  let picking = false;
   const pick = async (tr, filter) => {
-    const it = await lookupItem(filter, doc.type, getPid());
-    if (it) { setItem(tr, it); tr.classList.remove('unknown'); recalc(); const el = $('[data-k=price]', tr); el.focus(); el.select(); }
-    else $('[data-k=code]', tr).focus();
+    if (picking) return; picking = true;
+    try {
+      const it = await lookupItem(filter, doc.type, getPid());
+      if (it) { setItem(tr, it); tr.classList.remove('unknown'); recalc(); const el = $('[data-k=price]', tr); el.focus(); el.select(); }
+      else $('[data-k=code]', tr).focus();
+    } finally { picking = false; }
   };
   tbody.addEventListener('keydown', async (e) => {
+    if (picking) { e.preventDefault(); return; }
     const tr0 = e.target.closest('tr'); const k0 = e.target.dataset.k;
     if (e.key === 'F2' && k0 === 'price' && tr0.dataset.item) { e.preventDefault(); return lastPrice(tr0); }
     if (e.key === 'F2' && (k0 === 'code' || k0 === 'name')) {
@@ -1069,6 +1080,9 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
       const v = e.target.value.trim();
       if (tr.dataset.item) return focus('price');
       if (!v) return focus('name');
+      // an exact item code fills the line at once (no list in between), like a scanner expects
+      const exact = S.items.find((i) => i.active !== false && String(i.code).toLowerCase() === v.toLowerCase());
+      if (exact) { setItem(tr, exact); tr.classList.remove('unknown'); recalc(); return focus('price'); }
       return pick(tr, v);
     }
     if (k === 'name') {
@@ -1161,7 +1175,7 @@ function voucherUI(doc) {
 function smartEntry(doc, readDoc) {
   const dlg = document.createElement('dialog');
   dlg.innerHTML = `<h2 style="margin-top:0">Smart entry</h2>
-    <p class="muted">Paste JSON produced by Claude (see the prompt on the Import page), or simple lines like <code>1001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
+    <p class="muted">${CLOUD ? 'Type one line per item' : 'Paste JSON produced by Claude (see the prompt on the Import page), or simple lines'} like <code>1001 100 +20 @12.5</code> (code, qty, +bonus, @price).</p>
     <textarea id="smartText" dir="auto"></textarea>
     <div class="actions"><button class="btn primary" id="smartGo">Add to draft</button><button class="btn" id="smartClose">Close</button></div>`;
   document.body.appendChild(dlg); dlg.showModal();
@@ -1181,6 +1195,7 @@ function smartEntry(doc, readDoc) {
 function parseSmart(text) {
   text = text.trim();
   if (text.startsWith('{')) {
+    if (CLOUD) throw new Error('Claude only: pasted AI answers do not go into these books. Type lines like 1001 100 +20 @12.5, or send the order to Claude.');
     const obj = JSON.parse(text);
     const v = validateImport(obj); if (!v.ok) throw new Error(v.errors.join('\n'));
     return (obj.invoice?.lines || []).map((l) => {
@@ -1686,7 +1701,17 @@ bonus = free units; never invent items, customers or prices that are not in the 
 Source data:`;
 
 routes.import = async () => {
-  $('#main').innerHTML = `<h1>Import · Excel · AI</h1><p class="sub">Bring data in from Excel, CSV, or any AI assistant. Everything is checked before it is saved, and invoices arrive as drafts.</p>
+  // the official program (online) has no door for pasted AI answers: AI work reaches the books through Claude
+  // only, written directly and recorded under its name in the audit log (Rabee: ChatGPT never touches the program)
+  if (CLOUD) {
+    $('#main').innerHTML = `<h1>Import · Excel</h1><p class="sub">Items, customers and suppliers from Excel or CSV. Everything is checked before it is saved.</p>
+    <h2>From Excel or CSV</h2>
+    <div class="row"><label class="f">What<select id="kind"><option value="items">Items</option><option value="customers">Customers</option><option value="suppliers">Suppliers</option></select></label>
+      <label class="f grow">File<input id="file" type="file" accept=".xlsx,.xls,.csv"></label><button class="btn" id="tpl">Download template</button></div>
+    <div id="preview" style="margin-top:14px"></div>
+    <div class="note" style="margin-top:22px"><b>Claude only.</b> <span>Nothing written by another AI is pasted into these books. Invoices from a photo, a notebook or a message go to Claude, who enters them as saved drafts under its own name in the audit log, for you to review and post.</span></div>`;
+  } else
+  $('#main').innerHTML = `<h1>Import · Excel · AI</h1><p class="sub">Bring data in from Excel, CSV, or Claude. Everything is checked before it is saved, and invoices arrive as drafts.</p>
     <h2>1 · From Excel or CSV</h2>
     <div class="row"><label class="f">What<select id="kind"><option value="items">Items</option><option value="customers">Customers</option><option value="suppliers">Suppliers</option></select></label>
       <label class="f grow">File<input id="file" type="file" accept=".xlsx,.xls,.csv,.json"></label><button class="btn" id="tpl">Download template</button></div>
@@ -1697,7 +1722,7 @@ routes.import = async () => {
     <div class="actions"><button class="btn" id="copy">Copy prompt</button></div>
     <textarea id="json" placeholder="Paste the JSON answer here" style="font-family:ui-monospace,monospace;font-size:.85em"></textarea>
     <div class="actions"><button class="btn primary" id="importJson">Check and import</button></div><div id="jsonOut"></div>`;
-  $('#copy').onclick = () => { navigator.clipboard?.writeText(AI_PROMPT); toast('Prompt copied'); };
+  $('#copy') && ($('#copy').onclick = () => { navigator.clipboard?.writeText(AI_PROMPT); toast('Prompt copied'); });
   $('#tpl').onclick = () => {
     const k = $('#kind').value;
     const head = { items: ['code', 'name', 'brand', 'category', 'unit', 'buyPrice', 'pricePublic', 'pricePharmacist', 'barcode', 'openingQty'], customers: ['code', 'name', 'phone', 'address', 'region', 'type', 'creditLimit', 'openingBalance'], suppliers: ['code', 'name', 'phone', 'address', 'openingBalance'] }[k];
@@ -1706,17 +1731,17 @@ routes.import = async () => {
   $('#file').onchange = () => guard(async () => {
     const f = $('#file').files[0]; if (!f) return;
     // a prepared .json file (items + purchase invoice) goes through the same check as pasted JSON
-    if (/\.json$/i.test(f.name)) { $('#json').value = await f.text(); $('#importJson').click(); $('#json').scrollIntoView({ block: 'start' }); return; }
+    if (/\.json$/i.test(f.name)) { if (!$('#json')) throw new Error('Claude only: this file goes to Claude, not into the program'); $('#json').value = await f.text(); $('#importJson').click(); $('#json').scrollIntoView({ block: 'start' }); return; }
     const wb = XLSX.read(await f.arrayBuffer());
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     const kind = $('#kind').value;
     const data = { [kind]: rows.map((r) => mapRow(r, kind)).filter((r) => r.name) };
     showImportPreview(data, $('#preview'));
   });
-  $('#importJson').onclick = () => guard(async () => {
+  $('#importJson') && ($('#importJson').onclick = () => guard(async () => {
     const obj = JSON.parse($('#json').value.trim().replace(/^```(json)?|```$/g, ''));
     showImportPreview(obj, $('#jsonOut'));
-  });
+  }));
 };
 const SYN = {
   code: ['code', 'item code', 'رقم الصنف', 'الكود', 'رقم', 'كود', 'رقم الزبون'], name: ['name', 'item', 'اسم الصنف', 'الاسم', 'اسم', 'البيان', 'الصنف', 'اسم الزبون'],
@@ -1840,6 +1865,7 @@ routes.settings = async () => {
     <h2 id="sec-cur">Currency</h2><div class="row"><label class="f grow">Currency<input value="${esc(T('Israeli new shekel (₪, NIS)'))}" readonly></label></div>
     <p class="muted">One currency in this version: every amount, statement and report is in shekels.</p>
     ${isAdmin() ? '' : '<h2 id="sec-pin">Password</h2><p class="muted">Switch to admin to set or change the admin PIN.</p>'}
+    <h2>Program version</h2><p class="muted" data-notr><span dir="ltr">${esc(BUILD.commit)}</span>${BUILD.at ? ` · <span dir="ltr">${esc(BUILD.at)}</span>` : ''} · <span>${esc(T('Built and published by Claude only. Any other change shows when Claude checks the page before the next publish.'))}</span></p>
     <div class="note" style="margin-top:24px">${CLOUD ? 'Online books: the data lives with this program on claude.ai, not in this browser. Claude reads and writes the same books.' : 'This is version 0.1. Data is stored in this browser on this device. Cloud sync, real user accounts and permissions enforced by the server come in stage 3.'}</div>`;
   const prev = () => { const fd = Object.fromEntries(new FormData($('#co'))); const keep = S.settings; S.settings = { ...keep, ...fd }; $('#lhPrev').innerHTML = `<div class="doc-print" dir="ltr">${letterhead()}</div>`; S.settings = keep; };
   $('#co').addEventListener('input', prev); prev();

@@ -30,7 +30,13 @@ css = css.replace(/^@font-face \{ font-family: 'Plex Arabic';.*\n/gm, '').replac
 files.push(put('css/app.css', css));
 for (const f of fs.readdirSync(path.join(APP, 'js')).filter((x) => x.endsWith('.js'))) {
   let js = read('js/' + f);
-  if (f === 'app.js') { for (const k of ['vendor/html2canvas.min.js', 'vendor/jspdf.umd.min.js']) js = must(js, `'${k}'`, f).replaceAll(`'${k}'`, `'${CDN[k]}'`); js = must(js, '"Plex Arabic"', f).replaceAll('"Plex Arabic"', `"${FONT}"`); }
+  if (f === 'app.js') {
+    // the seal: the commit this page is built from (must be committed and clean, so the seal names exactly this code)
+    const git = (c) => require('child_process').execSync('git ' + c, { cwd: APP }).toString().trim();
+    if (git('status --porcelain -- .') && !process.argv.includes('--dirty')) throw new Error('commit the app first: the published page must match a commit');
+    const stamp = `const BUILD = { commit: '${git('rev-parse --short=12 HEAD')}', at: '${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC' };`;
+    js = must(js, "const BUILD = { commit: 'local', at: '' };", f).replace("const BUILD = { commit: 'local', at: '' };", stamp);
+ for (const k of ['vendor/html2canvas.min.js', 'vendor/jspdf.umd.min.js']) js = must(js, `'${k}'`, f).replaceAll(`'${k}'`, `'${CDN[k]}'`); js = must(js, '"Plex Arabic"', f).replaceAll('"Plex Arabic"', `"${FONT}"`); }
   files.push(put('js/' + f, js));
 }
 files.push(put('manifest.webmanifest', read('manifest.webmanifest')));

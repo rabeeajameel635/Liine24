@@ -64,7 +64,7 @@ ONLINE=1 node test/mobile.cjs          # نفس اختبار الجوال كله
 | `js/db.js` | قاعدة البيانات المحلية. **ما فيها دالة حذف.** الترحيل والإلغاء معاملة وحدة ذرية |
 | `js/app.js` | الشاشات |
 | `js/cloud.js` · `js/cloudmap.js` · `js/memidb.js` | الدفاتر أونلاين: الاتصال والكتابة · شكل المستندات · نسخة العمل بالذاكرة |
-| `tools/build-online.cjs` · `tools/online.cjs` | بناء الصفحة للنشر · قراءة وكتابة Claude بالدفاتر أونلاين |
+| `tools/build-online.cjs` · `tools/online.cjs` · `tools/check-live.cjs` | بناء الصفحة للنشر مع ختم الكومِت · قراءة وكتابة Claude بالدفاتر أونلاين · فحص الصفحة الحية قبل أي نشر |
 | `test/mock-claude.js` | بديل عن بيئة claude.ai للاختبار |
 | `css/app.css` | الشكل والطباعة A4 |
 | `vendor/xlsx.full.min.js` | قراءة وكتابة Excel بدون نت (SheetJS، رخصة Apache 2.0) |
