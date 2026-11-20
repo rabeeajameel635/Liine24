@@ -210,12 +210,12 @@ function ask(question, yes = 'Yes', no = 'Cancel') {
     setTimeout(() => $('[data-v=no]', dlg).focus(), 30);
   });
 }
-// a changed definition card is being closed: 'save' | 'discard' | 'stay'
+// a changed definition card is being closed: Yes → 'save', Cancel → 'discard' (the change is dropped); Esc → 'stay'
 function askSave() {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'ask';
-    dlg.innerHTML = `<p class="q">Save the changes?</p><div class="actions"><button class="btn" data-v="stay">Continue editing</button><button class="btn danger" data-v="discard">Discard changes</button><button class="btn ink" data-v="save">Save</button></div>`;
+    dlg.innerHTML = `<p class="q">Do you want to save the changes?</p><div class="actions"><button class="btn" data-v="discard">Cancel</button><button class="btn ink" data-v="save">Yes</button></div>`;
     document.body.appendChild(dlg); translate(dlg); dlg.showModal();
     const end = (v) => { dlg.remove(); resolve(v); };
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); end('stay'); });
@@ -996,6 +996,10 @@ function uniqueMatch(list, low, report) {
   if (report) toast(m.length ? `${m.length} matches: type more letters or pick from the list` : `Nothing matches "${low}"`, true);
   return null;
 }
+// the books runner (tools/books.cjs) prints through the same function as the buttons: a posted document's first
+// print gives the original and its copies on one file, a later one a copy. It writes nothing but the print log.
+window.__books = { printDoc: async (id, n) => { const d = S.docs.find((x) => x.id === id); if (!d) throw new Error('Document not found');
+  const first = !(await db.byIndex('printlog', 'docId', id)).length; await printDoc(d, '', n || (first ? copiesFor(d.type) : 1)); } };
 const copiesFor = (type) => Math.max(1, Number(DOC_TYPES[type].lines ? S.settings.copiesInvoice : S.settings.copiesVoucher) || 1);
 
 const num = (v) => (v === '' || v == null ? '' : Number(String(v).replace(/,/g, '')));
@@ -1339,7 +1343,8 @@ async function viewDoc(d) {
   $('#printBtn').onclick = () => guard(async () => {
     let reason = '';
     if (prints.length && isAdmin() && !prints.some((x) => x.copyNo > 1) && await okBox('Was the original lost (printer jam, damaged)? Press OK to record a reason; it still prints as a Copy.')) reason = await textBox('Reason:') || '';
-    await printDoc(d, reason); render();
+    // the first print of a posted document is the original with its copies (Settings), one file; later prints one copy
+    await printDoc(d, reason, prints.length ? 1 : copiesFor(d.type)); render();
   });
   $('#backBtn').onclick = backToPlace;
   // a posted document is never edited: its customer and its items open as inquiry (their own cards); a spelling
@@ -1372,7 +1377,7 @@ async function printDoc(d, reason = '', copies = 1) {
   const opt = docTotalsOpts(d, s);
   const tot = t.lines ? computeTotals(d.lines, opt) : { totalC: d.type === 'JV' ? d.totalC || 0 : toCents(d.amount) };
   const jvRows = d.type === 'JV' ? await jvEntries(d) : [];
-  const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? `COPY ${copyNo} · نسخة ${copyNo}` : 'DRAFT · مسودة');
+  const stampOf = ({ label, copyNo }) => (label === 'ORIGINAL' ? 'ORIGINAL · أصلية' : label === 'COPY' ? 'COPY · نسخة' : 'DRAFT · مسودة');
   const ar = { SI: 'فاتورة مبيعات', SR: 'مرتجع مبيعات', PI: 'فاتورة مشتريات', PR: 'مرتجع مشتريات', RV: 'سند قبض', PV: 'سند صرف', CN: 'إشعار دائن', DN: 'إشعار مدين', OB: 'رصيد افتتاحي', OS: 'بضاعة أول المدة', JV: 'سند قيد' }[d.type];
   // Print layout: company head with a monogram, grey title block, black table head, zebra rows,
   // boxed total, amount in words, signature. Digits stay Latin; the screen-only stock never prints.
@@ -2107,7 +2112,7 @@ async function printWhenReady() {
   if (CLOUD) { document.body.classList.remove('printing'); return showPaper(); }
   setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 30);
 }
-// Online there is no printer behind the frame: the page is shown as it prints, and saved as a PDF (A4).
+// Online there is no printer behind the frame: the page is shown as it prints, and saved as a PDF (A4, content at 90%).
 let paperName = 'document';
 function showPaper() {
   $$('dialog.paper').forEach((d) => d.remove());
@@ -2129,7 +2134,8 @@ async function paperPdf() {
   try {
     try { await document.fonts.ready; } catch {}
     const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
-    const W = 186, HH = 273, M = 12; let first = true;
+    // the content is 90% of the A4 sheet and centred on it, so any printer prints it whole
+    const W = 189, HH = 267.3, MX = 10.5, MY = 14.85; let first = true;
     for (const el of $$('#printArea .doc-print')) {
       const box = el.getBoundingClientRect();
       const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false });
@@ -2142,7 +2148,7 @@ async function paperPdf() {
         const part = document.createElement('canvas'); part.width = canvas.width; part.height = end - y;
         const g = part.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, part.width, part.height); g.drawImage(canvas, 0, y, canvas.width, end - y, 0, 0, canvas.width, end - y);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, M, W, (end - y) / perMm);
+        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', MX, MY, W, (end - y) / perMm);
         y = end;
       }
     }

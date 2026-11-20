@@ -68,7 +68,7 @@ const AR = {
   'Saving files is not available in this view': 'حفظ الملفات غير متاح في هذا العرض',
   'A save is already waiting. Answer it first.': 'هناك حفظ بانتظار ردّك. أجب عليه أولاً.',
   'The books are not set up yet. The owner opens the program first.': 'الدفاتر لم تُجهَّز بعد. صاحبها يفتح البرنامج أولاً.',
-  'Save the changes?': 'بدك تحفظ التغييرات؟', 'Discard changes': 'إلغاء التغييرات', 'Definition inquiry': 'استعلام دليل', 'Choose': 'اختيار', 'Inquiry': 'استعلام',
+  'Do you want to save the changes?': 'هل تريد حفظ التعديلات؟', 'Discard changes': 'إلغاء التغييرات', 'Definition inquiry': 'استعلام دليل', 'Choose': 'اختيار', 'Inquiry': 'استعلام',
   'right-click or hold a row: inquiry': 'الزر اليمين أو ضغطة مطوّلة على السطر: استعلام', 'opens the marked one.': 'بيفتح تعريف السطر المحدّد.',
   'Smart entry': 'الإدخال الذكي', 'Add to draft': 'أضف للمسودة', 'Close': 'إغلاق',
   // items and parties

@@ -38,7 +38,7 @@
   window.__saved = [];
   const caps = { db: { doc: docRef, collection: (p) => colRef(p) },
     user: { isOwner: async () => true, canEdit: async () => true, can: async () => true, id: async () => 'u1', me: async () => ({ id: 'u1', name: 'Tester' }) },
-    downloads: { save: async ({ filename, data }) => { const buf = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new TextEncoder().encode(String(data)); window.__saved.push({ filename, size: buf.length, head: String.fromCharCode(...buf.slice(0, 5)) }); return { status: 'saved' }; } } };
+    downloads: { save: async ({ filename, data }) => { const buf = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new TextEncoder().encode(String(data)); const txt = new TextDecoder('latin1').decode(buf); window.__saved.push({ filename, size: buf.length, head: txt.slice(0, 5), pages: (txt.match(/\/Type\s*\/Page[^s]/g) || []).length, mediaBox: (txt.match(/\/MediaBox\s*\[[^\]]*\]/) || [''])[0] }); return { status: 'saved' }; } } };
   window.claude = { use: async (n) => caps[n] ?? null };
   const refuse = (v) => () => { window.__refused = (window.__refused || 0) + 1; return v; };
   window.confirm = refuse(false); window.prompt = refuse(null); window.print = refuse(undefined);

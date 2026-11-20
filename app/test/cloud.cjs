@@ -68,6 +68,7 @@ const open = async (ctx, seed) => { const p = await ctx.newPage(); p.errors = []
   await p.click('dialog.paper [data-v=pdf]'); await p.waitForFunction(() => window.__saved.length > 0, null, { timeout: 60000 });
   const sv = await p.evaluate(() => window.__saved[0]);
   ok('PDF handed to the host', sv.head === '%PDF-' && sv.size > 20000 && /\.pdf$/.test(sv.filename), `${sv.filename} · ${sv.size} bytes`);
+  ok('first print of a posted invoice: ONE file, original and copy on two A4 sheets', sv.pages === 2 && (await p.locator('dialog.paper .stamp').allTextContents()).map((t) => t.trim()).join(' | ') === 'ORIGINAL · أصلية | COPY · نسخة' && /595\.2\d* 841\.8/.test(sv.mediaBox), `${sv.pages} pages · ${sv.mediaBox}`);
   await p.click('dialog.paper [data-v=close]');
   await p.waitForSelector('#void'); await p.click('#void'); await p.waitForSelector('dialog.ask .ans');
   await p.fill('dialog.ask .ans', 'test void'); await p.click('dialog.ask [data-v=yes]'); await p.waitForTimeout(1200);

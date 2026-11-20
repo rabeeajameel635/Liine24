@@ -183,7 +183,7 @@ const URL = process.env.APP_URL || 'http://127.0.0.1:8765/index.html';
   }
 
   step('statement');
-  const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100').id);
+  const cid = await page.evaluate(async () => (await (await import('./js/db.js')).all('parties')).find((p) => p.code === 'C-0100' && p.kind === 'customer').id);
   await page.goto(URL + `#/statement/${cid}`); await page.waitForSelector('#out table');
   console.log('  closing:', (await page.textContent('#out tfoot')).replace(/\s+/g, ' '));
   await page.evaluate(async (pid) => { const db = await import('./js/db.js'); await db.saveDraft({ type: 'RV', partyId: pid, date: '2026-11-10', amount: 100, method: 'cash', cashAccount: '1100', lines: [] }, 'test'); }, cid);

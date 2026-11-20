@@ -15,7 +15,8 @@
 //                                                                       change lines of a saved draft (by item code)
 //   { "op": "items", "set": [{ "code": "1001", "buyPrice": 9 }] }     change item definitions (by code)
 //   { "op": "post", "ref": "last" | "<docId>" | "<number>" }           post a saved draft
-//   { "op": "print", "ref": "last" | "<docId>" | "<number>", "name": "file.pdf" }
+//   { "op": "print", "ref": "last" | "<docId>" | "<number>", "name": "file.pdf", "copies"?: n }
+//        one PDF file. Post then print = original + copy on two sheets of the same file.
 //   { "op": "report", "route": "#/balances", "name": "balances.pdf" }  print any report screen
 // Every op is reported on stdout as one JSON line.
 const { chromium } = require('playwright');
@@ -52,7 +53,8 @@ const say = (o) => console.log(JSON.stringify(o));
   const reload = async (hash) => { await p.goto(URL + '?r=' + Date.now() + (hash || '#/dashboard')); await p.waitForTimeout(500); };
   const pdfOf = async (name) => {
     await p.evaluate(() => document.body.classList.add('printing')); await p.emulateMedia({ media: 'print' }); await p.evaluate(() => document.fonts.ready);
-    const file = path.join(PDF, name); await p.pdf({ path: file, format: 'A4', printBackground: true, margin: { top: '0', bottom: '0', left: '0', right: '0' } });
+    // the same sheet as the page's own PDF: content at 90% of A4, centred (the margins come from @page in app.css)
+    const file = path.join(PDF, name); await p.pdf({ path: file, format: 'A4', printBackground: true, preferCSSPageSize: true });
     await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => document.body.classList.remove('printing'));
     return file;
   };
@@ -124,7 +126,10 @@ const say = (o) => console.log(JSON.stringify(o));
       } else if (o.op === 'print') {
         const id = await find(o.ref || 'last');
         await reload('#/doc/' + id); await p.waitForSelector('#printBtn, #printdraft');
-        if (await p.locator('#printBtn').count()) await p.click('#printBtn'); else await p.click('#printdraft');
+        // a posted document: one file. Its first print holds the original and the copy (Settings: print copies),
+        // a later print one copy. A draft prints with its watermark.
+        if (await p.locator('#printBtn').count()) await p.evaluate(([id, n]) => window.__books.printDoc(id, n), [id, o.copies || 0]);
+        else await p.click('#printdraft');
         await p.waitForTimeout(800);
         say({ op: 'print', id, file: await pdfOf(o.name || id + '.pdf') });
       } else if (o.op === 'report') {
