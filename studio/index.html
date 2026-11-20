@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>غرفة الإخراج · Rabee Studio</title>
+<meta name="description" content="غرفة إخراج تجمع اشتراكات الملتي ميديا، التايم لاين، الستوري بورد، فحص الكادرات ضد المراجع، المعرض والإصدار.">
+<meta name="theme-color" content="#07070a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="الغرف">
+    <a class="brand" href="../index.html" title="ربيع ستوديو">
+      <span class="brand-mark">R</span>
+    </a>
+    <nav class="rooms" id="rooms"></nav>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <div class="proj">
+        <div class="proj-k">Liine24 · كليب رسمي</div>
+        <h1 class="proj-t">I Am The World <span class="mono dim">v44 · 4:16</span></h1>
+      </div>
+      <div class="chips" id="chips"></div>
+    </header>
+    <section class="room" id="view" tabindex="-1"></section>
+  </main>
+</div>
+
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-scrim" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true">
+    <button class="icon-btn drawer-x" data-close aria-label="إغلاق">✕</button>
+    <div id="drawer-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file-any" hidden>
+
+<script src="data.js"></script>
+<script src="studio.js"></script>
+<script src="rooms.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[
+ {
+  "id": "higgsfield",
+  "verified_url": "https://mcp.higgsfield.ai/mcp",
+  "verified_source": "https://higgsfield.ai/creator-hub/help-center/mcp-cli/how-do-i-connect-higgsfield-to-claude",
+  "verified_quote": "paste the MCP URL https://mcp.higgsfield.ai/mcp, and authorize with your Higgsfield account — اشتراك مدفوع (ربيع على Max). أكّده ربيع بنفسه ٤ نوفمبر.",
+  "verified_at": "2026-11-04 22:41:48"
+ },
+ {
+  "id": "suno",
+  "verified_url": "https://api.suno.com/mcp",
+  "verified_source": "https://help.suno.com/en/articles/14551425",
+  "verified_quote": "claude mcp add --transport http suno https://api.suno.com/mcp ثم /mcp — Beta وممكن يحتاج تفعيل وصول مبكر. أكّده ربيع بنفسه ٤ نوفمبر.",
+  "verified_at": "2026-11-04 22:41:48"
+ },
+ {
+  "id": "runway",
+  "verified_url": "https://mcp.runwayml.com/mcp",
+  "verified_source": "https://help.runwayml.com/hc/en-us/articles/51931843164691-Runway-MCP",
+  "verified_quote": "No separate API key is required – generations are tied to your existing Runway plan (https://runwayml.com/news/mcp). بالكريدت بس، من غير Explore Mode. أكّده ربيع بنفسه ٤ نوفمبر.",
+  "verified_at": "2026-11-04 22:41:48"
+ }
+]
