@@ -1,92 +1,83 @@
 # تنزيل البرنامج على الماك من الصفر
 
-لماك فاضي (MacBook Air M1، 8 جيجا)، وعليه Node 24. البرنامج بيتحط في `~/Liine24`، وآخر خطوة بيفتح على `http://127.0.0.1:4317` ببيانات فاضية.
+لماك فاضي بمعالج Apple (MacBook Air M1، 8 جيجا). من غير sudo، ومن غير Homebrew، ومن غير أدوات Apple للمطورين. البرنامج بيتحط في `~/Liine24`، وآخر خطوة بيفتح على `http://127.0.0.1:4317` ببيانات فاضية.
 
-كل الأوامر بتتكتب في Terminal (Spotlight ← اكتب Terminal). انسخ كل أمر لوحده ودوس Enter.
+## الطريق القصير: أمر واحد
+
+افتح Terminal (Spotlight ← اكتب Terminal)، والصق السطر ده ودوس Enter:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rabeeajameel635/Liine24/refs/heads/claude/rabee-studio/install.sh | bash
+```
+
+السكريبت (`install.sh`) بيعمل الأربع خطوات اللي تحت لوحده، وبيقف بسطر `✗` لو حاجة وقعت. تقدر تشغّله تاني في أي وقت: اللي موجود بيفضل، والكود بيتحدّث.
+
+**لو نجح:** أربع عناوين (`١ Node`، `٢ الكود`، `٣ ffmpeg`، `٤ التنصيب والتشغيل`)، وبعدها الست خطوات اللي في الخطوة ٤ تحت، وآخر سطر `البرنامج شغال هنا`، والمتصفح بيفتح لوحده.
 
 ## اللي بينزل من النت
 
-| الحاجة | التنزيل | على القرص | ملاحظة |
+| الحاجة | التنزيل | على القرص | منين |
 |---|---|---|---|
-| الكود (git أو ZIP) | حوالي 80 ميجا | حوالي 85 ميجا | مقاس |
-| الحزم (`npm install`) | حوالي 200 ميجا | حوالي 500 ميجا | تقدير للماك؛ المقاس على لينكس 784 ميجا، وأغلبه محرّك فحص الوش |
-| موديلات الوش | 37 ميجا | 37 ميجا | مقاس |
-| ffmpeg عن طريق Homebrew | مئات الميجات | حوالي 1 جيجا | تقدير، ما اتقاسش على ماك |
-| أدوات Apple للمطورين (لو Homebrew مش موجود) | حوالي 1 جيجا | 2 لـ 3 جيجا | تقدير؛ دي أتقل حاجة، وبتنزّل git معاها |
+| الكود (ZIP) | 80 ميجا | 85 ميجا | GitHub |
+| Node 26.13 (بس لو مش موجود في `~/.local`) | 58 ميجا | حوالي 200 ميجا | nodejs.org، tarball رسمي |
+| ffmpeg وffprobe | 38 ميجا | 91 ميجا | نسخة ffmpeg 6.1.1 جاهزة لـ arm64 من إصدارات مشروع ffmpeg-static على GitHub |
+| الحزم (`npm install`) | حوالي 150 ميجا | 478 ميجا | npm |
+| موديلات الوش | 37 ميجا | 37 ميجا | OpenCV Zoo |
+| **المجموع** | **حوالي 365 ميجا** (305 لو Node موجود) | **حوالي 900 ميجا** (700 لو Node موجود) | |
 
-الخطوة ٢ هي التقيلة. الباقي كله حوالي 320 ميجا تنزيل.
+أرقام التنزيل مقاسة. التنزيل أقل من 500 ميجا، لكن المساحة على القرص بعد الفك أكبر.
 
-## ١. اتأكد من Node
+Node وffmpeg بيتأكد من بصمة SHA-256 بتاعتهم قبل ما يتحطوا، ولو البصمة مش مطابقة الملف بيتمسح والسكريبت بيقف.
 
-```bash
-node -v
-```
+## الطريق اليدوي: نفس الخطوات واحدة واحدة
 
-**لو نجحت:** `v24.22.0` أو أي رقم بيبدأ بـ 24 أو أكبر.
+انسخ كل أمر لوحده. كل الأوامر في نفس شباك Terminal، لأن الخطوة ١ بتحفظ مكان Node في المتغير `NODE_BIN` للشباك ده بس.
 
-## ٢. ffmpeg
+### ١. Node
 
-```bash
-ffmpeg -version
-```
-
-**لو نجحت:** أول سطر `ffmpeg version …`. عدّي على الخطوة ٣.
-
-**لو طلع `command not found`:** شوف Homebrew موجود ولا لأ:
+دوّر عليه في `~/.local`:
 
 ```bash
-brew -v
+NODE_BIN=$(ls -d ~/.local/node-v2*-darwin-arm64/bin | tail -1); echo "$NODE_BIN"
 ```
 
-لو طلع `Homebrew 4…` أو أحدث، عدّي على أمر `brew install ffmpeg` تحت. لو `command not found`، نزّله (هيطلب باسورد الماك، وهينزّل أدوات Apple للمطورين لوحده):
+**لو موجود:** سطر زي `/Users/…/.local/node-v26.13.0-darwin-arm64/bin`. عدّي على أمر التأكد.
+
+**لو مش موجود:** `no matches found` أو سطر فاضي. نزّله (من غير pkg ولا sudo):
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+mkdir -p ~/.local && curl -fL -o ~/.local/node.tar.gz https://nodejs.org/dist/v26.13.0/node-v26.13.0-darwin-arm64.tar.gz
 ```
 
-**لو نجحت:** آخر الكلام `Installation successful!` وتحته `Next steps`. نفّذ السطرين دول عشان Terminal يشوف `brew`:
+**لو نجحت:** شريط تنزيل بيوصل 100%.
 
 ```bash
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+shasum -a 256 ~/.local/node.tar.gz
 ```
+
+**لو نجحت:** السطر بيبدأ بـ `d38bd5e5a2ddce6bbb5ce45e46e208337da4d51fffe611e567fd32073d6439f6`. لو رقم تاني، امسح الملف وما تكمّلش.
 
 ```bash
-eval "$(/opt/homebrew/bin/brew shellenv)"
+tar -xzf ~/.local/node.tar.gz -C ~/.local && rm ~/.local/node.tar.gz && NODE_BIN=~/.local/node-v26.13.0-darwin-arm64/bin
 ```
 
-وبعدها:
+**لو نجحت:** مفيش أي كلام بيظهر.
+
+أمر التأكد (بالمسار الكامل):
 
 ```bash
-brew install ffmpeg
+"$NODE_BIN/node" -v
 ```
 
-**لو نجحت:** `ffmpeg -version` بيطبع `ffmpeg version …`.
+**لو نجحت:** `v26.13.0`، أو أي رقم بيبدأ بـ 24 أو أكبر.
 
-## ٣. هات الكود في `~/Liine24`
-
-اختار طريقة واحدة.
-
-### الطريقة أ · git
-
-```bash
-git --version
-```
-
-**لو نجحت:** `git version 2.…`. لو ظهر شباك بيطلب تنزيل أدوات المطورين، دوس Cancel واستخدم الطريقة ب.
-
-```bash
-git clone --depth 1 https://github.com/rabeeajameel635/Liine24.git ~/Liine24
-```
-
-**لو نجحت:** `Cloning into '/Users/…/Liine24'…` وآخره `done.` من غير كلمة `fatal`.
-
-### الطريقة ب · ZIP (من غير git)
+### ٢. الكود في `~/Liine24`
 
 ```bash
 curl -L -o ~/Liine24.zip https://github.com/rabeeajameel635/Liine24/archive/refs/heads/claude/rabee-studio.zip
 ```
 
-**لو نجحت:** شريط تنزيل بيوصل 100%، وحجم حوالي 80M.
+**لو نجحت:** عدّاد تنزيل بيقف عند حوالي 80M.
 
 ```bash
 unzip -q ~/Liine24.zip -d ~ && mv ~/Liine24-claude-rabee-studio ~/Liine24 && rm ~/Liine24.zip
@@ -94,22 +85,51 @@ unzip -q ~/Liine24.zip -d ~ && mv ~/Liine24-claude-rabee-studio ~/Liine24 && rm 
 
 **لو نجحت:** مفيش أي كلام بيظهر.
 
-### اتأكد (للطريقتين)
-
 ```bash
 ls ~/Liine24
 ```
 
-**لو نجحت:** `CLAUDE.md  README.md  app  docs  index.html  projects  studio`
+**لو نجحت:** `CLAUDE.md  README.md  app  docs  index.html  install.sh  projects  studio`
 
-## ٤. نصّب وشغّل
+### ٣. ffmpeg في `~/Liine24/app/bin`
+
+البرنامج بيدوّر على ffmpeg وffprobe في الفولدر ده الأول، وبعده في باقي الجهاز.
 
 ```bash
-cd ~/Liine24/app
+mkdir -p ~/Liine24/app/bin && cd ~/Liine24/app/bin
 ```
 
 ```bash
-npm run mac-setup
+curl -fL -o ffmpeg.gz https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz
+```
+
+```bash
+curl -fL -o ffprobe.gz https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffprobe-darwin-arm64.gz
+```
+
+**لو نجحت:** كل واحد شريط تنزيل بيوصل 100% (19 ميجا).
+
+```bash
+shasum -a 256 ffmpeg.gz ffprobe.gz
+```
+
+**لو نجحت:** السطرين دول بالظبط:
+
+```
+8923876afa8db5585022d7860ec7e589af192f441c56793971276d450ed3bbfa  ffmpeg.gz
+d986a8ec7b030899fe66a8a288ed809a3543338705a3ce178cfb85869c5d80be  ffprobe.gz
+```
+
+```bash
+gunzip ffmpeg.gz ffprobe.gz && chmod +x ffmpeg ffprobe && ./ffmpeg -version | head -1
+```
+
+**لو نجحت:** سطر بيبدأ بـ `ffmpeg version 6.1.1`.
+
+### ٤. نصّب وشغّل
+
+```bash
+cd ~/Liine24/app && PATH="$NODE_BIN:$PATH" npm run mac-setup
 ```
 
 ده بينزّل الحزم والموديلات، ويبني الواجهة، ويعمل قاعدة بيانات فاضية، ويشغّل البرنامج. أول مرة بياخد كام دقيقة حسب النت.
@@ -118,7 +138,7 @@ npm run mac-setup
 
 ```
 ١  الأدوات
-✓ Node 24.22.0
+✓ Node 26.13.0
 ✓ ffmpeg
 ✓ ffprobe
 ٢  الحزم
@@ -140,7 +160,7 @@ npm run mac-setup
 - لو الماك سأل إن كان node يستقبل اتصالات: Allow.
 - سيب شباك الـ Terminal مفتوح. قفله بيقفل البرنامج.
 
-## ٥. البرنامج مفتوح
+### ٥. البرنامج مفتوح
 
 المتصفح بيفتح لوحده على `http://127.0.0.1:4317/#/setup`.
 
@@ -154,20 +174,28 @@ npm run mac-setup
 
 ## بعد كده
 
-التشغيل في أي يوم:
+**التشغيل في أي يوم:** دبل كليك على `~/Liine24/app/mac-setup.command` (بيلاقي Node في `~/.local` لوحده). أول مرة الماك ممكن يقول الملف مش موثوق: كليك يمين عليه، وبعدين Open. أو من Terminal:
 
 ```bash
-cd ~/Liine24/app
+cd ~/Liine24/app && PATH="$(ls -d ~/.local/node-v2*-darwin-arm64/bin | tail -1):$PATH" npm start
 ```
 
-```bash
-npm start
-```
+**لو نجحت:** `غرفة الإخراج → http://127.0.0.1:4317`. الإيقاف بـ Ctrl+C.
 
-**لو نجحت:** `غرفة الإخراج → http://127.0.0.1:4317`، وافتح العنوان ده في المتصفح. الإيقاف بـ Ctrl+C.
+**تحديث الكود:** شغّل أمر الطريق القصير تاني. بينزّل الكود الجديد فوق القديم، وNode وffmpeg والحزم والبيانات بيفضلوا.
 
-تحديث الكود: بالطريقة أ `git -C ~/Liine24 pull`. بالطريقة ب امسح `~/Liine24` وكرّر الخطوة ٣ والخطوة ٤ (البيانات في مكان تاني ومش بتتمسح).
+## بدايل
+
+- **git بدل ZIP** (لو git متنصّب عندك): `git clone --depth 1 https://github.com/rabeeajameel635/Liine24.git ~/Liine24`. لو `install.sh` لقى `~/Liine24/.git` بيسيب الكود زي ما هو، والتحديث يبقى `git -C ~/Liine24 pull`. على ماك من غير أدوات Apple، أمر `git` بيطلّع شباك يطلب تنزيلها (حوالي جيجا): دوس Cancel.
+- **Homebrew بدل نسخة ffmpeg الجاهزة:** `brew install ffmpeg`. البرنامج بيستخدم اللي في `app/bin` لو موجود، وإلا اللي Homebrew نزّله. ده أتقل (محتاج أدوات Apple، وباسورد الماك وقت تنصيب Homebrew).
 
 ## اتجرب إزاي
 
-يوم ٢٣ نوفمبر، في السحابة على لينكس بـ Node 24.22.3: نسخة نضيفة من الكود وفولدر بيانات فاضي، و`npm run mac-setup` عدّى الست خطوات، والصفحتين فتحوا من غير أخطاء. **ما اتجربش على ماك حقيقي لسه**، والخطوة ٢ (Homebrew وffmpeg) ما اتجربتش خالص.
+يوم ٢٣ نوفمبر، في السحابة على لينكس، بفولدر home فاضي:
+
+- **تنزيل Node:** نزل، والبصمة اتطابقت، واتفك في `~/.local`.
+- **الكود:** الـ ZIP نزل واتفك في `~/Liine24` بالملفات الصح.
+- **ffmpeg:** نزل والبصمة اتطابقت. الملفين Mach-O arm64، وفيهم libx264 والفلاتر اللي البرنامج بيستخدمها.
+- **التنصيب والتشغيل:** `install.sh` كمّل لحد ما البرنامج فتح على 4317 من قاعدة فاضية، والبرنامج لقى ffmpeg من `app/bin`.
+
+**اللي ما اتجربش:** تشغيل نسخ الماك من Node وffmpeg نفسها (لينكس ما يقدرش يشغّلها، فالتجربة كمّلت بنسخ لينكس مكانها)، وأي حاجة على ماك حقيقي.

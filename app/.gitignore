@@ -2,3 +2,4 @@ node_modules/
 web/dist/
 *.sqlite
 *.sqlite-*
+bin/
