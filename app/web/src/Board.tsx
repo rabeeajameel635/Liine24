@@ -319,7 +319,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
 
   return (
     <div className="seg-sheet-wrap" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-      <section ref={sheetEl} className="seg-sheet" role="dialog" aria-label={`مقطع ${s.label ?? s.idx}`}>
+      <section ref={sheetEl} className="seg-sheet" role="dialog" aria-modal="true" aria-label={panel ? `غرفة ${arNum(s.idx)} · ${PANEL[panel]}` : `غرفة ${arNum(s.idx)} · ${section?.name ?? ''} · ${STATUS[s.status].t}`}>
         <div className="grab" />
         {!panel ? <>
           <header className="ss-head">
@@ -330,7 +330,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </header>
 
           {/* the frame leads: the segment's video, else its newest take, else the first storyboard frame */}
-          <figure className="ss-hero" onClick={() => setPanel(heroTake ? 'takes' : 'board')}>
+          <figure className="ss-hero" role="button" tabIndex={0} aria-label={heroVideo ? 'فيديو الغرفة · افتح النسخ' : heroPoster ? 'كادر الغرفة · افتح الكادرات' : 'لسه مفيش كادر · افتح الكادرات'}
+            onClick={() => setPanel(heroTake ? 'takes' : 'board')} onKeyDown={e => { if (e.key === 'Enter') setPanel(heroTake ? 'takes' : 'board'); }}>
             {heroVideo ? <video key={heroVideo} src={heroVideo} poster={heroPoster ?? undefined} muted loop playsInline autoPlay preload="metadata" />
               : heroPoster ? <img src={heroPoster} alt="" className="kb" /> : null}
             <figcaption className="hero-cap glass"><i className="dot" style={{ background: STATUS[s.status].c }} /><b>{STATUS[s.status].t}</b></figcaption>
@@ -342,27 +343,27 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             <FitStrip fits={fits} segId={seg.id} stand={heroPoster} />
           </section>}
 
-          <div className="ss-wave">
+          <div className="ss-wave" role="group" aria-label={`شريط الوقت · ${arNum(bars)} بار · من ${tcode(s.start_s)} لحد ${tcode(s.end_s)}`}>
             <button className="gbtn icon play" onClick={play} aria-label="شغّل المقطع" disabled={!song.audio}>{playing ? <Pause size={26} weight="fill" /> : <Play size={26} weight="fill" />}</button>
             <div className="bar-ruler">
-              <div className="mini-wave">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
+              <div className="mini-wave" aria-hidden="true">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
               <div className="bar-ticks" aria-hidden="true">{Array.from({ length: Math.max(0, bars - 1) }, (_, i) => <i key={i} style={{ insetInlineEnd: `${(i + 1) / bars * 100}%` }} />)}</div>
               {pos != null && <i className="playhead" style={{ insetInlineEnd: `${pos * 100}%` }} />}
               <div className="bar-meta">
-                <span className="tcode">{tcode(s.start_s)}</span>
+                <span className="tcode" aria-label={`البداية ${tcode(s.start_s)}`}>{tcode(s.start_s)}</span>
                 <span className="bars-ctl">
                   <button className="gbtn icon soft" onClick={() => edge(-1)} aria-label="بار أقل"><Minus size={20} /></button>
                   <b>{arNum(bars)} بار</b>
                   <button className="gbtn icon soft" onClick={() => edge(1)} aria-label="بار أكتر"><Plus size={20} /></button>
                 </span>
-                <span className="tcode">{tcode(s.end_s)}</span>
+                <span className="tcode" aria-label={`النهاية ${tcode(s.end_s)}`}>{tcode(s.end_s)}</span>
               </div>
             </div>
             {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
           </div>
 
           {/* the room: its shots as a table (stars from the check, Claude's lamp, Rabee's lamp), then its folders */}
-          {room && room.shots.length > 0 && <section className="ss-sec">
+          {room && room.shots.length > 0 && <section className="ss-sec" aria-label={`اللقطات · ${arNum(room.approved)} من ${arNum(room.total)} معتمدة`}>
             <div className="sec-h static"><h2>اللقطات</h2><span>{arNum(room.approved)} من {arNum(room.total)}</span></div>
             <RoomTable room={room} stand={heroPoster} reload={() => { reloadRoom(); loadTakes(); reload(); }}
               open={(x, i) => { if (x.take_id) { setPick({ take: x.take_id }); setPanel('takes'); } else { setPick({ frame: i }); setPanel('board'); } }} />
@@ -373,10 +374,10 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           {/* الزاوية: one reference beside our frame, read-only; set on the Mac by scripts/study.ts */}
           {lens && <section className="ss-sec">
             <button className="sec-h" data-panel="lens" onClick={() => setPanel('lens')}><h2>الزاوية</h2><CaretLeft size={22} /></button>
-            <div role="button" tabIndex={0} className="lens-open" onClick={() => setPanel('lens')} onKeyDown={e => { if (e.key === 'Enter') setPanel('lens'); }}><LensPair compact ours={{ thumb: heroPoster }} lens={lens} /></div>
+            <div role="button" tabIndex={0} className="lens-open" aria-label="الزاوية · كادرنا جنب المرجع" onClick={() => setPanel('lens')} onKeyDown={e => { if (e.key === 'Enter') setPanel('lens'); }}><LensPair compact ours={{ thumb: heroPoster }} lens={lens} /></div>
           </section>}
 
-          <div className="ss-rows ss-group">
+          <div className="ss-rows ss-group" role="group" aria-label="أدوات الغرفة">
             <Row icon={At} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
             {video ? <VideoRow id={video.id} thumb={null} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
@@ -394,7 +395,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               </div>
             </Card>
           )}
-          <div className="ss-primary">{primary}</div>
+          <div className="ss-primary" role="group" aria-label="الخطوة الجاية">{primary}</div>
         </> : <>
           <header className="ss-head">
             <button className="gbtn icon soft" onClick={() => setPanel(null)} aria-label="رجوع"><CaretRight size={24} /></button>

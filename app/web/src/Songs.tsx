@@ -70,7 +70,7 @@ export function Home({ open }: { open: (song: string, seg?: string) => void }) {
             <button className="gbtn cover-btn" onClick={() => open(cover.song_id, cover.segment_id)}>اشتغل على <span className="ltr">{cover.seg_label ?? ''}</span></button>
           </div>
         </section>}
-        {cover === null && <section className="cover empty"><div className="cover-text"><h1 className="cover-idea">الإلهام بيتجاب</h1><p className="cover-credit">أول عمل بيوصل لما المصادر تتقرا على الماك</p></div></section>}
+        {cover === null && <p className="cover-none">مفيش إلهام لسه</p>}
 
         {/* كمّل من حيث وقفت */}
         {song && <section className="next-head">
