@@ -37,6 +37,8 @@ export function Percent({ value, size = 56, onPicture }: { value: number; size?:
   );
 }
 
+const stars = (s: RoomShot) => s.stars ? `${arNum(s.stars)} نجوم من ٥` : s.checked === 'partial' ? 'اتفحصت من غير الوش' : s.take_id ? 'بتتفحص' : 'لسه مفيش نسخة';
+const state = (s: RoomShot) => `${stars(s)} · ${s.claude ? 'Claude: عدّت الفحص' : 'Claude: لسه'} · ${s.approved ? 'معتمدة' : 'مش معتمدة'}`;
 const sceneOf = (t: string) => t.split('،')[0].replace(/\([^)]*\)/g, ' ').replace(/["«][^"»]*["»]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** The shots of the room. A row opens its take (or its frame when nothing arrived yet). */
@@ -51,20 +53,22 @@ export function RoomTable({ room, stand, reload, open }: { room: Room; stand: st
   return (
     <div className="room-table" role="table" aria-label="لقطات الغرفة">
       {room.shots.map((s, i) => (
-        <div key={s.code} className="room-row" role="row">
-          <button className="room-open" onClick={() => open(s, i)} aria-label={sceneOf(s.title)}>
+        <div key={s.code} className="room-row" role="row" aria-label={`لقطة ${arNum(i + 1)} · ${sceneOf(s.title)} · ${state(s)}`}>
+          <span role="cell" className="room-cell">
+          <button className="room-open" onClick={() => open(s, i)} aria-label={`لقطة ${arNum(i + 1)} · ${sceneOf(s.title)} · ${stars(s)} · افتح`}>
             <span className="room-pic">{(s.thumb ?? stand) && <img src={s.thumb ?? stand ?? ''} alt="" loading="lazy" className={s.thumb ? undefined : 'temp'} />}<i className="room-n">{arNum(i + 1)}</i></span>
             <span className="room-text">
               <b>{sceneOf(s.title)}</b>
-              <span className="room-stars" aria-label={s.stars ? `${s.stars} من ٥` : s.checked === 'partial' ? 'من غير الوش' : 'لسه'}>
+              <span className="room-stars">
                 {s.stars ? [1, 2, 3, 4, 5].map(n => <Star key={n} size={18} weight={n <= s.stars! ? 'fill' : 'regular'} />) : <small>{s.checked === 'partial' ? 'من غير الوش' : s.take_id ? 'بيتفحص' : 'لسه'}</small>}
               </span>
             </span>
           </button>
+          </span>
           {/* Claude's lamp: lit when the take passed the check. A recommendation, never an approval. */}
-          <span className={'lamp claude' + (s.claude ? ' on' : '')} title={s.claude ? 'Claude: عدّت الفحص' : 'Claude: لسه'} aria-label={s.claude ? 'Claude: عدّت الفحص' : 'Claude: لسه'}><Sparkle size={20} weight={s.claude ? 'fill' : 'regular'} /></span>
+          <span role="cell"><span role="img" className={'lamp claude' + (s.claude ? ' on' : '')} title={s.claude ? 'Claude: عدّت الفحص' : 'Claude: لسه'} aria-label={s.claude ? 'Claude: عدّت الفحص' : 'Claude: لسه'}><Sparkle size={20} weight={s.claude ? 'fill' : 'regular'} aria-hidden="true" /></span></span>
           {/* Rabee's lamp: his «اعتمد» on this shot's take. */}
-          <button className={'lamp rabee' + (s.approved ? ' on' : '')} disabled={busy === s.code || !s.take_id} aria-pressed={s.approved} onClick={() => approve(s)} aria-label={s.approved ? 'معتمدة' : 'اعتمد'} title={s.approved ? 'معتمدة' : s.take_id ? 'اعتمد' : 'لسه مفيش نسخة'}><CheckCircle size={26} weight={s.approved ? 'fill' : 'regular'} /></button>
+          <span role="cell"><button className={'lamp rabee' + (s.approved ? ' on' : '')} disabled={busy === s.code || !s.take_id} aria-pressed={s.approved} onClick={() => approve(s)} aria-label={s.approved ? `لقطة ${arNum(i + 1)} معتمدة · شيل الاعتماد` : s.take_id ? `اعتمد لقطة ${arNum(i + 1)}` : `لقطة ${arNum(i + 1)} · لسه مفيش نسخة تتعتمد`} title={s.approved ? 'معتمدة' : s.take_id ? 'اعتمد' : 'لسه مفيش نسخة'}><CheckCircle size={26} weight={s.approved ? 'fill' : 'regular'} aria-hidden="true" /></button></span>
         </div>
       ))}
     </div>
@@ -74,10 +78,10 @@ export function RoomTable({ room, stand, reload, open }: { room: Room; stand: st
 /** The room's folders: pictures, ready shots, what is left, and the backup plan. Each opens the panel that already holds it. */
 export function RoomFolders({ pics, ready, left, go }: { pics: number; ready: number; left: number; go: (p: 'board' | 'takes' | 'shots' | 'prompt') => void }) {
   const F = ({ p, I, t, n }: { p: 'board' | 'takes' | 'shots' | 'prompt'; I: typeof Images; t: string; n?: number }) => (
-    <button className="folder" data-panel={p} onClick={() => go(p)}><I size={26} /><b>{t}</b>{n != null && <small>{arNum(n)}</small>}</button>
+    <button className="folder" data-panel={p} onClick={() => go(p)} aria-label={n != null ? `${t} · ${arNum(n)}` : t}><I size={26} /><b>{t}</b>{n != null && <small>{arNum(n)}</small>}</button>
   );
   return (
-    <div className="folders">
+    <div className="folders" role="group" aria-label="مجلدات الغرفة">
       <F p="board" I={Images} t="الصور" n={pics} />
       <F p="takes" I={FilmStrip} t="الجاهز" n={ready} />
       <F p="shots" I={Hourglass} t="الباقي" n={left} />

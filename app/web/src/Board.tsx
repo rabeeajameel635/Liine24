@@ -240,7 +240,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [s, setS] = useState<Seg>(seg);
   const [plan, setPlan] = useState<'primary' | 'backup'>('primary');
   const [picker, setPicker] = useState<'refs' | 'video' | null>(null);
-  const [kit, setKit] = useState<{ kit: string; zip: string | null; files: number; audio: boolean; open: string } | null>(null);
+  const [kit, setKit] = useState<{ kit: string; dir: string; zip: string | null; files: number; audio: boolean; open: string; shots: { code: string | null; title: string; file: string; images: number; brief: string }[] } | null>(null);
   const [err, setErr] = useState<{ what: string; fix?: string; confirm?: string } | null>(null);
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
@@ -319,7 +319,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
 
   return (
     <div className="seg-sheet-wrap" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-      <section ref={sheetEl} className="seg-sheet" role="dialog" aria-label={`مقطع ${s.label ?? s.idx}`}>
+      <section ref={sheetEl} className="seg-sheet" role="dialog" aria-modal="true" aria-label={panel ? `غرفة ${arNum(s.idx)} · ${PANEL[panel]}` : `غرفة ${arNum(s.idx)} · ${section?.name ?? ''} · ${STATUS[s.status].t}`}>
         <div className="grab" />
         {!panel ? <>
           <header className="ss-head">
@@ -330,7 +330,8 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </header>
 
           {/* the frame leads: the segment's video, else its newest take, else the first storyboard frame */}
-          <figure className="ss-hero" onClick={() => setPanel(heroTake ? 'takes' : 'board')}>
+          <figure className="ss-hero" role="button" tabIndex={0} aria-label={heroVideo ? 'فيديو الغرفة · افتح النسخ' : heroPoster ? 'كادر الغرفة · افتح الكادرات' : 'لسه مفيش كادر · افتح الكادرات'}
+            onClick={() => setPanel(heroTake ? 'takes' : 'board')} onKeyDown={e => { if (e.key === 'Enter') setPanel(heroTake ? 'takes' : 'board'); }}>
             {heroVideo ? <video key={heroVideo} src={heroVideo} poster={heroPoster ?? undefined} muted loop playsInline autoPlay preload="metadata" />
               : heroPoster ? <img src={heroPoster} alt="" className="kb" /> : null}
             <figcaption className="hero-cap glass"><i className="dot" style={{ background: STATUS[s.status].c }} /><b>{STATUS[s.status].t}</b></figcaption>
@@ -342,27 +343,27 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
             <FitStrip fits={fits} segId={seg.id} stand={heroPoster} />
           </section>}
 
-          <div className="ss-wave">
+          <div className="ss-wave" role="group" aria-label={`شريط الوقت · ${arNum(bars)} بار · من ${tcode(s.start_s)} لحد ${tcode(s.end_s)}`}>
             <button className="gbtn icon play" onClick={play} aria-label="شغّل المقطع" disabled={!song.audio}>{playing ? <Pause size={26} weight="fill" /> : <Play size={26} weight="fill" />}</button>
             <div className="bar-ruler">
-              <div className="mini-wave">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
+              <div className="mini-wave" aria-hidden="true">{peaks ? peaks.map((p, i) => <i key={i} style={{ height: `${Math.max(6, p * 100)}%` }} />) : null}</div>
               <div className="bar-ticks" aria-hidden="true">{Array.from({ length: Math.max(0, bars - 1) }, (_, i) => <i key={i} style={{ insetInlineEnd: `${(i + 1) / bars * 100}%` }} />)}</div>
               {pos != null && <i className="playhead" style={{ insetInlineEnd: `${pos * 100}%` }} />}
               <div className="bar-meta">
-                <span className="tcode">{tcode(s.start_s)}</span>
+                <span className="tcode" aria-label={`البداية ${tcode(s.start_s)}`}>{tcode(s.start_s)}</span>
                 <span className="bars-ctl">
                   <button className="gbtn icon soft" onClick={() => edge(-1)} aria-label="بار أقل"><Minus size={20} /></button>
                   <b>{arNum(bars)} بار</b>
                   <button className="gbtn icon soft" onClick={() => edge(1)} aria-label="بار أكتر"><Plus size={20} /></button>
                 </span>
-                <span className="tcode">{tcode(s.end_s)}</span>
+                <span className="tcode" aria-label={`النهاية ${tcode(s.end_s)}`}>{tcode(s.end_s)}</span>
               </div>
             </div>
             {song.audio && <audio ref={audio} src={song.audio} preload="none" />}
           </div>
 
           {/* the room: its shots as a table (stars from the check, Claude's lamp, Rabee's lamp), then its folders */}
-          {room && room.shots.length > 0 && <section className="ss-sec">
+          {room && room.shots.length > 0 && <section className="ss-sec" aria-label={`اللقطات · ${arNum(room.approved)} من ${arNum(room.total)} معتمدة`}>
             <div className="sec-h static"><h2>اللقطات</h2><span>{arNum(room.approved)} من {arNum(room.total)}</span></div>
             <RoomTable room={room} stand={heroPoster} reload={() => { reloadRoom(); loadTakes(); reload(); }}
               open={(x, i) => { if (x.take_id) { setPick({ take: x.take_id }); setPanel('takes'); } else { setPick({ frame: i }); setPanel('board'); } }} />
@@ -373,28 +374,32 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           {/* الزاوية: one reference beside our frame, read-only; set on the Mac by scripts/study.ts */}
           {lens && <section className="ss-sec">
             <button className="sec-h" data-panel="lens" onClick={() => setPanel('lens')}><h2>الزاوية</h2><CaretLeft size={22} /></button>
-            <div role="button" tabIndex={0} className="lens-open" onClick={() => setPanel('lens')} onKeyDown={e => { if (e.key === 'Enter') setPanel('lens'); }}><LensPair compact ours={{ thumb: heroPoster }} lens={lens} /></div>
+            <div role="button" tabIndex={0} className="lens-open" aria-label="الزاوية · كادرنا جنب المرجع" onClick={() => setPanel('lens')} onKeyDown={e => { if (e.key === 'Enter') setPanel('lens'); }}><LensPair compact ours={{ thumb: heroPoster }} lens={lens} /></div>
           </section>}
 
-          <div className="ss-rows ss-group">
+          <div className="ss-rows ss-group" role="group" aria-label="أدوات الغرفة">
             <Row icon={At} title="المراجع" line={res?.refs.length ? (res.problems.length ? `${arNum(res.refs.length)} مراجع · فيه ${arNum(res.problems.length)} مشكلة` : `${arNum(res.refs.length)} مراجع · ${arNum(res.files.length + s.refs.filter(a => !res.files.some(f => f.asset === a)).length)} صور بالترتيب`) : 'اكتب @ في البرومبت'} onClick={() => setPanel('refs')} />
             <Row icon={TextAa} title="البرومبت" line={<span className="ltr">{song.tools[toolKey]?.name ?? toolKey}</span>} onClick={() => setPanel('prompt')} />
             {video ? <VideoRow id={video.id} thumb={null} open={() => setPanel('video')} /> : <Row icon={FilmStrip} title="الفيديو" line="مستني التوليد" onClick={() => setPanel('video')} />}
           </div>
 
           {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}{err.confirm === 'no_donia' && <button className="gbtn soft" onClick={() => prepare(true)}>جهّز برضه</button>}</div></div>}
+          {/* طقم التوليد: one kit per shot. «انسخ» copies everything Claude needs (prompt, numbered references, the file name and
+              the Inbox); nothing is sent from here. The video that lands in the Inbox with that name links itself to the room. */}
           {kit && (
-            <Card title="الكيت جاهز" line={`${arNum(kit.files)} صور والبرومبت${kit.audio ? ' والصوت' : ''}`}
-              action={kit.zip ? <a className="gbtn secondary" href={kit.zip}><DownloadSimple size={22} /> نزّل</a> : undefined}>
-              <div className="card-more">
-                <div className="row-btns">
-                  <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(res?.prompt_out ?? prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ البرومبت</button>
-                  {kit.open && <a className="gbtn soft" href={kit.open} target="_blank" rel="noreferrer"><ArrowSquareOut size={22} /> افتح الموقع</a>}
-                </div>
+            <Card title="طقم التوليد جاهز" line={`${arNum(kit.shots.length)} لقطات · ${arNum(kit.files)} صور`}
+              action={kit.zip ? <a className="gbtn secondary" href={kit.zip} aria-label="نزّل الطقم"><DownloadSimple size={22} /> نزّل</a> : undefined}>
+              <div className="card-more kit-shots" role="list" aria-label="لقطات الطقم">
+                {kit.shots.map((k, i) => (
+                  <div key={k.file} className="kit-shot" role="listitem">
+                    <b>{k.title.split('،')[0]}</b>
+                    <button className="gbtn soft" aria-label={`انسخ طقم لقطة ${arNum(i + 1)} · ${k.title.split('،')[0]}`} onClick={() => { navigator.clipboard?.writeText(k.brief); toast('اتنسخ · ابعته لـ Claude'); }}><Copy size={22} /> انسخ</button>
+                  </div>
+                ))}
               </div>
             </Card>
           )}
-          <div className="ss-primary">{primary}</div>
+          <div className="ss-primary" role="group" aria-label="الخطوة الجاية">{primary}</div>
         </> : <>
           <header className="ss-head">
             <button className="gbtn icon soft" onClick={() => setPanel(null)} aria-label="رجوع"><CaretRight size={24} /></button>
@@ -471,7 +476,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               {video?.src ? <video src={video.src} poster={video.thumb ?? undefined} controls playsInline /> : <button className="vs-empty" onClick={() => setPicker('video')}><FilmStrip size={40} /><span>اسحب الفيديو هنا</span></button>}
             </div>
             {video && <VideoQc id={video.id} />}
-            {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
+            {kit && <p className="panel-line">الفيديو اللي اسمه زي اللي في الطقم هيتربط بالغرفة لوحده لما ينزل في Inbox</p>}
           </>}
 
           {panel === 'lens' && lens && <LensPanel ours={{ thumb: heroPoster, src: heroVideo }} lens={lens} />}
