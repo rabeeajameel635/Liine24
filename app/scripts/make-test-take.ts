@@ -3,6 +3,7 @@
 // The clip is dropped into the same Inbox the app watches, so the shot-code auto-link, the take and the check run exactly as
 // for a real file. The name carries the shot code and TEST, so the app marks it test = 1: «تجربة» in the sheet, never in the gallery.
 // Usage: node scripts/make-test-take.ts [--code H2] [--seconds <segment length>] [--frames a.png,b.png,c.png] [--inbox <dir>] [--wait <port>]
+import '../server/bin.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';

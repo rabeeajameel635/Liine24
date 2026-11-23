@@ -1,4 +1,5 @@
 // غرفة الإخراج — local server. Run: node server/index.ts (Node 24+ strips TypeScript types natively).
+import './bin.ts';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';

@@ -1,6 +1,7 @@
 // npm run mac-setup — first run on the Mac, in order:
 //   ١ الأدوات (Node, ffmpeg, Claude Code)  ٢ الحزم  ٣ موديلات الوش (SHA-256)  ٤ الواجهة  ٥ قاعدة البيانات والبرنامج  ٦ يفتح «أول تشغيل»
 // It never asks for anything that isn't in «اللي محتاجه مني على الماك» (docs/mac-checklist.md).
+import '../server/bin.ts';
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,7 +23,7 @@ say('١', 'الأدوات');
 const node = Number(process.versions.node.split('.')[0]);
 if (node < 24) { console.log(`✗ Node ${process.versions.node} قديم. البرنامج محتاج Node 24 أو أحدث (عندك Node 26 في ~/.local).`); process.exit(1); }
 console.log(`✓ Node ${process.versions.node}`);
-for (const b of ['ffmpeg', 'ffprobe']) { if (has(b)) console.log(`✓ ${b}`); else { console.log(`✗ ${b} مش موجود. في Terminal: brew install ffmpeg`); process.exit(1); } }
+for (const b of ['ffmpeg', 'ffprobe']) { if (has(b)) console.log(`✓ ${b}`); else { console.log(`✗ ${b} مش موجود. شغّل install.sh (docs/mac-install.md)، أو في Terminal: brew install ffmpeg`); process.exit(1); } }
 if (has('claude')) console.log('✓ Claude Code'); else { console.log('! Claude Code مش موجود: الفحص البصري والإلهام هيستنوه. باقي البرنامج شغال.'); problems++; }
 if (platform() !== 'darwin') console.log('! ده مش ماك: الدخول هيتحفظ في ملف محمي بدل Keychain (للتجربة بس).');
 
