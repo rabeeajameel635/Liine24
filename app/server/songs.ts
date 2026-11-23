@@ -217,7 +217,10 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     db.prepare('DELETE FROM segment WHERE id = ?').run(String(n.id)); reindex(String(g.song_id)); return { ok: true };
   });
 
-  // «جهّز للتوليد»: MCP tools wait for the connection step; bridge tools get one numbered kit (images + prompt + audio clip)
+  // «جهّز للتوليد»: a generation kit («طقم توليد») for every shot of the room. Nothing is sent from inside the app, whatever
+  // the generator: each shot gets its prompt (@ already turned into what that generator reads), its references numbered in
+  // order, and the file name the result must carry. Rabee generates with Claude; the result is dropped in the Inbox, and the
+  // shot code in its name makes it a take of this room (linkInboxTake). A room without shots gets one kit, linked by the kit code.
   app.post('/api/segments/:id/prepare', async (req, reply) => {
     const { id } = req.params as { id: string }; const { prompt, which, confirm_no_donia } = req.body as { prompt: string; which?: 'primary' | 'backup'; confirm_no_donia?: boolean };
     const g = db.prepare('SELECT * FROM segment WHERE id = ?').get(id) as Row; const s = song(String(g.song_id))!;
@@ -228,42 +231,71 @@ export async function songRoutes(app: FastifyInstance, db: DB, dataDir: string) 
     if (blockedShot) return reply.code(409).send({ what: `${blockedShot.code} مقفولة: ${blockedShot.blocked}`, fix: 'ابعت الأصول الناقصة، وبعدها القفل يتفك.' });
     const nums = [...new Set(open.map(o => o.n))];
     if (nums.length) return reply.code(409).send({ what: `فيه ${nums.length === 1 ? 'تعارض' : `${nums.length} تعارضات`} مستني قرارك (${nums.map(n => '#' + n).join('، ')})`, fix: 'قرّر في التعارض الأول. المقطع ده مش هيتولّد قبلها.' });
-    // @ handles → what this generator needs, in its order (server-side, so the kit and the preview can never disagree)
-    const res = resolvePrompt(db, prompt ?? '', String(toolKey), tool.mode);
-    if (res.problems.length) return reply.code(409).send({ what: res.problems[0], fix: res.problems.length > 1 ? `و${res.problems.length - 1} حاجات تانية في «المراجع»` : 'افتح «المراجع» في المقطع.' });
-    // Donia is in this segment but the prompt never says @دنيا: warn before the kit (you can still go ahead)
-    if (!confirm_no_donia && !res.refs.some(r => r.handle === 'دنيا')) {
-      const shots = db.prepare('SELECT code, title, answers, note, prompt FROM shot WHERE segment_id = ?').all(id) as Record<string, string | null>[];
-      const hit = doniaHint([String(g.direction ?? ''), String(g.lyric ?? ''), ...shots.flatMap(x => [x.title, x.answers, x.note, x.prompt])]);
-      if (hit) return reply.code(409).send({ what: 'المقطع فيه دنيا ومفيش @دنيا في البرومبت', fix: `لقيت «${hit}» في وصف المقطع أو لقطاته. ضيف @دنيا، أو جهّز برضه لو اللقطة من غيرها.`, confirm: 'no_donia' });
-    }
-    if (tool.mode === 'mcp') {
-      const conn = db.prepare('SELECT status FROM connection WHERE id = ?').get(tool.via.toLowerCase()) as { status?: string } | undefined;
-      return reply.code(409).send(conn?.status === 'connected'
-        ? { what: `${tool.via} متوصل، والإرسال المباشر بييجي في الخطوة الجاية`, fix: 'لحد ساعتها جهّز البديلة أو استخدم جسر.' }
-        : { what: `${tool.via} مش متوصل لسه`, fix: 'من «الاتصالات» دوس «اختبر الاتصال» وسجّل دخول بحسابك (على الماك).' });
-    }
+
     const code = String(g.kit_code || randomBytes(3).toString('hex'));
     const slug = String(s.title).replace(/[^A-Za-z0-9]+/g, '').slice(0, 10) || 'SONG';
     const name = `${slug}_${String(g.idx).padStart(2, '0')}_${code}`;
-    const dir = join(dataDir, 'kits', name); await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
-    // extra pictures dropped in the slots go after the @ references
-    const extra = (JSON.parse(String(g.refs || '[]')) as string[]).filter(a => !res.files.some(f => f.asset === a));
-    const blocked = extra.map(r => db.prepare('SELECT label FROM asset WHERE id = ? AND no_generation = 1').get(r) as { label?: string } | undefined).filter(Boolean);
-    if (blocked.length) return reply.code(409).send({ what: `${blocked.map(b => b!.label).join('، ')} ممنوع كمرجع توليد`, fix: 'شيله من الصور الزيادة، أو استخدم نسخة من غير المشكلة.' });
-    const order = [...res.files.map(f => f.asset), ...extra];
-    for (const [n, aid] of order.entries()) {
-      const a = db.prepare('SELECT work_path, label FROM asset WHERE id = ?').get(aid) as { work_path?: string; label?: string } | undefined;
-      if (a?.work_path) await copyFile(a.work_path, join(dir, `${String(n + 1).padStart(2, '0')}${extname(a.work_path)}`));
+    const shots = db.prepare(`SELECT code, title, prompt, start_s, end_s, answers, note FROM shot WHERE segment_id = ? AND code IS NOT NULL ORDER BY start_s, idx`).all(id) as { code: string; title: string | null; prompt: string | null; start_s: number | null; end_s: number | null; answers: string | null; note: string | null }[];
+    // one unit per shot: its own prompt when it has one, else the room's. The shot code is the whole link, so no kit code in a shot's file name
+    // (a kit code would put the video straight in the room, past «اعتمد»).
+    const safe = (c: string) => c.replace(/[^A-Za-z0-9]+/g, '');
+    const units = shots.length
+      ? shots.map(x => ({ code: x.code, folder: safe(x.code), title: x.title ?? x.code, prompt: x.prompt?.trim() || (prompt ?? ''), start: x.start_s ?? Number(g.start_s), end: x.end_s ?? Number(g.end_s), stem: `${slug}_${safe(x.code)}` }))
+      : [{ code: null as string | null, folder: 'room', title: `غرفة ${g.idx}`, prompt: prompt ?? '', start: Number(g.start_s), end: Number(g.end_s), stem: name }];
+    // @ handles → what this generator needs, in its order (server-side, so the kit and the preview can never disagree)
+    const resolved = units.map(u => ({ u, res: resolvePrompt(db, u.prompt, String(toolKey), tool.mode) }));
+    for (const { u, res } of resolved) if (res.problems.length) return reply.code(409).send({ what: `${u.code ? u.code + ': ' : ''}${res.problems[0]}`, fix: res.problems.length > 1 ? `و${res.problems.length - 1} حاجات تانية في «المراجع»` : 'افتح «المراجع» في المقطع.' });
+    // Donia is in this room but no prompt says @دنيا: warn before the kit (you can still go ahead)
+    if (!confirm_no_donia && !resolved.some(({ res }) => res.refs.some(r => r.handle === 'دنيا'))) {
+      const hit = doniaHint([String(g.direction ?? ''), String(g.lyric ?? ''), ...shots.flatMap(x => [x.title, x.answers, x.note, x.prompt])]);
+      if (hit) return reply.code(409).send({ what: 'المقطع فيه دنيا ومفيش @دنيا في البرومبت', fix: `لقيت «${hit}» في وصف المقطع أو لقطاته. ضيف @دنيا، أو جهّز برضه لو اللقطة من غيرها.`, confirm: 'no_donia' });
     }
-    const refs = order;
-    await writeFile(join(dir, 'prompt.txt'), res.prompt_out);
+    // extra pictures dropped in the room's slots go after the @ references, in every shot's kit
+    const slots = (JSON.parse(String(g.refs || '[]')) as string[]).filter(r => db.prepare('SELECT 1 FROM asset WHERE id = ?').get(r));
+    const blocked = slots.map(r => db.prepare('SELECT label FROM asset WHERE id = ? AND no_generation = 1').get(r) as { label?: string } | undefined).filter(Boolean);
+    if (blocked.length) return reply.code(409).send({ what: `${blocked.map(b => b!.label).join('، ')} ممنوع كمرجع توليد`, fix: 'شيله من الصور الزيادة، أو استخدم نسخة من غير المشكلة.' });
+
+    const dir = join(dataDir, 'kits', name); await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
+    const inbox = process.env.GHORFA_INBOX ?? join(dataDir, 'Inbox');
+    const tc = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+    const out: { code: string | null; title: string; file: string; images: number; brief: string }[] = [];
+    let files = 0;
+    for (const { u, res } of resolved) {
+      const sub = join(dir, u.folder); await mkdir(sub, { recursive: true });
+      const order = [...res.files.map(f => f.asset), ...slots.filter(a => !res.files.some(f => f.asset === a))];
+      const lines: string[] = [];
+      for (const [n, aid] of order.entries()) {
+        const a = db.prepare('SELECT work_path, label, source, source_ref FROM asset WHERE id = ?').get(aid) as { work_path?: string; label?: string; source?: string; source_ref?: string } | undefined;
+        const num = String(n + 1).padStart(2, '0'); const fname = a?.work_path ? `${num}${extname(a.work_path)}` : null;
+        if (a?.work_path && fname) await copyFile(a.work_path, join(sub, fname));
+        // Higgsfield reads a picture it already holds by its id; the file is there for every other case
+        lines.push(`${n + 1}. ${a?.label ?? 'صورة'}${fname ? ` · الملف ${fname}` : ' · الملف مش على الجهاز'}${res.family === 'higgsfield' && a?.source === 'higgsfield' && a.source_ref ? ` · رقمها على Higgsfield: ${a.source_ref}` : ''}`);
+      }
+      files += order.length;
+      const file = `${u.stem}_01.mp4`;
+      const brief = [
+        `ولّد لقطة واحدة لكليب «${s.title}».`,
+        `اللقطة: ${u.code ? `${u.code} · ` : ''}${u.title}`,
+        `المولّد: ${tool.name} (${tool.via})`,
+        `المدة: ${(u.end - u.start).toFixed(1)} ث · من ${tc(u.start)} لحد ${tc(u.end)} في الأغنية`,
+        '', 'البرومبت (استخدمه زي ما هو):', res.prompt_out,
+        '', order.length ? `المراجع بالترتيب (في الفولدر ${sub}):` : 'المراجع: مفيش صور.', ...lines,
+        ...(res.refs.length ? ['', 'كل مرجع بيتبعت إزاي:', ...res.refs.map(r => `@${r.handle}: ${r.how}`)] : []),
+        ...(res.notes.length ? ['', 'ملاحظات:', ...res.notes.map(x => `- ${x}`)] : []),
+        '', `احفظ الفيديو بالاسم ده: ${file}`, `وحطه في الفولدر ده: ${inbox}`,
+        u.code ? `الاسم لازم يفضل فيه ${safe(u.code)} ككلمة لوحدها. لنسخة تانية غيّر الرقم الأخير (02، 03…).` : `الاسم لازم يفضل فيه ${code}.`,
+        'ما تغيّرش البرومبت ولا المراجع، وما تولّدش أكتر من نسخة واحدة من غير ما أطلب.'
+      ].join('\n');
+      await writeFile(join(sub, 'prompt.txt'), res.prompt_out);
+      await writeFile(join(sub, 'للمولّد.txt'), brief + '\n');
+      out.push({ code: u.code, title: u.title, file, images: order.length, brief });
+    }
     const ap = audioPath(s);
     if (ap) await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(g.start_s), '-to', String(g.end_s), '-i', ap, '-c:a', 'aac', '-b:a', '192k', join(dir, 'audio.m4a')]);
-    await writeFile(join(dir, 'README.txt'), `${s.title} — مقطع ${g.idx}\nالأداة: ${tool.name} (${tool.via})\nالصور بالترتيب: ${refs.length}\n${res.refs.map(r => `@${r.handle}: ${r.how}`).join('\n')}\nسمّي الفيديو اللي يطلع بأي اسم فيه ${name} وحطه في فولدر Inbox، وهيترتبط بالمقطع لوحده.\n`);
-    await run('zip', ['-qrj', dir + '.zip', dir]).catch(() => {});
+    await writeFile(join(dir, 'README.txt'), `${s.title} — غرفة ${g.idx}\nالمولّد: ${tool.name} (${tool.via})\nطقم لكل لقطة في فولدر باسمها: الصور مترقّمة بالترتيب، وprompt.txt، و«للمولّد.txt» (الكلام اللي يتبعت لـ Claude).\n\n${out.map(o => `${o.code ?? 'الغرفة'}: الفيديو يتسمّى ${o.file}`).join('\n')}\n\nحط الفيديو في ${inbox} وهيتربط بالغرفة لوحده ويتفحص، ويستنى «اعتمد».\n`);
+    await run('zip', ['-qr', dir + '.zip', '.'], { cwd: dir }).catch(() => {});
     db.prepare(`UPDATE segment SET kit_code = ?, kit_path = ?, status = CASE WHEN status IN ('idea','ready') THEN 'generating' ELSE status END, updated_at = datetime('now') WHERE id = ?`).run(code, dir, id);
-    return { kit: name, zip: existsSync(dir + '.zip') ? `/api/kits/${name}.zip` : null, files: refs.length, audio: !!ap, open: tool.url, mode: tool.mode };
+    return { kit: name, dir, inbox, zip: existsSync(dir + '.zip') ? `/api/kits/${name}.zip` : null, files, audio: !!ap, open: tool.url, mode: tool.mode, shots: out };
   });
 
   app.get('/api/kits/:name', async (req, reply) => {

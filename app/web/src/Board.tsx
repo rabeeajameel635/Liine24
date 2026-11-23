@@ -240,7 +240,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
   const [s, setS] = useState<Seg>(seg);
   const [plan, setPlan] = useState<'primary' | 'backup'>('primary');
   const [picker, setPicker] = useState<'refs' | 'video' | null>(null);
-  const [kit, setKit] = useState<{ kit: string; zip: string | null; files: number; audio: boolean; open: string } | null>(null);
+  const [kit, setKit] = useState<{ kit: string; dir: string; zip: string | null; files: number; audio: boolean; open: string; shots: { code: string | null; title: string; file: string; images: number; brief: string }[] } | null>(null);
   const [err, setErr] = useState<{ what: string; fix?: string; confirm?: string } | null>(null);
   const [versions, setVersions] = useState<{ id: number; at: string }[]>([]);
   const [playing, setPlaying] = useState(false);
@@ -384,14 +384,18 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
           </div>
 
           {err && <div className="note-err"><Warning size={24} weight="fill" /><div><b>{err.what}</b>{err.fix && <p>{err.fix}</p>}{err.confirm === 'no_donia' && <button className="gbtn soft" onClick={() => prepare(true)}>جهّز برضه</button>}</div></div>}
+          {/* طقم التوليد: one kit per shot. «انسخ» copies everything Claude needs (prompt, numbered references, the file name and
+              the Inbox); nothing is sent from here. The video that lands in the Inbox with that name links itself to the room. */}
           {kit && (
-            <Card title="الكيت جاهز" line={`${arNum(kit.files)} صور والبرومبت${kit.audio ? ' والصوت' : ''}`}
-              action={kit.zip ? <a className="gbtn secondary" href={kit.zip}><DownloadSimple size={22} /> نزّل</a> : undefined}>
-              <div className="card-more">
-                <div className="row-btns">
-                  <button className="gbtn soft" onClick={() => { navigator.clipboard?.writeText(res?.prompt_out ?? prompt); toast('اتنسخ'); }}><Copy size={22} /> انسخ البرومبت</button>
-                  {kit.open && <a className="gbtn soft" href={kit.open} target="_blank" rel="noreferrer"><ArrowSquareOut size={22} /> افتح الموقع</a>}
-                </div>
+            <Card title="طقم التوليد جاهز" line={`${arNum(kit.shots.length)} لقطات · ${arNum(kit.files)} صور`}
+              action={kit.zip ? <a className="gbtn secondary" href={kit.zip} aria-label="نزّل الطقم"><DownloadSimple size={22} /> نزّل</a> : undefined}>
+              <div className="card-more kit-shots" role="list" aria-label="لقطات الطقم">
+                {kit.shots.map((k, i) => (
+                  <div key={k.file} className="kit-shot" role="listitem">
+                    <b>{k.title.split('،')[0]}</b>
+                    <button className="gbtn soft" aria-label={`انسخ طقم لقطة ${arNum(i + 1)} · ${k.title.split('،')[0]}`} onClick={() => { navigator.clipboard?.writeText(k.brief); toast('اتنسخ · ابعته لـ Claude'); }}><Copy size={22} /> انسخ</button>
+                  </div>
+                ))}
               </div>
             </Card>
           )}
@@ -472,7 +476,7 @@ function SegmentSheet({ song, seg, assets, close, reload, setAssets, shots = [],
               {video?.src ? <video src={video.src} poster={video.thumb ?? undefined} controls playsInline /> : <button className="vs-empty" onClick={() => setPicker('video')}><FilmStrip size={40} /><span>اسحب الفيديو هنا</span></button>}
             </div>
             {video && <VideoQc id={video.id} />}
-            {kit && <p className="panel-line">الفيديو اللي فيه رقم <b className="ltr">{kit.kit.split('_').pop()}</b> هيتربط لوحده</p>}
+            {kit && <p className="panel-line">الفيديو اللي اسمه زي اللي في الطقم هيتربط بالغرفة لوحده لما ينزل في Inbox</p>}
           </>}
 
           {panel === 'lens' && lens && <LensPanel ours={{ thumb: heroPoster, src: heroVideo }} lens={lens} />}
