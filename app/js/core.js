@@ -351,6 +351,26 @@ export function stockOnHand(moves) {
   return q;
 }
 
+// Frozen items (Rabee, Nov 2026). An item with nothing left to sell is frozen: no new sales invoice takes it and
+// it stays off the lists given to pharmacies and salesmen, but it keeps every report, and purchases and returns
+// still take it (that is what brings it back).
+//   manual: the admin froze it (item.frozen), whatever the stock; only the admin unfreezes it
+//   auto:   posted stock minus what saved (unposted) outgoing documents already hold is zero or less;
+//           it is worked out, never stored, so it lifts by itself when stock arrives
+export function heldByDrafts(docs, exceptId = null) {
+  const h = {};
+  for (const d of docs) {
+    if (d.status !== 'draft' || d.id === exceptId || !((DOC_TYPES[d.type]?.stock || 0) < 0)) continue;
+    for (const l of d.lines || []) if (l.itemId) h[l.itemId] = (h[l.itemId] || 0) + (Number(l.qty) || 0) + (Number(l.bonus) || 0);
+  }
+  return h;
+}
+export function frozenKind(item, onHandQty = 0, heldQty = 0) {
+  if (!item) return '';
+  if (item.frozen === true) return 'manual';
+  return (Number(onHandQty) || 0) - (Number(heldQty) || 0) <= 0 ? 'auto' : '';
+}
+
 // gaps inside every series; numbers must run 1..n without holes
 export function sequenceGaps(docs) {
   const bySeries = {};

@@ -132,10 +132,16 @@ const AR = {
   // toasts
   'Draft saved': 'تم حفظ المسودة', 'Saved': 'تم الحفظ', 'Prompt copied': 'تم نسخ البرومبت', 'Restored': 'تم الاسترجاع', 'PIN set': 'تم حفظ الرقم السري', 'Wrong PIN': 'رقم سري خطأ',
   'Voided with reversing entry': 'أُلغي بقيد عكسي',
+  // frozen items
+  'Frozen': 'مجمد', 'Freeze': 'تجميد', 'Unfreeze': 'فك التجميد', 'Unfrozen': 'تم فك التجميد', 'Not frozen': 'غير مجمد', 'Available': 'المتاح',
+  'Frozen by the admin': 'مجمد من المدير', 'Frozen automatically: nothing left to sell': 'مجمد تلقائياً: لا يوجد رصيد للبيع',
+  'It unfreezes by itself when a purchase or a return is posted.': 'يُفك تلقائياً عند ترحيل فاتورة شراء أو مرتجع.',
+  'Held by saved invoices': 'محجوز بفواتير محفوظة', 'Only the admin freezes or unfreezes an item': 'التجميد وفك التجميد للمدير فقط',
 };
 
 // sentences built from data: [regex, replacement]
 const PATTERNS = [
+  [/^(.+) is frozen$/, 'الصنف $1 مجمد'],
   [/^Posted (.+)$/, 'تم ترحيل $1'],
   [/^New (.+)$/, (m, x) => 'جديد: ' + (AR[x.charAt(0).toUpperCase() + x.slice(1)] || x)],
   [/^(Sales invoice|Sales return|Receipt voucher|Credit note|Debit note|Purchase invoice|Purchase return|Payment voucher|Opening balance|Opening stock)s$/, (m, x) => AR[x] ? 'كل ' + AR[x] : m],

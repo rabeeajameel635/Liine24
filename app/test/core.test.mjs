@@ -240,3 +240,25 @@ test('statement: a voided invoice and its journal voucher stay out unless voided
   assert.deepEqual(all.rows.map((r) => [r.docId, r.voided]), [['si1', false], ['si2', true], ['jv1', true], ['sr1', false]]);
   assert.equal(all.closing, 8000);
 });
+
+test('frozen items: manual, automatic at zero available, held by saved outgoing drafts only', async () => {
+  const { heldByDrafts, frozenKind } = await import('../js/core.js');
+  const docs = [
+    { id: 'a', type: 'SI', status: 'draft', lines: [{ itemId: 'x', qty: 30, bonus: 6 }, { itemId: 'y', qty: 5 }] },
+    { id: 'b', type: 'SI', status: 'draft', lines: [{ itemId: 'x', qty: 10 }] },
+    { id: 'c', type: 'SI', status: 'posted', lines: [{ itemId: 'x', qty: 99 }] },      // posted: already in the stock
+    { id: 'd', type: 'SI', status: 'cancelled', lines: [{ itemId: 'x', qty: 99 }] },
+    { id: 'e', type: 'PI', status: 'draft', lines: [{ itemId: 'x', qty: 500 }] },      // a saved purchase holds nothing
+    { id: 'f', type: 'PR', status: 'draft', lines: [{ itemId: 'y', qty: 2 }] },        // a saved purchase return does
+    { id: 'g', type: 'RV', status: 'draft', amount: 5 },
+  ];
+  assert.deepEqual(heldByDrafts(docs), { x: 46, y: 7 });
+  assert.deepEqual(heldByDrafts(docs, 'a'), { x: 10, y: 2 });
+  assert.equal(frozenKind({ id: 'x' }, 46, 46), 'auto');
+  assert.equal(frozenKind({ id: 'x' }, 47, 46), '');
+  assert.equal(frozenKind({ id: 'x' }, 0, 0), 'auto');
+  assert.equal(frozenKind({ id: 'x' }, -3, 0), 'auto');
+  assert.equal(frozenKind({ id: 'x', frozen: true }, 1000, 0), 'manual');
+  assert.equal(frozenKind({ id: 'x', frozen: false }, 1000, 0), '');
+  assert.equal(frozenKind(null, 5, 0), '');
+});

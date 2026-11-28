@@ -1305,3 +1305,13 @@ dialog .ctrail i { font-style: normal; opacity: .6; }
 dialog .ctrail b { color: var(--cl-ink, #1F1E1C); }
 .deflist tr.sel > td { background: var(--cl-cream, #FAF9F5); box-shadow: inset 0 0 0 1px var(--cl-line, #E2DFD6); }
 dialog.ask .actions { flex-wrap: wrap; }
+
+/* frozen items (Nov 28 2026): crimson wherever the item is listed */
+:root { --frz: #c1121f; --frz-soft: #fde4e7; }
+.pill.frz { background: var(--frz-soft); color: var(--frz); margin-inline-start: 6px; }
+tr.frz td, tr.frz td b, tr.frz td span[dir] { color: var(--frz); }
+.frzdot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--muted); vertical-align: -2px; margin-inline-end: 7px; box-sizing: border-box; }
+.frzdot.on { background: var(--frz); border-color: var(--frz); }
+.frzline { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: .95em; }
+.frzline.on, .lmh .frzline .frzdot.on + span { color: var(--frz); }
+#fzOnly.on { background: var(--frz-soft); color: var(--frz); }

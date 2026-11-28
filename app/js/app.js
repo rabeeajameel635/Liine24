@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import {
   DOC_TYPES, REGIONS, CUSTOMER_TYPES, PAY_METHODS, ACCOUNTS, CASH_ACCOUNTS,
-  computeTotals, docTotalsOpts, round1, draftEntries, DEFAULT_ACCOUNT_CODES, checkAccountCodes, DEFAULT_REGIONS, checkRegions, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand,
+  computeTotals, docTotalsOpts, round1, draftEntries, DEFAULT_ACCOUNT_CODES, checkAccountCodes, DEFAULT_REGIONS, checkRegions, fmt, fromCents, toCents, amountInWords, trialBalance, statement, stockOnHand, heldByDrafts, frozenKind,
   sequenceGaps, similarNames, validateImport, nextNumericCode, avgCostC,
 } from './core.js';
 import { ic, TYPE_ICON } from './icons.js';
@@ -59,13 +59,50 @@ async function guard(fn) {
   try { return await fn(); } catch (e) { console.warn(e); toast(e.message || String(e), true); }
 }
 async function reload() {
-  [S.settings, S.items, S.parties, S.docs] = await Promise.all([db.getSettings(), db.all('items'), db.all('parties'), db.all('docs')]);
+  let moves;
+  [S.settings, S.items, S.parties, S.docs, moves] = await Promise.all([db.getSettings(), db.all('items'), db.all('parties'), db.all('docs'), db.all('stock')]);
+  S.oh = stockOnHand(moves); S.held = heldByDrafts(S.docs);
   S.items.sort((a, b) => a.code.localeCompare(b.code));
   S.parties.sort((a, b) => a.code.localeCompare(b.code));
   document.documentElement.dataset.size = S.settings.fontScale;
   $('#brandName').textContent = (getLang() === 'ar' && S.settings.companyNameAr) || S.settings.companyName || 'Ledger';
   showLogo();
   $('#whoami').innerHTML = `<span data-notr>${esc(S.user)}</span> · <b>${isAdmin() ? 'Admin' : 'Accountant'}</b><br><a href="#/settings">Switch role</a>`;
+}
+
+// frozen items: '' | 'manual' | 'auto' (see core.js). exceptDoc: the saved document being edited does not hold stock against itself.
+const frozenOf = (it, held = S.held) => frozenKind(it, S.oh?.[it?.id]?.qty || 0, held?.[it?.id] || 0);
+const frozenMsg = (it) => `${it.code} — ${it.name} is frozen`;
+const frzPill = (it) => (frozenOf(it) ? ` <span class="pill frz" data-notr>${esc(T('Frozen'))}</span>` : '');
+async function setFrozen(it, on) {
+  if (!isAdmin()) throw new Error('Only the admin freezes or unfreezes an item');
+  await db.saveMaster('items', { ...it, frozen: !!on, frozenAt: on ? new Date().toISOString() : '', frozenBy: on ? S.user : '' }, S.user);
+  await reload(); onMasters?.();
+}
+// right-click or hold on an item: freeze / unfreeze (admin), or its card
+function freezeMenu(it) {
+  return new Promise((resolve) => {
+    const k = frozenOf(it), avail = (S.oh?.[it.id]?.qty || 0) - (S.held?.[it.id] || 0);
+    const dlg = document.createElement('dialog'); dlg.className = 'ask lmenu';
+    dlg.innerHTML = `<div class="lmh"><span class="lcap big" dir="ltr"><span class="lcode" dir="ltr">${esc(it.code)}</span></span><b dir="auto">${esc(it.name)}</b>
+        <span class="frzline"><i class="frzdot ${k ? 'on' : ''}"></i><span>${k === 'manual' ? 'Frozen by the admin' : k === 'auto' ? 'Frozen automatically: nothing left to sell' : 'Not frozen'}</span> · <span>Available</span>: <b dir="ltr">${fmt(avail, 0)}</b></span></div>
+      <div class="lmb">${isAdmin() ? (it.frozen === true ? `<button class="btn" data-v="unfreeze">${ic('undo')}<span>Unfreeze</span></button>` : `<button class="btn danger" data-v="freeze">${ic('x')}<span>Freeze</span></button>`) : ''}<button class="btn" data-v="card">${ic('book')}<span>Item card</span></button></div>
+      ${k === 'auto' ? '<p class="muted" style="margin:10px 2px 0">It unfreezes by itself when a purchase or a return is posted.</p>' : ''}
+      <div class="actions"><button class="btn" data-v="cancel">Cancel</button></div>`;
+    document.body.appendChild(dlg); translate(dlg); dlg.showModal();
+    const end = (v) => { dlg.remove(); resolve(v); };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); end(null); });
+    $$('[data-v]', dlg).forEach((b) => (b.onclick = () => end(b.dataset.v === 'cancel' ? null : b.dataset.v)));
+    setTimeout(() => $('[data-v=cancel]', dlg).focus(), 30);
+  });
+}
+
+// a frozen item takes no new sales invoice; one already on this saved invoice stays (the invoice does not hold stock against itself)
+function frozenGate(doc) {
+  if (doc.type !== 'SI') return () => false;
+  const heldX = heldByDrafts(S.docs, doc.id);
+  const had = new Set((doc.lines || []).map((l) => l.itemId).filter(Boolean));
+  return (it) => !!it && !had.has(it.id) && !!frozenOf(it, heldX);
 }
 
 // ---------- router ----------
@@ -493,7 +530,8 @@ function editor(doc) {
   const partyKind = t.party === 'supplier' ? 'supplier' : 'customer';
   const pickParties = () => S.parties.filter((p) => (t.party === 'any' || p.kind === partyKind) && (p.active !== false || !t.lines));
   let parties = pickParties();
-  const itemsList = S.items.filter((i) => i.active !== false);
+  const blocked = frozenGate(doc);
+  const itemsList = S.items.filter((i) => i.active !== false && !blocked(i));
   const phone = window.matchMedia('(max-width: 860px)').matches;
   // One sheet laid out like the printed page:
   //   top: party ——— region · date ——— (ref, salesman)
@@ -562,6 +600,8 @@ function editor(doc) {
       if (bad) throw new Error(`Unknown item "${bad.itemText}". Pick it from the list.`);
       const off = d.lines.map((l) => itemById(l.itemId)).find((i) => i && i.active === false);
       if (off) throw new Error(`${off.code} is inactive${off.replacedBy ? `, use ${itemById(off.replacedBy)?.code} instead` : ''}.`);
+      const frz = d.lines.map((l) => itemById(l.itemId)).find((i) => blocked(i));
+      if (frz) throw new Error(frozenMsg(frz));
       if (forPost && !d.lines.length) throw new Error('Add at least one line');
     } else if (forPost && !(d.amount > 0)) throw new Error('Amount must be greater than zero');
     if (['OB', 'OS'].includes(d.type) && !isAdmin()) throw new Error('Opening balances are entered by the admin');
@@ -798,7 +838,7 @@ function lookup({ title, headers, rows, filter = '', onHold, focus = false }) {
       shown = all.filter((r) => !low || r.code.toLowerCase().includes(low) || r.name.toLowerCase().includes(low));
       shown.sort((a, b) => (b.code.toLowerCase().startsWith(low) || b.name.toLowerCase().startsWith(low)) - (a.code.toLowerCase().startsWith(low) || a.name.toLowerCase().startsWith(low)));
       idx = Math.min(idx, Math.max(0, shown.length - 1));
-      tb.innerHTML = shown.slice(0, 200).map((r, i) => `<tr data-i="${i}" class="${i === idx ? 'sel' : ''}"><td><b dir="ltr">${esc(r.code)}</b></td><td dir="auto">${esc(r.name)}</td>${r.extra.map((x) => `<td class="n">${x}</td>`).join('')}</tr>`).join('')
+      tb.innerHTML = shown.slice(0, 200).map((r, i) => `<tr data-i="${i}" class="${i === idx ? 'sel' : ''}${r.cls ? ' ' + r.cls : ''}"><td><b dir="ltr">${esc(r.code)}</b>${r.tag || ''}</td><td dir="auto">${esc(r.name)}</td>${r.extra.map((x) => `<td class="n">${x}</td>`).join('')}</tr>`).join('')
         || `<tr><td colspan="${2 + headers.length}" class="muted">Nothing matches</td></tr>`;
       $('tr.sel', tb)?.scrollIntoView({ block: 'nearest' });
       const mk = $('.lk-mark', dlg); if (mk) { const r = shown[idx]; mk.classList.toggle('none', !r); $('.lk-who', mk).textContent = r ? `${r.code} — ${r.name}` : ''; }
@@ -838,7 +878,7 @@ async function lookupItem(filter = '', type = 'SI', partyId = null) {
   const oh = stockOnHand(await db.all('stock'));
   const R = docTotalsOpts({ type, lines: [] }, S.settings).roundTotals;
   const id = await lookup({ title: 'Items', headers: ['Price', 'On hand'], filter,
-    rows: () => S.items.filter((i) => i.active !== false).map((i) => ({ id: i.id, code: i.code, name: i.name, extra: [pricef(defaultPrice(i, type), R), fmt(oh[i.id]?.qty || 0, 0)] })),
+    rows: () => S.items.filter((i) => i.active !== false).map((i) => ({ id: i.id, code: i.code, name: i.name, cls: frozenOf(i) ? 'frz' : '', tag: frzPill(i), extra: [pricef(defaultPrice(i, type), R), fmt(oh[i.id]?.qty || 0, 0)] })),
     onHold: (iid) => itemCard(itemById(iid), partyId, type, { change: false }) });
   return id ? itemById(id) : null;
 }
@@ -910,6 +950,10 @@ function recordCard({ title, fields, sections = [], onSave = null, change = true
 const saveFromCard = async (store, rec, vals) => {
   if (vals.name !== undefined && !vals.name) throw new Error('Name is required');
   if (vals.active !== undefined) vals.active = vals.active !== 'false' && vals.active !== false;
+  if (store === 'items' && vals.frozen !== undefined) {
+    vals.frozen = vals.frozen === 'true' || vals.frozen === true;
+    if (vals.frozen !== (rec.frozen === true)) { vals.frozenAt = vals.frozen ? new Date().toISOString() : ''; vals.frozenBy = vals.frozen ? S.user : ''; }
+  }
   if (store === 'parties' && vals.active === false && rec.active !== false) {
     const bal = await partyBalanceC(rec.id);
     if (bal !== 0 && !await okBox(`${rec.code} has a balance of ${money(bal)}. It stays on this account and in every report. Receipts, payments and notes can still be posted to it. Deactivate?`)) throw new Error('Not changed');
@@ -959,6 +1003,7 @@ async function itemCard(it, partyId, type, opts = {}) {
   const posted = S.docs.filter((d) => d.status === 'posted' && (d.lines || []).some((l) => l.itemId === it.id))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.seqNo || 0) - (a.seqNo || 0));
   const lineOf = (d) => d.lines.find((l) => l.itemId === it.id);
+  const fk = frozenOf(it), heldQ = S.held?.[it.id] || 0;
   const lastSaleHere = partyId ? posted.find((d) => d.type === 'SI' && d.partyId === partyId) : null;
   const lastBuy = posted.find((d) => d.type === 'PI');
   const R = (d) => docTotalsOpts(d, S.settings).roundTotals;
@@ -973,6 +1018,9 @@ async function itemCard(it, partyId, type, opts = {}) {
       ['Category', esc(it.category || ''), { k: 'category', v: it.category }], ['Unit', esc(it.unit || ''), { k: 'unit', v: it.unit }], ['Barcode', esc(it.barcode || ''), { k: 'barcode', v: it.barcode }],
       ['Buy price', fmt(it.buyPrice || 0, 3), { k: 'buyPrice', v: it.buyPrice, type: 'number' }], ['Public price', fmt(it.pricePublic || 0, 3), { k: 'pricePublic', v: it.pricePublic, type: 'number' }], ['Pharmacist price', fmt(it.pricePharmacist || 0, 3), { k: 'pricePharmacist', v: it.pricePharmacist, type: 'number' }],
       ['On hand', `<b>${fmt(onHand, 0)}</b>`],
+      ['Held by saved invoices', heldQ ? fmt(heldQ, 0) : ''],
+      ['Frozen', `<span class="frzline${fk ? ' on' : ''}"><i class="frzdot ${fk ? 'on' : ''}"></i><span data-notr>${esc(fk === 'manual' ? `${T('Frozen by the admin')}${it.frozenBy ? ' · ' + it.frozenBy : ''}${it.frozenAt ? ' · ' + it.frozenAt.slice(0, 10) : ''}` : fk === 'auto' ? T('Frozen automatically: nothing left to sell') : T('No'))}</span></span>`,
+        { k: 'frozen', v: String(it.frozen === true), type: 'select', options: [['false', T('No')], ['true', T('Yes')]] }],
       ['Last price to this customer', lastSaleHere ? `${pricef(lineOf(lastSaleHere).price, R(lastSaleHere))} · ${esc(lastSaleHere.date)}` : ''],
       ['Last purchase price', lastBuy ? `${pricef(lineOf(lastBuy).price, R(lastBuy))} · ${esc(lastBuy.date)}` : ''],
       ['Status', it.active === false ? esc(T('inactive')) : ''],
@@ -1043,6 +1091,7 @@ function linesUI(doc) {
 }
 
 function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
+  const blocked = frozenGate(doc);
   const tbody = $('#lines tbody');
   const ORDER = ['code', 'name', 'price', 'qty', 'bonus', 'disc'];
   const renumber = () => $$('tr', tbody).forEach((tr, i) => ($('.lno', tr).textContent = i + 1));
@@ -1064,6 +1113,7 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
   // stock on hand beside the expiry: on screen only, never printed
   let oh = null;
   // Rabee's rule: a sale never stops at zero; the stock goes below zero until the purchase invoice arrives.
+  // (Nov 28 2026: once nothing is left to sell the item freezes, so a new invoice cannot take it; see frozenOf.)
   // The line shows the count, and what it will be after this document when that goes below zero.
   const outSign = DOC_TYPES[doc.type].stock || 0;
   const showOh = () => {
@@ -1082,6 +1132,7 @@ function wireLines(doc, arm, getPid = () => null, setTotal = () => {}) {
   };
   db.all('stock').then((m) => { oh = stockOnHand(m); showOh(); });
   const setItem = (tr, it) => {
+    if (blocked(it)) { toast(frozenMsg(it), true); it = null; $('[data-k=code]', tr).value = ''; $('[data-k=name]', tr).value = ''; $('.lcode', tr).textContent = ''; }
     tr.dataset.item = it ? it.id : '';
     tr.classList.toggle('found', !!it);
     if (!it) return;
@@ -1422,12 +1473,21 @@ async function printDoc(d, reason = '', copies = 1) {
 // ---------- items ----------
 routes.items = async () => {
   $('#main').innerHTML = `<h1>Items</h1><p class="sub">${S.items.length} items. Codes are permanent. Items are never deleted, only deactivated.</p>
-    <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus>${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}</div>
+    <div class="searchbar"><input id="q" placeholder="Search by code or name" autofocus><button class="btn tonal" id="fzOnly" type="button" aria-pressed="false"><i class="frzdot on"></i><span>Frozen</span> <b dir="ltr" data-notr>${S.items.filter((i) => frozenOf(i)).length}</b></button>${isAdmin() ? '<button class="btn primary" id="add">Add item</button>' : '<span class="muted">Only the admin adds or edits items.</span>'}</div>
     <p class="hint" style="margin:-6px 4px 16px">${isAdmin() ? 'Click a row to edit it.' : ''} <kbd>Enter</kbd> <span>opens the marked one.</span></p>
     <div class="tablewrap"><table class="t deflist"><tbody id="tb">
-    ${S.items.map((i) => `<tr data-id="${i.id}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td class="dl"><b dir="ltr">${esc(i.code)}</b> <span dir="auto">${esc(i.name)}</span>${i.active === false ? ` <span class="pill">inactive</span>` : ''}</td>
+    ${S.items.map((i) => `<tr data-id="${i.id}" class="${frozenOf(i) ? 'frz' : ''}" data-s="${esc((i.code + ' ' + i.name + ' ' + (i.brand || '')).toLowerCase())}"><td class="dl"><b dir="ltr">${esc(i.code)}</b> <span dir="auto">${esc(i.name)}</span>${i.active === false ? ` <span class="pill">inactive</span>` : ''}${frzPill(i)}</td>
       <td class="de">${isAdmin() ? `<button class="btn small" data-edit="${i.id}">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
-  $('#q').oninput = (e) => { const s = e.target.value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) ? '' : 'none')); markFirst(); };
+  let fzOnly = false;
+  const filterRows = () => { const s = $('#q').value.toLowerCase(); $$('#tb tr').forEach((tr) => (tr.style.display = tr.dataset.s.includes(s) && (!fzOnly || tr.classList.contains('frz')) ? '' : 'none')); markFirst(); };
+  $('#q').oninput = filterRows;
+  $('#fzOnly').onclick = () => { fzOnly = !fzOnly; $('#fzOnly').classList.toggle('on', fzOnly); $('#fzOnly').setAttribute('aria-pressed', String(fzOnly)); filterRows(); };
+  // right-click or hold a row: freeze / unfreeze
+  holdable($('#tb'), 'tr[data-id]', (tr) => guard(async () => {
+    const it = itemById(tr.dataset.id); const v = await freezeMenu(it);
+    if (v === 'card') return openItem(it.id);
+    if (v === 'freeze' || v === 'unfreeze') { await setFrozen(it, v === 'freeze'); toast(v === 'freeze' ? 'Frozen' : 'Unfrozen'); render(); }
+  }));
   $('#add') && ($('#add').onclick = () => itemForm({}));
   // the same item card as in the invoice: one card per item, everywhere
   const openItem = (id, edit = false) => guard(async () => { if ((await itemCard(itemById(id), null, 'SI', { change: false, edit })) === 'saved') render(); });
@@ -1708,7 +1768,7 @@ routes.stock = async () => {
   });
   $('#main').innerHTML = `<h1>Inventory</h1><p class="sub">Quantities come only from posted documents.</p>
     <div class="tablewrap"><table class="t"><thead><tr><th>Code</th><th>Item</th><th class="n">In</th><th class="n">Bonus in</th><th class="n">Out</th><th class="n">Bonus out</th><th class="n">On hand</th><th class="n">Avg cost</th><th class="n">Value</th></tr></thead><tbody>
-    ${rows.map(({ i, s, avg, value }) => `<tr><td>${esc(i.code)}</td><td dir="auto">${esc(i.name)}</td><td class="n">${fmt(s.in, 0)}</td><td class="n">${fmt(s.bonusIn, 0)}</td><td class="n">${fmt(s.out, 0)}</td><td class="n">${fmt(s.bonusOut, 0)}</td>
+    ${rows.map(({ i, s, avg, value }) => `<tr class="${frozenOf(i) ? 'frz' : ''}"><td>${esc(i.code)}${frzPill(i)}</td><td dir="auto">${esc(i.name)}</td><td class="n">${fmt(s.in, 0)}</td><td class="n">${fmt(s.bonusIn, 0)}</td><td class="n">${fmt(s.out, 0)}</td><td class="n">${fmt(s.bonusOut, 0)}</td>
       <td class="n" style="${s.qty < 0 ? 'color:var(--bad)' : ''}"><b>${fmt(s.qty, 0)}</b></td><td class="n">${fmt(avg / 100, 3)}</td><td class="n">${money(value)}</td></tr>`).join('')}
     </tbody><tfoot><tr><td colspan="8">Inventory value</td><td class="n">${money(rows.reduce((t, r) => t + r.value, 0))}</td></tr></tfoot></table></div>
     <div class="actions"><button class="btn" id="xl">Excel</button><button class="btn" id="pr">Print / PDF</button></div>`;
